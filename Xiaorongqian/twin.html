@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数字孪生场景模块</title>
+  
+  <link href="https://www.supermapol.com/earth/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <link rel="stylesheet" href="./css/twin.css" />
+</head>
+<body>
+  <div class="twin-app">
+    <header class="top-header">
+      <div class="header-meta">
+        <span class="meta-label">三维引擎状态</span>
+        <strong id="runStatus" class="text-glow">SuperMap WebGL 运行中</strong>
+      </div>
+      <div class="header-title">
+        <h1>数字孪生场景模块</h1>
+        <p>兰考泡桐示范村 · 三维重建 / 空间联动 / 产业资源 / 智能漫游</p>
+      </div>
+      <div class="header-time">
+        <span class="meta-label">当前时间</span>
+        <strong id="currentTime">--</strong>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <aside class="left-panel panel">
+        <section class="panel-section overview-section">
+          <div class="section-head">
+            <h2>村庄三维资产概览</h2>
+          </div>
+          <div class="overview-grid">
+            <article class="mini-stat"><span>实景建筑</span><strong>342</strong><small>栋</small></article>
+            <article class="mini-stat"><span>泡桐林区</span><strong>1,250</strong><small>亩</small></article>
+            <article class="mini-stat"><span>乐器工坊</span><strong>15</strong><small>家</small></article>
+            <article class="mini-stat"><span>道路网络</span><strong>12.5</strong><small>km</small></article>
+          </div>
+        </section>
+
+        <section class="panel-section layer-section">
+          <div class="section-head">
+            <h2>全要素图层控制</h2>
+          </div>
+          <div class="layer-scroll scroll-region">
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerBuilding" value="buildingLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span>建筑轮廓模型 (白膜)</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerRoad" value="roadLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span>路网与硬化面</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerWater" value="waterLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span>水系与沟渠</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerTree" value="treeLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span>特色泡桐林</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerWorkshop" value="workshopLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span>民族乐器工坊</span>
+            </label>
+            <label class="layer-toggle">
+              <input type="checkbox" id="layerIssue" value="issueLayer" checked />
+              <div class="toggle-track"><div class="toggle-thumb"></div></div>
+              <span class="text-warn">治理问题标绘</span>
+            </label>
+          </div>
+        </section>
+      </aside>
+
+      <section class="center-panel panel">
+        <div class="map-toolbar">
+          <button class="scene-btn active" data-mode="white" type="button">三维白膜</button>
+          <button class="scene-btn" data-mode="photo" type="button">倾斜摄影实景</button>
+          <button class="scene-btn" data-mode="lidar" type="button">激光雷达点云</button>
+        </div>
+        <div class="map-wrap">
+          <div id="cesiumContainer"></div>
+          <div class="roam-tip" id="roamTip">当前视角：全村鸟瞰</div>
+        </div>
+      </section>
+
+      <aside class="right-panel panel">
+        <section class="panel-section roam-section">
+          <div class="section-head">
+            <h2>视点智能漫游</h2>
+          </div>
+          <div class="roam-list">
+            <button class="roam-item" data-target="center">
+              <i class="icon">◎</i>
+              <div class="roam-info">
+                <h3>村委会广场</h3>
+                <p>行政与治理中心</p>
+              </div>
+            </button>
+            <button class="roam-item" data-target="forest">
+              <i class="icon">🌲</i>
+              <div class="roam-info">
+                <h3>徐场村泡桐林</h3>
+                <p>生态资源与原材料产地</p>
+              </div>
+            </button>
+            <button class="roam-item" data-target="industry">
+              <i class="icon">🎸</i>
+              <div class="roam-info">
+                <h3>古琴制作工坊集群</h3>
+                <p>特色民族乐器产业链</p>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel-section radar-section">
+          <div class="section-head">
+            <h2>“三生”空间评价模型</h2>
+          </div>
+          <div class="radar-container">
+            <canvas id="radarChart"></canvas>
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="https://www.supermapol.com/earth/Build/Cesium/Cesium.js"></script>
+  <script src="./js/twin.js"></script>
+</body>
+</html>
