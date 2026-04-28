@@ -1,0 +1,168 @@
+<!-- governance.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>乡村治理闭环处置模块</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="./css/governance.css" />
+</head>
+<body>
+  <div class="governance-app">
+    <header class="top-header">
+      <div class="header-meta">
+        <span class="meta-label">模块运行状态</span>
+        <strong id="runStatus">正常运行</strong>
+      </div>
+      <div class="header-title">
+        <h1>乡村治理闭环处置模块</h1>
+        <p>群众参与 / 空间落图 / 数据分析 / 闭环处置</p>
+      </div>
+      <div class="header-time">
+        <span class="meta-label">当前时间</span>
+        <strong id="currentTime">--</strong>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <aside class="left-panel panel">
+        <section class="panel-section overview-section">
+          <div class="section-head">
+            <h2>处置总览</h2>
+          </div>
+          <div class="overview-grid">
+            <article class="mini-stat"><span>问题总数</span><strong id="statTotal">0</strong></article>
+            <article class="mini-stat"><span>待审核</span><strong id="statPending">0</strong></article>
+            <article class="mini-stat"><span>处理中</span><strong id="statProcessing">0</strong></article>
+            <article class="mini-stat"><span>已办结</span><strong id="statClosed">0</strong></article>
+            <article class="mini-stat"><span>闭环处置率</span><strong id="statClosureRate">0%</strong></article>
+            <article class="mini-stat urgent"><span>高紧急问题</span><strong id="statHighUrgent">0</strong></article>
+          </div>
+        </section>
+
+        <section class="panel-section filter-section">
+          <div class="section-head">
+            <h2>筛选条件</h2>
+            <button id="resetFilters" class="tiny-btn" type="button">重置</button>
+          </div>
+          <div class="filter-scroll scroll-region">
+            <div class="filter-group">
+              <label for="filterKeyword">属性查询（编号/描述）</label>
+              <input id="filterKeyword" type="text" placeholder="输入关键词" />
+            </div>
+            <div class="filter-group">
+              <label for="filterType">按问题类型筛选</label>
+              <select id="filterType"></select>
+            </div>
+            <div class="filter-group">
+              <label for="filterTown">按乡镇筛选</label>
+              <select id="filterTown"></select>
+            </div>
+            <div class="filter-group">
+              <label for="filterVillage">按村庄筛选</label>
+              <select id="filterVillage"></select>
+            </div>
+            <div class="filter-group">
+              <label for="filterTime">按时间筛选</label>
+              <select id="filterTime">
+                <option value="all">全部时间</option>
+                <option value="7">近7天</option>
+                <option value="30">近30天</option>
+                <option value="90">近90天</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label for="filterUrgency">按紧急程度筛选</label>
+              <select id="filterUrgency">
+                <option value="all">全部紧急程度</option>
+                <option value="高">高</option>
+                <option value="中">中</option>
+                <option value="低">低</option>
+              </select>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="center-panel panel">
+        <div class="map-toolbar">
+          <button class="layer-btn active" data-layer="points" type="button">问题点</button>
+          <button class="layer-btn" data-layer="hotspot" type="button">热点分析</button>
+          <button class="layer-btn" data-layer="cluster" type="button">聚类分析</button>
+          <button class="layer-btn" data-layer="status" type="button">处置状态</button>
+        </div>
+        <div class="map-wrap">
+          <div id="governanceMap"></div>
+          <canvas id="fallbackMap"></canvas>
+        </div>
+        <div class="map-legend" id="mapLegend"></div>
+      </section>
+
+      <aside class="right-panel panel">
+        <section class="panel-section latest-section">
+          <div class="section-head">
+            <h2>最新上报问题</h2>
+            <span id="latestCount">0条</span>
+          </div>
+          <div class="latest-scroll scroll-region">
+            <div id="latestList" class="latest-list"></div>
+          </div>
+        </section>
+
+        <section class="panel-section detail-section">
+          <div class="section-head">
+            <h2>当前问题详情</h2>
+          </div>
+          <div class="detail-scroll scroll-region">
+            <div id="problemDetail" class="problem-detail"></div>
+          </div>
+        </section>
+
+        <section class="panel-section action-section">
+          <div class="section-head">
+            <h2>状态更新</h2>
+          </div>
+          <div class="status-btns">
+            <button class="status-btn" data-status="待审核" type="button">待审核</button>
+            <button class="status-btn" data-status="已派单" type="button">已派单</button>
+            <button class="status-btn" data-status="处理中" type="button">处理中</button>
+            <button class="status-btn" data-status="已办结" type="button">已办结</button>
+          </div>
+          <div class="extra-actions">
+            <button id="viewPhotoBtn" class="tiny-btn" type="button">查看照片</button>
+            <button id="viewContactBtn" class="tiny-btn" type="button">查看联系方式</button>
+            <button id="exportBtn" class="export-btn" type="button">导出问题清单</button>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <section class="charts-layout">
+      <article class="chart-card panel">
+        <div class="section-head"><h2>村庄问题分布图</h2></div>
+        <div class="chart-content"><div id="villageBars" class="village-bars"></div></div>
+      </article>
+      <article class="chart-card panel">
+        <div class="section-head"><h2>问题热点图</h2></div>
+        <div class="chart-content"><canvas id="hotspotChart"></canvas></div>
+      </article>
+      <article class="chart-card panel">
+        <div class="section-head"><h2>问题处置统计图</h2></div>
+        <div class="chart-content">
+          <div class="status-chart">
+            <div id="statusDonut" class="status-donut"></div>
+            <div id="statusLegend" class="status-legend"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js"></script>
+  <script src="./js/governance.js"></script>
+</body>
+</html>
