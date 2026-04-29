@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>分析模块入口 - 兰考县和美乡村数字孪生决策平台</title>
+  <style>
+    :root{
+      --bg:#091215; --panel:rgba(14,28,31,.9); --line:rgba(136,190,185,.26);
+      --text:#edf7f3; --muted:#9eb8b2; --cyan:#35d0c6; --amber:#f4b44b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--text);
+      font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif;
+      background:linear-gradient(135deg,#071113,#10211e 48%,#171817);
+    }
+    .wrap{padding:18px; min-height:100vh; display:grid; grid-template-rows:72px 1fr}
+    header{
+      border:1px solid var(--line); display:flex; align-items:center; justify-content:space-between;
+      padding:0 18px; background:rgba(13,32,31,.86)
+    }
+    h1{margin:0; font-size:22px}
+    .sub{color:var(--muted); font-size:13px}
+    .main{
+      margin-top:12px; border:1px solid var(--line); background:var(--panel); padding:16px;
+    }
+    .grid{
+      display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:14px;
+    }
+    .card{
+      border:1px solid var(--line); background:rgba(255,255,255,.03); padding:14px;
+      display:grid; gap:10px;
+    }
+    .card h3{margin:0; font-size:17px}
+    .card p{margin:0; color:var(--muted); font-size:13px; line-height:1.6}
+    .btn{
+      display:inline-block; width:max-content; margin-top:4px; text-decoration:none;
+      border:1px solid rgba(141,215,205,.35); color:var(--text); padding:7px 12px; font-size:12px;
+      background:rgba(11,27,28,.88)
+    }
+    .btn:hover{background:var(--cyan); color:#041110; font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>分析模块（汇报演示壳子）</h1>
+      <div class="sub">输入数据 → 指标计算 → 专题可视化 → 决策比选</div>
+    </header>
+
+    <section class="main">
+      <div class="grid">
+        <article class="card">
+          <h3>01 数据输入与质检</h3>
+          <p>统一接入行政区、POI、DEM、土地利用、道路水系、治理点位等数据，完成字段规范、坐标统一、缺失值检查。</p>
+          <a class="btn" href="./analysis-data-input.html">进入页面</a>
+        </article>
+
+        <article class="card">
+          <h3>02 三生指标评价</h3>
+          <p>基于生态、生活、产业指标体系构建综合评价分值，支持权重调整、结果重算与等级可视化表达。</p>
+          <a class="btn" href="./analysis-eco-live-industry.html">进入页面</a>
+        </article>
+
+        <article class="card">
+          <h3>03 建设适宜性分析</h3>
+          <p>叠加DEM坡度、低洼风险、土地利用现状、基础设施可达性，输出建设适宜区、限制区、优化区。</p>
+          <a class="btn" href="./analysis-suitability.html">进入页面</a>
+        </article>
+
+        <article class="card">
+          <h3>04 治理问题热点分析</h3>
+          <p>对人居环境、设施短板、违建疑似、占地异常点位进行核密度/聚类分析，识别重点治理片区。</p>
+          <a class="btn" href="./analysis-hotspot.html">进入页面</a>
+        </article>
+
+        <article class="card">
+          <h3>05 决策方案比选</h3>
+          <p>面向候选方案进行多指标评分、成本收益对比和覆盖范围评估，辅助生成推荐方案。</p>
+          <a class="btn" href="./analysis-decision-compare.html">进入页面</a>
+        </article>
+
+        <article class="card">
+          <h3>返回主控大屏</h3>
+          <p>从分析模块跳回总览大屏，展示全局态势与专题切换效果。</p>
+          <a class="btn" href="../Master.html">返回主控</a>
+        </article>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

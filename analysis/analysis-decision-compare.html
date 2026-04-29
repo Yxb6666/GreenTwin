@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>决策方案比选 - 分析模块</title>
+  <style>
+    body{margin:0;font-family:"Microsoft YaHei";background:#0b1316;color:#e9f3ef}
+    .wrap{padding:16px}
+    .top{display:flex;justify-content:space-between;align-items:center;border:1px solid #2b4a49;padding:10px 14px;background:#132224}
+    .btn{color:#e9f3ef;text-decoration:none;border:1px solid #3d6a68;padding:6px 10px}
+    .card{margin-top:12px;border:1px solid #2b4a49;background:#132224;padding:12px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border:1px solid #2b4a49;padding:8px;text-align:center}
+    .best{color:#7ee28a;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <b>分析模块 / 决策方案比选</b>
+      <a class="btn" href="./analysis-index.html">返回分析入口</a>
+    </div>
+
+    <div class="card">
+      <h3>候选方案综合评分（示意）</h3>
+      <table>
+        <tr>
+          <th>方案</th><th>生态改善</th><th>民生提升</th><th>产业带动</th><th>实施成本</th><th>综合得分</th>
+        </tr>
+        <tr>
+          <td>方案A</td><td>85</td><td>80</td><td>78</td><td>中</td><td>81.2</td>
+        </tr>
+        <tr>
+          <td>方案B</td><td>79</td><td>88</td><td>84</td><td>中高</td><td class="best">84.6（推荐）</td>
+        </tr>
+        <tr>
+          <td>方案C</td><td>91</td><td>74</td><td>76</td><td>高</td><td>80.1</td>
+        </tr>
+      </table>
+      <p style="color:#9fb7b0;margin-top:10px;">结论：当前权重下推荐方案B。支持按权重变化重新计算推荐结果。</p>
+    </div>
+  </div>
+</body>
+</html>
