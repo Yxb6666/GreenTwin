@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>兰考县和美乡村数字孪生决策平台 - 三生空间综合分析模块</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/sansheng.css">
+</head>
+<body>
+  <div class="screen">
+    <header>
+      <div class="system-tag">
+        <strong>SuperMap iClient / iServer</strong>
+        <span>三生评价模型运行态</span>
+      </div>
+      <div class="title">
+        <h1>兰考县和美乡村数字孪生决策平台 - 三生空间综合分析模块</h1>
+        <p>生态评价 / 生活服务 / 生产空间 / 综合指数 / 报告生成</p>
+      </div>
+      <div class="clock">
+        <strong id="clock">--:--:--</strong>
+        <span>分析模块运行中</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="side left-side">
+        <section class="panel indicator-panel">
+          <div class="panel-header">
+            <h2>三生指标体系</h2>
+            <span id="indicatorScope">生态指标</span>
+          </div>
+          <div class="panel-body">
+            <div class="tab-group" id="indicatorTabs">
+              <button class="tab-btn active" data-dimension="ecology">生态指标</button>
+              <button class="tab-btn" data-dimension="life">生活指标</button>
+              <button class="tab-btn" data-dimension="production">生产空间</button>
+            </div>
+            <div class="indicator-list" id="indicatorList"></div>
+          </div>
+        </section>
+
+        <section class="panel weight-panel">
+          <div class="panel-header">
+            <h2>权重配置</h2>
+            <span id="weightHint">权重总和 1.00</span>
+          </div>
+          <div class="panel-body">
+            <div class="weight-row">
+              <label for="ecoWeight">生态权重</label>
+              <input id="ecoWeight" type="range" min="0" max="1" step="0.01" value="0.34">
+              <input id="ecoWeightValue" class="weight-input" type="number" min="0" max="1" step="0.01" value="0.34">
+            </div>
+            <div class="weight-row">
+              <label for="lifeWeight">生活权重</label>
+              <input id="lifeWeight" type="range" min="0" max="1" step="0.01" value="0.33">
+              <input id="lifeWeightValue" class="weight-input" type="number" min="0" max="1" step="0.01" value="0.33">
+            </div>
+            <div class="weight-row">
+              <label for="productionWeight">生产权重</label>
+              <input id="productionWeight" type="range" min="0" max="1" step="0.01" value="0.33">
+              <input id="productionWeightValue" class="weight-input" type="number" min="0" max="1" step="0.01" value="0.33">
+            </div>
+            <div class="weight-actions">
+              <button class="primary-btn" id="recalculateBtn">重新计算指数</button>
+              <button class="ghost-btn" id="resetWeightBtn">恢复默认</button>
+            </div>
+            <div class="mini-note">权重总和不等于 1 时将自动归一化参与计算。</div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="center">
+        <section class="panel map-panel">
+          <div class="panel-header">
+            <h2>空间分析图</h2>
+            <span id="mapMode">三生综合指数专题图</span>
+          </div>
+          <div class="panel-body map-body">
+            <div class="layer-switch" id="layerSwitch">
+              <button class="active" data-layer="composite">三生综合指数</button>
+              <button data-layer="ecology">生态空间</button>
+              <button data-layer="life">生活服务</button>
+              <button data-layer="production">生产空间</button>
+              <button data-layer="advantage">优势区域</button>
+              <button data-layer="shortage">短板区域</button>
+            </div>
+            <div class="map-stage">
+              <div id="leafletMap" class="leaflet-map"></div>
+              <canvas id="fallbackMap"></canvas>
+              <div class="map-card">
+                <label id="selectedTownName">仪封镇</label>
+                <div class="map-score"><strong id="selectedComposite">--</strong><span>综合指数</span></div>
+                <div class="map-metrics">
+                  <span>生态 <b id="selectedEcology">--</b></span>
+                  <span>生活 <b id="selectedLife">--</b></span>
+                  <span>生产 <b id="selectedProduction">--</b></span>
+                </div>
+              </div>
+            </div>
+            <div class="map-bottom">
+              <p id="mapDescription">正在加载三生综合指数专题图。</p>
+              <div class="legend" id="legend"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="side right-side">
+        <section class="panel score-panel">
+          <div class="panel-header">
+            <h2>三生综合指数</h2>
+            <span>县域均值</span>
+          </div>
+          <div class="panel-body score-body">
+            <div class="score-number"><span id="countyComposite">84.7</span><small>分</small></div>
+            <canvas id="radarCanvas" width="260" height="190"></canvas>
+            <div class="metric-grid compact">
+              <div class="metric"><label>生态指数</label><strong id="countyEcology">--</strong><i>生态韧性</i></div>
+              <div class="metric"><label>生活指数</label><strong id="countyLife">--</strong><i>服务均衡</i></div>
+              <div class="metric"><label>生产指数</label><strong id="countyProduction">--</strong><i>产业支撑</i></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel ranking-panel">
+          <div class="panel-header">
+            <h2>乡镇综合排名</h2>
+            <span>点击联动地图</span>
+          </div>
+          <div class="panel-body ranking-list" id="rankingList"></div>
+        </section>
+
+        <section class="panel diagnosis-panel">
+          <div class="panel-header">
+            <h2>优势短板识别</h2>
+            <span id="diagnosisLayer">综合诊断</span>
+          </div>
+          <div class="panel-body diagnosis-list" id="diagnosisList"></div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <section class="footer-card process-card">
+        <div class="footer-title">计算流程</div>
+        <div class="process-flow" id="processFlow"></div>
+      </section>
+      <section class="footer-card table-card">
+        <div class="footer-title">指标明细表</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>指标名称</th>
+                <th>原始值</th>
+                <th>标准化值</th>
+                <th>权重</th>
+                <th>得分贡献</th>
+              </tr>
+            </thead>
+            <tbody id="indicatorTable"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="footer-card report-card">
+        <div class="footer-title">
+          <span>报告生成</span>
+          <div>
+            <button class="ghost-btn" id="generateReportBtn">生成报告</button>
+            <button class="primary-btn" id="exportReportBtn">导出报告</button>
+          </div>
+        </div>
+        <div class="report-output" id="reportOutput">点击“生成报告”后，将自动汇总区域总体评价、三生指数得分、优势短板与治理建议。</div>
+      </section>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js"></script>
+  <script src="js/sansheng.js"></script>
+</body>
+</html>
