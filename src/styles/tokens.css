@@ -1,0 +1,21 @@
+:root {
+  --bg-deep: #061011;
+  --bg-mid: #0b1918;
+  --panel: rgba(13, 28, 28, 0.86);
+  --panel-strong: rgba(16, 37, 36, 0.96);
+  --line: rgba(122, 203, 190, 0.2);
+  --line-bright: rgba(61, 214, 196, 0.58);
+  --text: #eef8f5;
+  --text-soft: #9ab7b0;
+  --cyan: #3dd6c4;
+  --green: #78d787;
+  --amber: #f0b85c;
+  --red: #e77468;
+  --violet: #b99af7;
+  --blue: #6da9ed;
+  --shadow: 0 16px 46px rgba(0, 0, 0, 0.28);
+  --radius: 10px;
+  --font-display: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  --font-body: "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-data: "Bahnschrift", "DIN Alternate", "Segoe UI", sans-serif;
+}

@@ -1,0 +1,26 @@
+{
+  "appTitle": "兰考县和美乡村数字孪生决策平台",
+  "apiBaseUrl": "http://127.0.0.1:8080/api",
+  "requestTimeoutMs": 10000,
+  "map": {
+    "center": [34.82, 114.82],
+    "zoom": 10,
+    "crs": "EPSG4326"
+  },
+  "supermap": {
+    "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",
+    "mapServices": {
+      "base": "https://iserver.supermap.io/iserver/services/map-world/rest/maps/World",
+      "population": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/population_density",
+      "gdp": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/gdp_grid",
+      "landuse": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/land_use"
+    },
+    "webglSdkUrl": "https://www.supermapol.com/earth/Build/Cesium/Cesium.js",
+    "webglWidgetsCssUrl": "https://www.supermapol.com/earth/Build/Cesium/Widgets/widgets.css",
+    "realspace": {
+      "whiteModel": "",
+      "oblique": "",
+      "lidar": ""
+    }
+  }
+}
