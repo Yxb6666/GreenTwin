@@ -16,8 +16,13 @@ interface SuperMapViewer {
   scene: {
     globe: { depthTestAgainstTerrain: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
-    open: (url: string) => Promise<SceneLayer | SceneLayer[]>
+    addS3MTilesLayerByScp: (url: string, options: { name: string }) => Promise<SceneLayer>
   }
+  imageryLayers: {
+    removeAll: (destroy?: boolean) => void
+    addImageryProvider: (provider: unknown) => unknown
+  }
+  flyTo: (target: unknown) => Promise<boolean>
   camera: {
     setView: (options: Record<string, unknown>) => void
     flyTo: (options: Record<string, unknown>) => void
@@ -28,6 +33,14 @@ interface SuperMapViewer {
 
 interface CesiumRuntime {
   Viewer: new (container: HTMLElement, options: Record<string, unknown>) => SuperMapViewer
+  UrlTemplateImageryProvider: new (options: {
+    url: string
+    minimumLevel?: number
+    maximumLevel?: number
+    tilingScheme?: unknown
+    customTags?: Record<string, (provider: unknown, x: number, y: number, level: number) => string>
+  }) => unknown
+  WebMercatorTilingScheme: new () => unknown
   Cartesian3: { fromDegrees: (longitude: number, latitude: number, height: number) => unknown }
   Math: { toRadians: (degrees: number) => number }
 }
@@ -39,7 +52,7 @@ const sceneMode = ref<SceneMode>('whiteModel')
 const roamTip = ref('当前视角：全村鸟瞰')
 const layerVisibility = ref({ buildingLayer: true, roadLayer: true, waterLayer: true, treeLayer: true, workshopLayer: true, issueLayer: true })
 let viewer: SuperMapViewer | null = null
-let openedLayers: Array<SceneLayer | undefined> = []
+let openedLayers: SceneLayer[][] = [[], [], []]
 
 const modeItems: Array<{ key: SceneMode; label: string }> = [
   { key: 'whiteModel', label: '三维白膜' },
@@ -65,9 +78,6 @@ function cesium(): CesiumRuntime {
 async function openScene(mode: SceneMode) {
   sceneMode.value = mode
   const url = config.supermap.realspace[mode]
-  openedLayers.forEach((layer, index) => {
-    if (layer) layer.visible = index === modeItems.findIndex((item) => item.key === mode)
-  })
   if (!viewer) {
     engineStatus.value = '三维 Viewer 尚未创建'
     return
@@ -80,13 +90,16 @@ async function openScene(mode: SceneMode) {
   try {
     engineStatus.value = `正在加载${activeModeLabel.value}`
     const existingIndex = modeItems.findIndex((item) => item.key === mode)
-    if (!openedLayers[existingIndex]) {
-      const result = await viewer.scene.open(url)
-      const layer = Array.isArray(result) ? result[0] : result
-      openedLayers[existingIndex] = layer
+    openedLayers.forEach((layers, index) => {
+      layers.forEach((layer) => (layer.visible = index === existingIndex))
+    })
+    if (!openedLayers[existingIndex]?.length) {
+      const layer = await viewer.scene.addS3MTilesLayerByScp(url, { name: mode })
+      openedLayers[existingIndex] = [layer]
+      await viewer.flyTo(layer)
     }
-    openedLayers.forEach((layer, index) => {
-      if (layer) layer.visible = index === existingIndex
+    openedLayers.forEach((layers, index) => {
+      layers.forEach((layer) => (layer.visible = index === existingIndex))
     })
     engineStatus.value = `${activeModeLabel.value}运行中`
   } catch (error) {
@@ -119,10 +132,6 @@ function flyTo(target: 'center' | 'forest' | 'industry') {
 async function initializeViewer() {
   await nextTick()
   if (!cesiumContainer.value) return
-  if (!config.supermap.realspace.whiteModel) {
-    engineStatus.value = '三维场景服务待配置'
-    return
-  }
   try {
     await loadSuperMapWebgl(config.supermap.webglSdkUrl, config.supermap.webglWidgetsCssUrl)
     const sdk = cesium()
@@ -137,13 +146,29 @@ async function initializeViewer() {
       sceneModePicker: false,
       navigationHelpButton: false,
     })
+    viewer.imageryLayers.removeAll(true)
+    const baseMapUrl = config.supermap.mapServices.base.replace(/\/+$/, '')
+    viewer.imageryLayers.addImageryProvider(
+      new sdk.UrlTemplateImageryProvider({
+        url: `${baseMapUrl}/tileImage.png?scale={scale}&x={x}&y={y}&width=256&height=256&transparent=false&cacheEnabled=true`,
+        minimumLevel: 0,
+        maximumLevel: 18,
+        tilingScheme: new sdk.WebMercatorTilingScheme(),
+        customTags: {
+          scale: (_provider, _x, _y, level) => String(1.6901635716026553e-9 * 2 ** level),
+        },
+      }),
+    )
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(114.81, 34.82, 3000),
       orientation: { heading: 0, pitch: sdk.Math.toRadians(-45), roll: 0 },
     })
-    engineStatus.value = '三维引擎运行中'
-    await openScene('whiteModel')
+    if (config.supermap.realspace.whiteModel) {
+      await openScene('whiteModel')
+    } else {
+      engineStatus.value = '三维底图运行中，场景服务待配置'
+    }
   } catch (error) {
     engineStatus.value = error instanceof Error ? error.message : '三维引擎初始化失败'
   }
@@ -152,7 +177,7 @@ async function initializeViewer() {
 onMounted(initializeViewer)
 
 onBeforeUnmount(() => {
-  openedLayers = []
+  openedLayers = [[], [], []]
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
   viewer = null
 })
