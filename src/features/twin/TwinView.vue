@@ -163,7 +163,6 @@ onBeforeUnmount(() => {
     <ScreenHeader
       title="数字孪生场景模块"
       subtitle="兰考泡桐示范村 · 三维重建 / 空间联动 / 产业资源 / 智能漫游"
-      :status="engineStatus"
     />
 
     <div class="twin-layout">

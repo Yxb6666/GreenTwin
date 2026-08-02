@@ -4,7 +4,6 @@ import { useClock } from '@/shared/composables/useClock'
 defineProps<{
   title: string
   subtitle: string
-  status?: string
 }>()
 
 const now = useClock()
@@ -12,10 +11,6 @@ const now = useClock()
 
 <template>
   <header class="screen-header panel-frame">
-    <div class="screen-header__meta">
-      <span>GREENTWIN / SUPERMAP</span>
-      <strong>{{ status ?? '服务在线' }}</strong>
-    </div>
     <div class="screen-header__title">
       <h1>{{ title }}</h1>
       <p>{{ subtitle }}</p>

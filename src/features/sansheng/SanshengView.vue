@@ -77,7 +77,6 @@ onMounted(async () => {
     <ScreenHeader
       title="三生空间综合分析模块"
       subtitle="指标建模 / 权重推演 / 空间评价 / 优势短板识别"
-      status="评价模型就绪"
     />
 
     <div class="sansheng-layout">

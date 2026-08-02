@@ -109,7 +109,6 @@ watch(filtered, () => {
     <ScreenHeader
       title="乡村治理闭环处置模块"
       subtitle="群众参与 / 空间落图 / 数据分析 / 闭环处置"
-      status="治理服务正常"
     />
 
     <div class="governance-layout">

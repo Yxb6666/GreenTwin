@@ -145,7 +145,6 @@ button {
   background: linear-gradient(90deg, transparent, var(--cyan), transparent);
 }
 
-.screen-header__meta,
 .screen-header__time {
   display: grid;
   gap: 4px;
@@ -154,15 +153,11 @@ button {
   letter-spacing: 0.08em;
 }
 
-.screen-header__meta {
-  padding-top: 26px;
-}
-
 .screen-header__time {
+  grid-column: 3;
   justify-items: end;
 }
 
-.screen-header__meta strong,
 .screen-header__time strong {
   color: var(--text);
   font-family: var(--font-data);
@@ -170,11 +165,8 @@ button {
   letter-spacing: 0.04em;
 }
 
-.screen-header__meta strong {
-  color: var(--cyan);
-}
-
 .screen-header__title {
+  grid-column: 2;
   text-align: center;
 }
 
