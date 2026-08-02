@@ -5,12 +5,12 @@
   "map": {
     "center": [34.82, 114.82],
     "zoom": 10,
-    "crs": "EPSG4326"
+    "crs": "EPSG3857"
   },
   "supermap": {
     "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",
     "mapServices": {
-      "base": "https://iserver.supermap.io/iserver/services/map-world/rest/maps/World",
+      "base": "https://www.supermapol.com/proxy/y8f150ad/iserver/services/map-geovis-img/rest/maps/GEOVIS_Img",
       "population": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/population_density",
       "gdp": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/gdp_grid",
       "landuse": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/land_use"
