@@ -341,25 +341,10 @@ button {
   font-size: 11px;
 }
 
-.map-caption {
-  position: absolute;
-  z-index: 600;
-  right: 12px;
-  bottom: 12px;
-  max-width: 360px;
-  padding: 10px 12px;
-  border-left: 2px solid var(--cyan);
-  background: rgba(5, 16, 17, 0.86);
-  color: var(--text-soft);
-  font-size: 11px;
-  line-height: 1.65;
-  backdrop-filter: blur(8px);
-}
-
 .map-error {
   position: absolute;
   z-index: 700;
-  top: 52px;
+  top: 10px;
   left: 10px;
   max-width: 330px;
   padding: 8px 10px;

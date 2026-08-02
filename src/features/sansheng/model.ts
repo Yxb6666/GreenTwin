@@ -12,8 +12,6 @@ export interface Indicator {
 export interface Town {
   id: string
   name: string
-  lat: number
-  lng: number
   ecology: Record<string, number>
   life: Record<string, number>
   production: Record<string, number>
@@ -56,14 +54,14 @@ export const dimensionMeta: Record<DimensionKey, { label: string; color: string;
 }
 
 export const towns: Town[] = [
-  { id: 'chengguan', name: '城关乡', lat: 34.82, lng: 114.82, ecology: { ecoLandRatio: 66, waterRatio: 58, waterNetwork: 63, slope: 32, buildDisturbance: 48 }, life: { residentialRatio: 82, poiDensity: 88, educationAccess: 91, medicalAccess: 89, roadAccess: 92 }, production: { farmlandRatio: 62, constructionRatio: 56, industryPoi: 84, roadDensity: 86, mainRoadDistance: 24 } },
-  { id: 'yifeng', name: '仪封镇', lat: 34.88, lng: 114.79, ecology: { ecoLandRatio: 72, waterRatio: 61, waterNetwork: 68, slope: 18, buildDisturbance: 42 }, life: { residentialRatio: 69, poiDensity: 64, educationAccess: 72, medicalAccess: 66, roadAccess: 78 }, production: { farmlandRatio: 84, constructionRatio: 39, industryPoi: 76, roadDensity: 74, mainRoadDistance: 31 } },
-  { id: 'guying', name: '谷营镇', lat: 34.76, lng: 114.91, ecology: { ecoLandRatio: 70, waterRatio: 54, waterNetwork: 66, slope: 22, buildDisturbance: 38 }, life: { residentialRatio: 64, poiDensity: 61, educationAccess: 68, medicalAccess: 62, roadAccess: 73 }, production: { farmlandRatio: 86, constructionRatio: 34, industryPoi: 72, roadDensity: 70, mainRoadDistance: 36 } },
-  { id: 'hongmiao', name: '红庙镇', lat: 34.74, lng: 114.71, ecology: { ecoLandRatio: 75, waterRatio: 69, waterNetwork: 73, slope: 20, buildDisturbance: 36 }, life: { residentialRatio: 61, poiDensity: 56, educationAccess: 64, medicalAccess: 58, roadAccess: 67 }, production: { farmlandRatio: 82, constructionRatio: 31, industryPoi: 68, roadDensity: 66, mainRoadDistance: 42 } },
-  { id: 'guyang', name: '堌阳镇', lat: 34.93, lng: 114.68, ecology: { ecoLandRatio: 78, waterRatio: 64, waterNetwork: 71, slope: 16, buildDisturbance: 34 }, life: { residentialRatio: 66, poiDensity: 59, educationAccess: 70, medicalAccess: 63, roadAccess: 75 }, production: { farmlandRatio: 88, constructionRatio: 30, industryPoi: 81, roadDensity: 77, mainRoadDistance: 29 } },
-  { id: 'dongbatou', name: '东坝头镇', lat: 34.89, lng: 114.98, ecology: { ecoLandRatio: 80, waterRatio: 76, waterNetwork: 79, slope: 24, buildDisturbance: 44 }, life: { residentialRatio: 58, poiDensity: 52, educationAccess: 61, medicalAccess: 57, roadAccess: 64 }, production: { farmlandRatio: 79, constructionRatio: 33, industryPoi: 66, roadDensity: 63, mainRoadDistance: 48 } },
-  { id: 'putaohjia', name: '葡萄架乡', lat: 34.69, lng: 114.84, ecology: { ecoLandRatio: 74, waterRatio: 57, waterNetwork: 62, slope: 19, buildDisturbance: 37 }, life: { residentialRatio: 57, poiDensity: 49, educationAccess: 60, medicalAccess: 55, roadAccess: 68 }, production: { farmlandRatio: 90, constructionRatio: 27, industryPoi: 74, roadDensity: 71, mainRoadDistance: 39 } },
-  { id: 'xuhe', name: '许河乡', lat: 34.79, lng: 115.02, ecology: { ecoLandRatio: 69, waterRatio: 52, waterNetwork: 59, slope: 21, buildDisturbance: 41 }, life: { residentialRatio: 55, poiDensity: 47, educationAccess: 57, medicalAccess: 52, roadAccess: 62 }, production: { farmlandRatio: 83, constructionRatio: 29, industryPoi: 65, roadDensity: 61, mainRoadDistance: 52 } },
+  { id: 'chengguan', name: '城关乡', ecology: { ecoLandRatio: 66, waterRatio: 58, waterNetwork: 63, slope: 32, buildDisturbance: 48 }, life: { residentialRatio: 82, poiDensity: 88, educationAccess: 91, medicalAccess: 89, roadAccess: 92 }, production: { farmlandRatio: 62, constructionRatio: 56, industryPoi: 84, roadDensity: 86, mainRoadDistance: 24 } },
+  { id: 'yifeng', name: '仪封镇', ecology: { ecoLandRatio: 72, waterRatio: 61, waterNetwork: 68, slope: 18, buildDisturbance: 42 }, life: { residentialRatio: 69, poiDensity: 64, educationAccess: 72, medicalAccess: 66, roadAccess: 78 }, production: { farmlandRatio: 84, constructionRatio: 39, industryPoi: 76, roadDensity: 74, mainRoadDistance: 31 } },
+  { id: 'guying', name: '谷营镇', ecology: { ecoLandRatio: 70, waterRatio: 54, waterNetwork: 66, slope: 22, buildDisturbance: 38 }, life: { residentialRatio: 64, poiDensity: 61, educationAccess: 68, medicalAccess: 62, roadAccess: 73 }, production: { farmlandRatio: 86, constructionRatio: 34, industryPoi: 72, roadDensity: 70, mainRoadDistance: 36 } },
+  { id: 'hongmiao', name: '红庙镇', ecology: { ecoLandRatio: 75, waterRatio: 69, waterNetwork: 73, slope: 20, buildDisturbance: 36 }, life: { residentialRatio: 61, poiDensity: 56, educationAccess: 64, medicalAccess: 58, roadAccess: 67 }, production: { farmlandRatio: 82, constructionRatio: 31, industryPoi: 68, roadDensity: 66, mainRoadDistance: 42 } },
+  { id: 'guyang', name: '堌阳镇', ecology: { ecoLandRatio: 78, waterRatio: 64, waterNetwork: 71, slope: 16, buildDisturbance: 34 }, life: { residentialRatio: 66, poiDensity: 59, educationAccess: 70, medicalAccess: 63, roadAccess: 75 }, production: { farmlandRatio: 88, constructionRatio: 30, industryPoi: 81, roadDensity: 77, mainRoadDistance: 29 } },
+  { id: 'dongbatou', name: '东坝头镇', ecology: { ecoLandRatio: 80, waterRatio: 76, waterNetwork: 79, slope: 24, buildDisturbance: 44 }, life: { residentialRatio: 58, poiDensity: 52, educationAccess: 61, medicalAccess: 57, roadAccess: 64 }, production: { farmlandRatio: 79, constructionRatio: 33, industryPoi: 66, roadDensity: 63, mainRoadDistance: 48 } },
+  { id: 'putaohjia', name: '葡萄架乡', ecology: { ecoLandRatio: 74, waterRatio: 57, waterNetwork: 62, slope: 19, buildDisturbance: 37 }, life: { residentialRatio: 57, poiDensity: 49, educationAccess: 60, medicalAccess: 55, roadAccess: 68 }, production: { farmlandRatio: 90, constructionRatio: 27, industryPoi: 74, roadDensity: 71, mainRoadDistance: 39 } },
+  { id: 'xuhe', name: '许河乡', ecology: { ecoLandRatio: 69, waterRatio: 52, waterNetwork: 59, slope: 21, buildDisturbance: 41 }, life: { residentialRatio: 55, poiDensity: 47, educationAccess: 57, medicalAccess: 52, roadAccess: 62 }, production: { farmlandRatio: 83, constructionRatio: 29, industryPoi: 65, roadDensity: 61, mainRoadDistance: 52 } },
 ]
 
 export function normalizeWeights(weights: Record<DimensionKey, number>) {

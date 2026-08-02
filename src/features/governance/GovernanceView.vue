@@ -6,16 +6,13 @@ import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { initialIssues, type GovernanceIssue, type IssueStatus } from './data'
 
-type LayerMode = 'points' | 'hotspot' | 'cluster' | 'status'
-
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const issues = ref<GovernanceIssue[]>(initialIssues.map((issue) => ({ ...issue })))
 const selectedId = ref(initialIssues[0]!.id)
-const activeLayer = ref<LayerMode>('points')
 const toast = ref('')
 const filters = reactive({ keyword: '', type: 'all', town: 'all', village: 'all', urgency: 'all' })
-const { error: mapError, initialize, setPoints } = useLeafletMap(mapContainer)
+const { error: mapError, initialize } = useLeafletMap(mapContainer)
 let toastTimer: number | undefined
 
 const types = computed(() => [...new Set(issues.value.map((issue) => issue.type))])
@@ -67,27 +64,6 @@ const statusColors: Record<IssueStatus, string> = {
   已办结: '#839b95',
 }
 
-function colorFor(issue: GovernanceIssue) {
-  if (activeLayer.value === 'status') return statusColors[issue.status]
-  if (activeLayer.value === 'hotspot') return issue.urgency === '高' ? '#e77468' : issue.urgency === '中' ? '#f0b85c' : '#6da9ed'
-  if (activeLayer.value === 'cluster') return issue.town === '红庙镇' || issue.town === '谷营镇' ? '#b99af7' : '#3dd6c4'
-  return typeColors[issue.type] ?? '#3dd6c4'
-}
-
-function refreshMap() {
-  setPoints(
-    filtered.value.map((issue) => ({
-      id: issue.id,
-      name: `${issue.id} · ${issue.subtype}`,
-      lat: issue.lat,
-      lng: issue.lng,
-      color: colorFor(issue),
-      value: `${issue.village} / ${issue.status}`,
-    })),
-    (id) => (selectedId.value = id),
-  )
-}
-
 function resetFilters() {
   Object.assign(filters, { keyword: '', type: 'all', town: 'all', village: 'all', urgency: 'all' })
 }
@@ -121,12 +97,10 @@ function exportIssues() {
 
 onMounted(async () => {
   await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
-  refreshMap()
 })
 
-watch([filtered, activeLayer], () => {
+watch(filtered, () => {
   if (!filtered.value.some((issue) => issue.id === selectedId.value)) selectedId.value = filtered.value[0]?.id ?? ''
-  refreshMap()
 })
 </script>
 
@@ -166,18 +140,7 @@ watch([filtered, activeLayer], () => {
       <section class="governance-center">
         <section class="map-shell panel-frame governance-map">
           <div ref="mapContainer" class="map-container" />
-          <div class="map-toolbar">
-            <button
-              v-for="item in [{ key: 'points', label: '问题点' }, { key: 'hotspot', label: '热点分析' }, { key: 'cluster', label: '聚类分析' }, { key: 'status', label: '处置状态' }]"
-              :key="item.key"
-              class="layer-button"
-              :class="{ active: activeLayer === item.key }"
-              type="button"
-              @click="activeLayer = item.key as LayerMode"
-            >{{ item.label }}</button>
-          </div>
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
-          <div class="map-caption">当前显示 {{ filtered.length }} 条问题，点击地图点位查看处置详情。</div>
         </section>
 
         <div class="governance-charts">

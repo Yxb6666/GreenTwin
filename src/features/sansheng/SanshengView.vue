@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
@@ -7,16 +7,13 @@ import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { dimensionMeta, scoreTown, towns, type DimensionKey } from './model'
 
-type ThemeLayer = 'composite' | DimensionKey | 'advantage' | 'shortage'
-
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const activeDimension = ref<DimensionKey>('ecology')
-const activeLayer = ref<ThemeLayer>('composite')
 const selectedTownId = ref('yifeng')
 const report = ref('')
 const weights = ref<Record<DimensionKey, number>>({ ecology: 34, life: 33, production: 33 })
-const { error: mapError, initialize, setPoints } = useLeafletMap(mapContainer)
+const { error: mapError, initialize } = useLeafletMap(mapContainer)
 
 const scoredTowns = computed(() =>
   towns
@@ -41,36 +38,6 @@ const countyScores = computed(() => {
     number
   >
 })
-
-const layerMeta: Record<ThemeLayer, { label: string; description: string }> = {
-  composite: { label: '综合指数', description: '叠加生态韧性、生活服务和生产支撑能力，表达三生空间协同水平。' },
-  ecology: { label: '生态空间', description: '突出水域水网、生态用地与建设干扰的空间差异。' },
-  life: { label: '生活服务', description: '表达教育、医疗、公共服务与道路通达性。' },
-  production: { label: '生产支撑', description: '综合耕地、产业 POI 和道路密度识别生产优势区。' },
-  advantage: { label: '优势区域', description: '提取综合指数和单项指数高值区域。' },
-  shortage: { label: '短板区域', description: '聚焦服务不足、建设干扰和交通可达性弱区。' },
-}
-
-function scoreForLayer(town: (typeof scoredTowns.value)[number]) {
-  if (activeLayer.value === 'advantage') return Math.max(town.scores.ecology, town.scores.life, town.scores.production)
-  if (activeLayer.value === 'shortage') return 100 - Math.min(town.scores.ecology, town.scores.life, town.scores.production)
-  return town.scores[activeLayer.value]
-}
-
-function scoreColor(score: number) {
-  if (activeLayer.value === 'shortage') return score >= 38 ? '#e77468' : score >= 28 ? '#f0b85c' : '#6da9ed'
-  return score >= 76 ? '#3dd6c4' : score >= 68 ? '#78d787' : score >= 60 ? '#f0b85c' : '#e77468'
-}
-
-function refreshMap() {
-  setPoints(
-    scoredTowns.value.map((town) => {
-      const score = scoreForLayer(town)
-      return { id: town.id, name: town.name, lat: town.lat, lng: town.lng, color: scoreColor(score), value: `${layerMeta[activeLayer.value].label}：${score}` }
-    }),
-    (id) => (selectedTownId.value = id),
-  )
-}
 
 function resetWeights() {
   weights.value = { ecology: 34, life: 33, production: 33 }
@@ -102,10 +69,7 @@ function exportReport() {
 
 onMounted(async () => {
   await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
-  refreshMap()
 })
-
-watch([activeLayer, scoredTowns], refreshMap)
 </script>
 
 <template>
@@ -153,18 +117,7 @@ watch([activeLayer, scoredTowns], refreshMap)
       <section class="sansheng-center">
         <section class="map-shell panel-frame sansheng-map">
           <div ref="mapContainer" class="map-container" />
-          <div class="map-toolbar theme-toolbar">
-            <button
-              v-for="(meta, key) in layerMeta"
-              :key="key"
-              class="layer-button"
-              :class="{ active: activeLayer === key }"
-              type="button"
-              @click="activeLayer = key"
-            >{{ meta.label }}</button>
-          </div>
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
-          <div class="map-caption">{{ layerMeta[activeLayer].description }}</div>
         </section>
 
         <PanelCard title="评价明细" :meta="selectedTown.name">
@@ -197,7 +150,7 @@ watch([activeLayer, scoredTowns], refreshMap)
           </div>
         </PanelCard>
 
-        <PanelCard title="乡镇综合排名" meta="点击联动地图">
+        <PanelCard title="乡镇综合排名" meta="点击切换乡镇">
           <ol class="ranking-list">
             <li
               v-for="(town, index) in scoredTowns"
@@ -292,11 +245,6 @@ watch([activeLayer, scoredTowns], refreshMap)
 
 .weight-total strong { float: right; color: var(--text); }
 .full-button { width: 100%; height: 30px; }
-
-.theme-toolbar {
-  max-width: calc(100% - 20px);
-  flex-wrap: wrap;
-}
 
 .indicator-table {
   width: 100%;

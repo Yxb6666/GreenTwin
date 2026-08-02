@@ -1,18 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 
-type LayerKey = 'population' | 'gdp' | 'land' | 'issues'
-
 interface Village {
   id: string
   name: string
-  lat: number
-  lng: number
   population: number
   gdp: number
   land: number
@@ -21,70 +17,21 @@ interface Village {
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const activeLayer = ref<LayerKey>('population')
-const { error: mapError, initialize, setPoints } = useLeafletMap(mapContainer)
+const { error: mapError, initialize } = useLeafletMap(mapContainer)
 
 const villages: Village[] = [
-  { id: 'yifeng', name: '仪封镇', lat: 34.88, lng: 114.79, population: 74, gdp: 88, land: 82, issues: 8 },
-  { id: 'guying', name: '谷营镇', lat: 34.9, lng: 114.68, population: 61, gdp: 71, land: 89, issues: 6 },
-  { id: 'hongmiao', name: '红庙镇', lat: 34.76, lng: 114.86, population: 58, gdp: 63, land: 78, issues: 9 },
-  { id: 'xuhe', name: '许河乡', lat: 34.72, lng: 114.72, population: 46, gdp: 52, land: 91, issues: 5 },
-  { id: 'dongbatou', name: '东坝头镇', lat: 34.94, lng: 114.98, population: 69, gdp: 78, land: 84, issues: 4 },
-  { id: 'putaohjia', name: '葡萄架乡', lat: 34.81, lng: 114.64, population: 53, gdp: 66, land: 86, issues: 7 },
-  { id: 'guyang', name: '堌阳镇', lat: 34.66, lng: 114.82, population: 64, gdp: 82, land: 76, issues: 3 },
+  { id: 'yifeng', name: '仪封镇', population: 74, gdp: 88, land: 82, issues: 8 },
+  { id: 'guying', name: '谷营镇', population: 61, gdp: 71, land: 89, issues: 6 },
+  { id: 'hongmiao', name: '红庙镇', population: 58, gdp: 63, land: 78, issues: 9 },
+  { id: 'xuhe', name: '许河乡', population: 46, gdp: 52, land: 91, issues: 5 },
+  { id: 'dongbatou', name: '东坝头镇', population: 69, gdp: 78, land: 84, issues: 4 },
+  { id: 'putaohjia', name: '葡萄架乡', population: 53, gdp: 66, land: 86, issues: 7 },
+  { id: 'guyang', name: '堌阳镇', population: 64, gdp: 82, land: 76, issues: 3 },
 ]
-
-const layerMeta: Record<LayerKey, { label: string; description: string; colors: string[] }> = {
-  population: {
-    label: '人口热力',
-    description: '人口密度专题显示村庄集聚强度与公共服务承载压力，亮度越高代表人口越集中。',
-    colors: ['#315c51', '#4c8d71', '#3dd6c4'],
-  },
-  gdp: {
-    label: 'GDP 等级',
-    description: '产业活力格网用于识别高贡献村域与产业提升潜力区。',
-    colors: ['#72572d', '#bb843c', '#f0b85c'],
-  },
-  land: {
-    label: '土地利用',
-    description: '土地利用专题表达耕地、林地、水域、建设用地和生态弹性空间。',
-    colors: ['#486a3b', '#70a858', '#a4d67d'],
-  },
-  issues: {
-    label: '治理问题',
-    description: '治理问题专题汇聚人居环境、设施短板、违建疑似与占地异常点位。',
-    colors: ['#755646', '#bd7258', '#e77468'],
-  },
-}
-
-const currentMeta = computed(() => layerMeta[activeLayer.value])
-
-function colorFor(value: number, layer: LayerKey) {
-  const colors = layerMeta[layer].colors
-  const normalized = layer === 'issues' ? Math.min(100, value * 10) : value
-  return normalized >= 75 ? colors[2]! : normalized >= 58 ? colors[1]! : colors[0]!
-}
-
-function refreshPoints() {
-  const layer = activeLayer.value
-  setPoints(
-    villages.map((village) => ({
-      id: village.id,
-      name: village.name,
-      lat: village.lat,
-      lng: village.lng,
-      color: colorFor(village[layer], layer),
-      value: `${layerMeta[layer].label}：${village[layer]}`,
-    })),
-  )
-}
 
 onMounted(async () => {
   await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
-  refreshPoints()
 })
-
-watch(activeLayer, refreshPoints)
 </script>
 
 <template>
@@ -125,20 +72,7 @@ watch(activeLayer, refreshPoints)
       <section class="master-center">
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
-          <div class="map-toolbar">
-            <button
-              v-for="(meta, key) in layerMeta"
-              :key="key"
-              class="layer-button"
-              :class="{ active: activeLayer === key }"
-              type="button"
-              @click="activeLayer = key"
-            >
-              {{ meta.label }}
-            </button>
-          </div>
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
-          <div class="map-caption"><strong>乡村空间资源一张图</strong><br />{{ currentMeta.description }}</div>
         </section>
 
         <PanelCard title="DEM 数据三维表达" meta="高程 / 坡度 / 低洼风险">
@@ -253,10 +187,6 @@ watch(activeLayer, refreshPoints)
 
 .master-map {
   min-height: 320px;
-}
-
-.map-caption strong {
-  color: var(--text);
 }
 
 .dem-overview {

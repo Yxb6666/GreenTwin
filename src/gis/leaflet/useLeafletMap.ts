@@ -2,18 +2,8 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 
-export interface MapPoint {
-  id: string
-  name: string
-  lat: number
-  lng: number
-  color: string
-  value?: string | number
-}
-
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
-  const markerLayer = shallowRef<L.LayerGroup | null>(null)
   const error = ref('')
   let resizeObserver: ResizeObserver | null = null
   let disposed = false
@@ -41,7 +31,6 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
         return
       }
 
-      markerLayer.value = L.layerGroup().addTo(instance)
       map.value = instance
 
       resizeObserver = new ResizeObserver(() => instance.invalidateSize({ animate: false }))
@@ -65,36 +54,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     }
   }
 
-  function setPoints(points: MapPoint[], onSelect?: (id: string) => void) {
-    if (!map.value || !markerLayer.value) return
-    markerLayer.value.clearLayers()
-    for (const point of points) {
-      const marker = L.circleMarker([point.lat, point.lng], {
-        radius: 7,
-        color: '#f4fffd',
-        weight: 1.5,
-        fillColor: point.color,
-        fillOpacity: 0.88,
-      })
-      marker.bindTooltip(
-        `<strong>${point.name}</strong>${point.value === undefined ? '' : `<br>${point.value}`}`,
-        { direction: 'top', opacity: 0.92 },
-      )
-      if (onSelect) marker.on('click', () => onSelect(point.id))
-      marker.addTo(markerLayer.value)
-    }
-  }
-
   function dispose() {
     disposed = true
     resizeObserver?.disconnect()
     resizeObserver = null
-    markerLayer.value?.clearLayers()
     map.value?.remove()
-    markerLayer.value = null
     map.value = null
   }
 
   onBeforeUnmount(dispose)
-  return { map, error, initialize, setPoints, dispose }
+  return { map, error, initialize, dispose }
 }
