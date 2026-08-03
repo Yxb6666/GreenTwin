@@ -234,16 +234,16 @@ button {
 }
 
 .screen-header__time {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-soft);
   font-size: 11px;
   letter-spacing: 0.08em;
-}
-
-.screen-header__time {
   grid-column: 3;
-  justify-items: end;
+  align-self: end;
+  justify-content: flex-end;
+  padding: 0 4px 5px 0;
 }
 
 .screen-header__time strong {
