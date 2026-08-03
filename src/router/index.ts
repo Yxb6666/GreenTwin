@@ -1,34 +1,58 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/features/auth/auth'
 import MasterView from '@/features/master/MasterView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', redirect: '/master' },
-    { path: '/master', name: 'master', component: MasterView, meta: { label: '主控大屏' } },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/features/auth/LoginView.vue'),
+      meta: { publicOnly: true },
+    },
+    {
+      path: '/master',
+      name: 'master',
+      component: MasterView,
+      meta: { label: '主控大屏', requiresAuth: true },
+    },
     {
       path: '/sansheng',
       name: 'sansheng',
       component: () => import('@/features/sansheng/SanshengView.vue'),
-      meta: { label: '三生空间' },
+      meta: { label: '三生空间', requiresAuth: true },
     },
     {
       path: '/twin',
       name: 'twin',
       component: () => import('@/features/twin/TwinView.vue'),
-      meta: { label: '数字孪生' },
+      meta: { label: '数字孪生', requiresAuth: true },
     },
     {
       path: '/governance',
       name: 'governance',
       component: () => import('@/features/governance/GovernanceView.vue'),
-      meta: { label: '乡村治理' },
+      meta: { label: '乡村治理', requiresAuth: true },
     },
     {
       path: '/:pathMatch(.*)*',
       component: () => import('@/features/not-found/NotFoundView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const auth = useAuthStore()
+  auth.restoreSession()
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  if (to.meta.publicOnly && auth.isAuthenticated) return { name: 'master' }
+  return true
 })
 
 export default router

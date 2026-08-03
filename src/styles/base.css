@@ -6,7 +6,7 @@ html,
 body,
 #app {
   width: 100%;
-  min-width: 1180px;
+  min-width: 320px;
   height: 100%;
   margin: 0;
 }
@@ -16,7 +16,11 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   background:
-    radial-gradient(circle at 50% -20%, rgba(61, 214, 196, 0.14), transparent 44%),
+    radial-gradient(
+      circle at 50% -20%,
+      rgba(61, 214, 196, 0.14),
+      transparent 44%
+    ),
     linear-gradient(145deg, var(--bg-deep), var(--bg-mid) 58%, #101a17);
 }
 
@@ -107,11 +111,91 @@ button {
   background: rgba(61, 214, 196, 0.14);
 }
 
+.account-nav {
+  position: fixed;
+  z-index: 3000;
+  top: 14px;
+  right: 16px;
+  display: flex;
+  min-height: 40px;
+  padding: 4px 5px 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  align-items: center;
+  gap: 8px;
+  background: rgba(4, 13, 14, 0.82);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.account-nav__avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(61, 214, 196, 0.34);
+  border-radius: 6px;
+  place-items: center;
+  color: #dffff9;
+  font: 12px var(--font-data);
+  background: rgba(61, 214, 196, 0.12);
+}
+
+.account-nav__identity {
+  display: grid;
+  min-width: 74px;
+  gap: 1px;
+}
+
+.account-nav__identity small {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+
+.account-nav__identity strong {
+  max-width: 112px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-nav button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  place-items: center;
+  color: var(--text-soft);
+  background: transparent;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+
+.account-nav button:hover {
+  border-color: rgba(231, 116, 104, 0.3);
+  color: #ffd7d2;
+  background: rgba(231, 116, 104, 0.1);
+}
+
+.account-nav button svg {
+  width: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
 .screen-page {
   position: relative;
   z-index: 1;
   display: grid;
   width: 100%;
+  min-width: 1180px;
   height: 100%;
   padding: 12px 14px;
   gap: 10px;
@@ -121,7 +205,11 @@ button {
 .panel-frame {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: linear-gradient(145deg, rgba(16, 34, 34, 0.92), rgba(8, 22, 22, 0.78));
+  background: linear-gradient(
+    145deg,
+    rgba(16, 34, 34, 0.92),
+    rgba(8, 22, 22, 0.78)
+  );
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
 }
@@ -283,7 +371,11 @@ button {
   overflow: hidden;
   border-radius: 7px;
   background:
-    radial-gradient(circle at 54% 48%, rgba(61, 214, 196, 0.12), transparent 36%),
+    radial-gradient(
+      circle at 54% 48%,
+      rgba(61, 214, 196, 0.12),
+      transparent 36%
+    ),
     #071313;
 }
 
@@ -295,11 +387,19 @@ button {
 
 .leaflet-container {
   background:
-    radial-gradient(circle at 50% 50%, rgba(61, 214, 196, 0.12), transparent 42%),
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(61, 214, 196, 0.12),
+      transparent 42%
+    ),
     linear-gradient(rgba(61, 214, 196, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(61, 214, 196, 0.055) 1px, transparent 1px),
     #071313 !important;
-  background-size: auto, 32px 32px, 32px 32px, auto !important;
+  background-size:
+    auto,
+    32px 32px,
+    32px 32px,
+    auto !important;
 }
 
 .map-shell::after {
@@ -365,7 +465,9 @@ button {
   fill: color-mix(in srgb, var(--radar-color) 22%, transparent);
   stroke: var(--radar-color);
   stroke-width: 2;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--radar-color) 55%, transparent));
+  filter: drop-shadow(
+    0 0 4px color-mix(in srgb, var(--radar-color) 55%, transparent)
+  );
 }
 
 .radar-chart text {
@@ -411,7 +513,9 @@ button {
 
 .module-enter-active,
 .module-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .module-enter-from,
