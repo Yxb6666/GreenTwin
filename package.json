@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "npm run type-check && npm run build-only",
     "build-only": "vite build",
+    "start": "node server/index.mjs",
     "type-check": "vue-tsc --build",
     "test:unit": "vitest run",
     "lint": "eslint . --fix",

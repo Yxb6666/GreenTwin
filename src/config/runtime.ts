@@ -4,6 +4,7 @@ export interface RuntimeConfig {
   appTitle: string
   apiBaseUrl: string
   requestTimeoutMs: number
+  reportTimeoutMs: number
   map: {
     center: [number, number]
     zoom: number
@@ -24,6 +25,7 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (!value || typeof value !== 'object') throw new Error('runtime-config.json 内容为空')
   const config = value as Partial<RuntimeConfig>
   if (!config.appTitle || !config.apiBaseUrl) throw new Error('缺少 appTitle 或 apiBaseUrl')
+  if (!config.reportTimeoutMs || config.reportTimeoutMs < 10000) throw new Error('reportTimeoutMs 必须不少于 10000')
   if (!config.map || !Array.isArray(config.map.center) || config.map.center.length !== 2) {
     throw new Error('map.center 必须是 [纬度, 经度]')
   }

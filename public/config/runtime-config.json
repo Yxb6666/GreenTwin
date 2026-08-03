@@ -1,7 +1,8 @@
 {
   "appTitle": "兰考县和美乡村数字孪生决策平台",
-  "apiBaseUrl": "http://127.0.0.1:8080/api",
+  "apiBaseUrl": "/api",
   "requestTimeoutMs": 10000,
+  "reportTimeoutMs": 120000,
   "map": {
     "center": [34.82, 114.82],
     "zoom": 10,
