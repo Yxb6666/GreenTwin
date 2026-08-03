@@ -8,11 +8,11 @@ import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { dimensionMeta, scoreTown, towns, type DimensionKey } from './model'
 import {
   buildSanshengReportRequest,
-  formatReportAsText,
   requestSanshengReport,
   type ReportMeta,
   type SanshengReport,
 } from './report'
+import { createReportDocxBlob, createReportDocxFileName } from './reportDocx'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
@@ -23,6 +23,7 @@ const reportMeta = ref<ReportMeta | null>(null)
 const reportError = ref('')
 const reportOpen = ref(false)
 const isGeneratingReport = ref(false)
+const isExportingReport = ref(false)
 const weights = ref<Record<DimensionKey, number>>({ ecology: 34, life: 33, production: 33 })
 const { error: mapError, initialize } = useLeafletMap(mapContainer)
 
@@ -93,13 +94,21 @@ async function generateReport() {
 async function exportReport() {
   if (!report.value || !reportMeta.value) await generateReport()
   if (!report.value || !reportMeta.value) return
-  const blob = new Blob([formatReportAsText(report.value, reportMeta.value)], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `${selectedTown.value.name}-三生空间详细报告.txt`
-  anchor.click()
-  URL.revokeObjectURL(url)
+  isExportingReport.value = true
+  reportError.value = ''
+  try {
+    const blob = await createReportDocxBlob(report.value, reportMeta.value)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = createReportDocxFileName(selectedTown.value.name)
+    anchor.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    reportError.value = error instanceof Error ? `Word 报告导出失败：${error.message}` : 'Word 报告导出失败'
+  } finally {
+    isExportingReport.value = false
+  }
 }
 
 watch(
@@ -213,10 +222,12 @@ onMounted(async () => {
             <p>{{ report?.executiveSummary || diagnosisSummary }}</p>
             <span v-if="reportError" class="report-error" role="alert">{{ reportError }}</span>
             <div>
-              <button class="action-button" type="button" :disabled="isGeneratingReport" @click="generateReport">
+              <button class="action-button" type="button" :disabled="isGeneratingReport || isExportingReport" @click="generateReport">
                 {{ isGeneratingReport ? 'DeepSeek 生成中…' : '生成详细报告' }}
               </button>
-              <button class="action-button" type="button" :disabled="isGeneratingReport" @click="exportReport">导出报告</button>
+              <button class="action-button" type="button" :disabled="isGeneratingReport || isExportingReport" @click="exportReport">
+                {{ isExportingReport ? 'Word 生成中…' : '导出 Word' }}
+              </button>
             </div>
           </div>
         </PanelCard>
@@ -275,7 +286,9 @@ onMounted(async () => {
           </div>
           <footer class="report-dialog__footer">
             <span>AI 报告仅供辅助研判，不替代法定规划与实地调查。</span>
-            <button class="action-button" type="button" @click="exportReport">导出文本报告</button>
+            <button class="action-button" type="button" :disabled="isExportingReport" @click="exportReport">
+              {{ isExportingReport ? 'Word 生成中…' : '导出 Word 文档' }}
+            </button>
           </footer>
         </section>
       </div>

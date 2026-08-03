@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { scoreTown, towns } from '@/features/sansheng/model'
-import { buildSanshengReportRequest, formatReportAsText, type ReportMeta, type SanshengReport } from '@/features/sansheng/report'
+import { buildSanshengReportRequest, type ReportMeta, type SanshengReport } from '@/features/sansheng/report'
+import { createReportDocxBlob, createReportDocxFileName } from '@/features/sansheng/reportDocx'
 
 const report: SanshengReport = {
   title: '仪封镇三生空间综合评价报告',
@@ -32,13 +33,12 @@ describe('DeepSeek 三生空间报告前端数据', () => {
     expect(payload.indicators.find((item) => item.name === '坡度')).toMatchObject({ direction: 'negative', normalizedScore: 82 })
   })
 
-  it('将结构化报告导出为包含完整章节的文本', () => {
+  it('将结构化报告打包为 Word 文档', async () => {
     const meta: ReportMeta = { model: 'deepseek-v4-flash', generatedAt: '2026-08-03T10:00:00.000Z', usage: null }
-    const text = formatReportAsText(report, meta)
+    const blob = await createReportDocxBlob(report, meta)
 
-    expect(text).toContain('一、执行摘要')
-    expect(text).toContain('六、行动建议')
-    expect(text).toContain('deepseek-v4-flash')
-    expect(text).toContain('补齐公共服务短板')
+    expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    expect(blob.size).toBeGreaterThan(3000)
+    expect(createReportDocxFileName('仪封镇')).toBe('仪封镇-三生空间详细报告.docx')
   })
 })
