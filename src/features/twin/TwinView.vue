@@ -237,8 +237,10 @@ onBeforeUnmount(() => {
         </PanelCard>
 
         <PanelCard title="三生空间评价模型" meta="场景实时关联">
-          <RadarChart :labels="['生态连续性', '生活便利度', '产业活力', '治理响应', '空间品质']" :values="[88, 76, 92, 81, 84]" />
-          <div class="scene-score"><span>场景综合评分</span><strong>84.2</strong></div>
+          <div class="scene-model-layout">
+            <RadarChart :labels="['生态连续性', '生活便利度', '产业活力', '治理响应', '空间品质']" :values="[88, 76, 92, 81, 84]" />
+            <div class="scene-score"><span>场景综合评分</span><strong>84.2</strong></div>
+          </div>
         </PanelCard>
       </aside>
     </div>
@@ -356,7 +358,14 @@ onBeforeUnmount(() => {
 .roam-list strong { font-size: 11px; }
 .roam-list small { color: var(--text-soft); font-size: 9px; }
 
-.scene-score { display: flex; align-items: center; margin-top: -8px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.scene-model-layout {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.scene-model-layout .radar-chart { min-height: 0; }
+.scene-score { display: flex; align-items: center; padding: 8px 10px; border-top: 1px solid var(--line); }
 .scene-score span { color: var(--text-soft); font-size: 10px; }
 .scene-score strong { margin-left: auto; color: var(--cyan); font: 20px var(--font-data); }
 
