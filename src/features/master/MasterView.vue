@@ -33,7 +33,7 @@ onMounted(async () => {
     <div class="master-layout">
       <aside class="master-side">
         <PanelCard title="人口与密度特征" meta="2020—2025 / 县域统计">
-          <div class="population-scroll scroll-region">
+          <div class="population-content">
             <div class="metric-grid">
               <article class="metric-card">
                 <span>年末总人口</span>
@@ -46,7 +46,7 @@ onMounted(async () => {
                 <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
               </article>
             </div>
-            <div class="data-bars master-bars">
+            <div class="data-bars master-bars scroll-region">
               <div v-for="item in populationTrend" :key="item.year" class="data-bar">
                 <span>{{ item.year }}年</span>
                 <i :style="{ '--value': `${item.barPercent}%` }" />
@@ -154,16 +154,19 @@ onMounted(async () => {
   grid-template-rows: minmax(0, 1fr) 196px;
 }
 
-.population-scroll {
+.population-content {
+  display: grid;
   height: 100%;
   min-height: 0;
-  padding-right: 4px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .master-bars {
-  margin-top: 10px;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
 }
 
 .master-bars .data-bar {
