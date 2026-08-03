@@ -16,7 +16,7 @@ const now = useClock()
       <p>{{ subtitle }}</p>
     </div>
     <div class="screen-header__time">
-      <span>当前时间</span>
+      <span></span>
       <strong>{{ now }}</strong>
     </div>
   </header>
