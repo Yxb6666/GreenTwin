@@ -5,29 +5,18 @@ import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-
-interface Village {
-  id: string
-  name: string
-  population: number
-  gdp: number
-  land: number
-  issues: number
-}
+import {
+  gdpTrend,
+  latestDensityRecord,
+  latestPopulation,
+  latestPopulationDensity,
+  latestPopulationGrowth,
+  populationTrend,
+} from '@/features/master/data'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const { error: mapError, initialize } = useLeafletMap(mapContainer)
-
-const villages: Village[] = [
-  { id: 'yifeng', name: '仪封镇', population: 74, gdp: 88, land: 82, issues: 8 },
-  { id: 'guying', name: '谷营镇', population: 61, gdp: 71, land: 89, issues: 6 },
-  { id: 'hongmiao', name: '红庙镇', population: 58, gdp: 63, land: 78, issues: 9 },
-  { id: 'xuhe', name: '许河乡', population: 46, gdp: 52, land: 91, issues: 5 },
-  { id: 'dongbatou', name: '东坝头镇', population: 69, gdp: 78, land: 84, issues: 4 },
-  { id: 'putaohjia', name: '葡萄架乡', population: 53, gdp: 66, land: 86, issues: 7 },
-  { id: 'guyang', name: '堌阳镇', population: 64, gdp: 82, land: 76, issues: 3 },
-]
 
 onMounted(async () => {
   await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
@@ -43,23 +32,39 @@ onMounted(async () => {
 
     <div class="master-layout">
       <aside class="master-side">
-        <PanelCard title="人口密度特征" meta="村域网格 / 人口承载">
+        <PanelCard title="人口与密度特征" meta="2020—2025 / 县域统计">
           <div class="metric-grid">
-            <article class="metric-card"><span>常住人口</span><strong>72.6万</strong><small>较上期 +1.8%</small></article>
-            <article class="metric-card"><span>平均密度</span><strong>642</strong><small>人 / km²</small></article>
+            <article class="metric-card">
+              <span>年末总人口</span>
+              <strong>{{ latestPopulation.populationWan.toFixed(1) }}万</strong>
+              <small>{{ latestPopulation.year }}年 · 较上年 {{ latestPopulationGrowth.toFixed(1) }}%</small>
+            </article>
+            <article class="metric-card">
+              <span>人口密度</span>
+              <strong>{{ latestPopulationDensity }}</strong>
+              <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
+            </article>
           </div>
           <div class="data-bars master-bars">
-            <div v-for="village in villages.slice(0, 5)" :key="village.id" class="data-bar">
-              <span>{{ village.name }}</span><i :style="{ '--value': `${village.population}%` }" /><b>{{ village.population }}</b>
+            <div v-for="item in populationTrend" :key="item.year" class="data-bar">
+              <span>{{ item.year }}年</span>
+              <i :style="{ '--value': `${item.barPercent}%` }" />
+              <b>{{ item.populationWan.toFixed(1) }}</b>
             </div>
           </div>
         </PanelCard>
 
-        <PanelCard title="GDP 特征" meta="产业贡献 / 增长态势">
+        <PanelCard title="GDP 特征" meta="2020—2025 / 亿元">
           <div class="gdp-chart">
-            <div v-for="(item, index) in [56, 68, 63, 79, 74, 88, 92]" :key="index">
-              <i :style="{ height: `${item}%` }" /><span>{{ 2020 + index }}</span>
-            </div>
+            <article
+              v-for="item in gdpTrend"
+              :key="item.year"
+              :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`"
+            >
+              <strong>{{ item.gdpYiYuan.toFixed(1) }}</strong>
+              <i :style="{ height: `${item.barPercent}%` }" />
+              <span>{{ item.year }}</span>
+            </article>
           </div>
         </PanelCard>
 
@@ -151,6 +156,10 @@ onMounted(async () => {
   margin-top: 10px;
 }
 
+.master-bars .data-bar {
+  grid-template-columns: 48px minmax(0, 1fr) 30px;
+}
+
 .gdp-chart {
   display: flex;
   align-items: end;
@@ -161,12 +170,18 @@ onMounted(async () => {
   border-bottom: 1px solid var(--line);
 }
 
-.gdp-chart div {
+.gdp-chart article {
   display: grid;
   align-items: end;
   height: 100%;
   flex: 1;
-  grid-template-rows: minmax(0, 1fr) 20px;
+  grid-template-rows: 18px minmax(0, 1fr) 20px;
+}
+
+.gdp-chart strong {
+  color: var(--text-soft);
+  font: 9px var(--font-data);
+  text-align: center;
 }
 
 .gdp-chart i {
