@@ -161,7 +161,7 @@ watch(filtered, () => {
 
       <aside class="governance-right">
         <PanelCard title="最新上报问题" :meta="`${filtered.length} 条`">
-          <div class="issue-list">
+          <div class="issue-list scroll-region">
             <button
               v-for="issue in filtered"
               :key="issue.id"

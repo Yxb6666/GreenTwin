@@ -511,6 +511,26 @@ button {
   text-align: right;
 }
 
+.scroll-region {
+  scrollbar-color: rgba(150, 175, 167, 0.6) rgba(255, 255, 255, 0.05);
+  scrollbar-width: thin;
+}
+
+.scroll-region::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-region::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.scroll-region::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(150, 175, 167, 0.6);
+}
+
 .module-enter-active,
 .module-leave-active {
   transition:
