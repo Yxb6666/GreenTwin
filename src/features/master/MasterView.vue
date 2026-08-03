@@ -33,23 +33,25 @@ onMounted(async () => {
     <div class="master-layout">
       <aside class="master-side">
         <PanelCard title="人口与密度特征" meta="2020—2025 / 县域统计">
-          <div class="metric-grid">
-            <article class="metric-card">
-              <span>年末总人口</span>
-              <strong>{{ latestPopulation.populationWan.toFixed(1) }}万</strong>
-              <small>{{ latestPopulation.year }}年 · 较上年 {{ latestPopulationGrowth.toFixed(1) }}%</small>
-            </article>
-            <article class="metric-card">
-              <span>人口密度</span>
-              <strong>{{ latestPopulationDensity }}</strong>
-              <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
-            </article>
-          </div>
-          <div class="data-bars master-bars">
-            <div v-for="item in populationTrend" :key="item.year" class="data-bar">
-              <span>{{ item.year }}年</span>
-              <i :style="{ '--value': `${item.barPercent}%` }" />
-              <b>{{ item.populationWan.toFixed(1) }}</b>
+          <div class="population-scroll scroll-region">
+            <div class="metric-grid">
+              <article class="metric-card">
+                <span>年末总人口</span>
+                <strong>{{ latestPopulation.populationWan.toFixed(1) }}万</strong>
+                <small>{{ latestPopulation.year }}年 · 较上年 {{ latestPopulationGrowth.toFixed(1) }}%</small>
+              </article>
+              <article class="metric-card">
+                <span>人口密度</span>
+                <strong>{{ latestPopulationDensity }}</strong>
+                <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
+              </article>
+            </div>
+            <div class="data-bars master-bars">
+              <div v-for="item in populationTrend" :key="item.year" class="data-bar">
+                <span>{{ item.year }}年</span>
+                <i :style="{ '--value': `${item.barPercent}%` }" />
+                <b>{{ item.populationWan.toFixed(1) }}</b>
+              </div>
             </div>
           </div>
         </PanelCard>
@@ -150,6 +152,14 @@ onMounted(async () => {
 
 .master-center {
   grid-template-rows: minmax(0, 1fr) 196px;
+}
+
+.population-scroll {
+  height: 100%;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .master-bars {
