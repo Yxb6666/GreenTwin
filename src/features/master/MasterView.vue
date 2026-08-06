@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
+import MapToolbox from '@/shared/components/MapToolbox.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
@@ -16,7 +17,7 @@ import {
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, error: mapError, initialize } = useLeafletMap(mapContainer)
 
 onMounted(async () => {
   await initialize(
@@ -85,6 +86,12 @@ onMounted(async () => {
       <section class="master-center">
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
+          <MapToolbox
+            :map="map"
+            :initial-center="config.map.center"
+            :initial-zoom="config.map.zoom"
+            export-name="兰考县综合决策地图"
+          />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
