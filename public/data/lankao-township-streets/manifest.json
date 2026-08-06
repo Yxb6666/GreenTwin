@@ -1,0 +1,33 @@
+{
+  "generated_on": "2026-08-06",
+  "crs": "EPSG:4326 / OGC:CRS84",
+  "service_url": "http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township",
+  "official_divisions": {
+    "feature_count": 16,
+    "geometry_valid": true,
+    "pairwise_overlap_area_degrees2": 8.503588847033417e-11,
+    "bounds": [
+      114.687016,
+      34.744375,
+      115.261478,
+      35.02605
+    ],
+    "total_area_km2": 1073.5389
+  },
+  "map_units": {
+    "feature_count": 20,
+    "geometry_valid": true,
+    "pairwise_overlap_area_degrees2": 8.659428563175203e-11,
+    "bounds": [
+      114.687016,
+      34.744375,
+      115.261478,
+      35.02605
+    ],
+    "total_area_km2": 1103.322
+  },
+  "files": {
+    "lankao-township-streets.geojson": "fa3f08e2c60a5b40f3998d3dccdc03ec5299f9b2780525c9431272a53c09ceee",
+    "lankao-map-units.geojson": "805c4838f96e010a3b5e2cda83ba0088ef6bf259f058b85ba08d3da48cfd5bb8"
+  }
+}
