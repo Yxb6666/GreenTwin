@@ -2,6 +2,52 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 
+class IServerGeographicOverlay extends L.GridLayer {
+  private readonly serviceUrl: string
+  private readonly onTileError: () => void
+
+  constructor(serviceUrl: string, onTileError: () => void) {
+    super({ tileSize: 256, pane: 'overlayPane' })
+    this.serviceUrl = serviceUrl.replace(/\/+$/, '')
+    this.onTileError = onTileError
+  }
+
+  protected createTile(coords: L.Coords, done: L.DoneCallback) {
+    const tileSize = this.getTileSize()
+    const northWest = this._map.unproject(L.point(coords.x * tileSize.x, coords.y * tileSize.y), coords.z)
+    const southEast = this._map.unproject(
+      L.point((coords.x + 1) * tileSize.x, (coords.y + 1) * tileSize.y),
+      coords.z,
+    )
+    const image = document.createElement('img')
+    image.alt = ''
+    image.width = tileSize.x
+    image.height = tileSize.y
+    image.setAttribute('role', 'presentation')
+    image.addEventListener('load', () => done(undefined, image))
+    image.addEventListener('error', () => {
+      this.onTileError()
+      done(new Error('iServer 乡镇叠加图层加载失败'), image)
+    })
+
+    const params = new URLSearchParams({
+      width: String(tileSize.x),
+      height: String(tileSize.y),
+      redirect: 'false',
+      transparent: 'true',
+      cacheEnabled: 'false',
+      viewBounds: JSON.stringify({
+        left: northWest.lng,
+        bottom: southEast.lat,
+        right: southEast.lng,
+        top: northWest.lat,
+      }),
+    })
+    image.src = `${this.serviceUrl}/image.png?${params.toString()}`
+    return image
+  }
+}
+
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
   const error = ref('')
@@ -14,6 +60,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     center: [number, number],
     zoom: number,
     crsCode: 'EPSG4326' | 'EPSG3857',
+    overlayServiceUrls: string[] = [],
   ) {
     await nextTick()
     if (!container.value || map.value) return
@@ -42,9 +89,16 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
           if (disposed) return
           const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, { transparent: false })
           baseLayer.on('tileerror', () => {
-            error.value = '二维地图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
+            error.value = '二维底图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
           })
           baseLayer.addTo(instance)
+
+          overlayServiceUrls.forEach((overlayServiceUrl) => {
+            const overlayLayer = new IServerGeographicOverlay(overlayServiceUrl, () => {
+              error.value = '二维叠加图层响应异常，请检查 iServer 地址、动态投影与跨域配置。'
+            })
+            overlayLayer.addTo(instance)
+          })
         })
         .catch((cause: unknown) => {
           error.value = cause instanceof Error ? cause.message : 'SuperMap iClient Leaflet SDK 加载失败'

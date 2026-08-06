@@ -4,9 +4,9 @@
   "requestTimeoutMs": 10000,
   "reportTimeoutMs": 120000,
   "map": {
-    "center": [34.885212666, 114.974247107],
+    "center": [34.82, 114.82],
     "zoom": 10,
-    "crs": "EPSG4326"
+    "crs": "EPSG3857"
   },
   "supermap": {
     "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",

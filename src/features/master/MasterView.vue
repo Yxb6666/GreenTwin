@@ -21,10 +21,11 @@ const { error: mapError, initialize } = useLeafletMap(mapContainer)
 onMounted(async () => {
   await initialize(
     config.supermap.leafletSdkUrl,
-    config.supermap.mapServices.township,
+    config.supermap.mapServices.base,
     config.map.center,
     config.map.zoom,
     config.map.crs,
+    [config.supermap.mapServices.township],
   )
 })
 </script>

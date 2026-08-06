@@ -35,9 +35,11 @@ npm run build
 
 该文件会原样复制到构建产物，可以在构建后按现场环境修改。前端公开配置中不要存放密码、私钥或长期令牌。
 
-当前二维业务地图使用 `supermap.mapServices.township`，其值应为 iServer REST 目录下可直接加载的地图资源地址，例如
-`http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township`。该服务使用 EPSG:4326，
-对应的 `map.center` 按 `[纬度, 经度]` 配置，`map.crs` 应设为 `EPSG4326`。三维场景仍使用 `mapServices.base` 作为影像底图。
+当前二维业务地图使用 `supermap.mapServices.base` 作为影像底图，并将 `supermap.mapServices.township` 作为透明乡镇边界叠加层。
+乡镇服务地址应指向 iServer REST 目录下可直接加载的地图资源，例如
+`http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township`。应用保持 EPSG:3857，
+加载原始坐标系为 EPSG:4326 的乡镇服务时，客户端按影像瓦片的经纬度范围请求透明 `image.png`，再由 Leaflet 对齐到
+EPSG:3857 底图；这是因为该 iServer 服务未启用动态投影。三维场景仍使用 `mapServices.base` 作为影像底图。
 
 原静态页面及其样式、脚本已保存在 `legacy/`，用于迁移效果对照。
 
