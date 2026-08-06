@@ -35,6 +35,10 @@ npm run build
 
 该文件会原样复制到构建产物，可以在构建后按现场环境修改。前端公开配置中不要存放密码、私钥或长期令牌。
 
+当前二维业务地图使用 `supermap.mapServices.township`，其值应为 iServer REST 目录下可直接加载的地图资源地址，例如
+`http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township`。该服务使用 EPSG:4326，
+对应的 `map.center` 按 `[纬度, 经度]` 配置，`map.crs` 应设为 `EPSG4326`。三维场景仍使用 `mapServices.base` 作为影像底图。
+
 原静态页面及其样式、脚本已保存在 `legacy/`，用于迁移效果对照。
 
 详细需求与实现约束见 [SPEC.md](./SPEC.md)。

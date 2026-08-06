@@ -96,7 +96,13 @@ function exportIssues() {
 }
 
 onMounted(async () => {
-  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
+  await initialize(
+    config.supermap.leafletSdkUrl,
+    config.supermap.mapServices.township,
+    config.map.center,
+    config.map.zoom,
+    config.map.crs,
+  )
 })
 
 watch(filtered, () => {

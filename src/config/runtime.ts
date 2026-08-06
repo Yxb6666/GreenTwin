@@ -12,7 +12,7 @@ export interface RuntimeConfig {
   }
   supermap: {
     leafletSdkUrl: string
-    mapServices: Record<'base' | 'population' | 'gdp' | 'landuse', string>
+    mapServices: Record<'base' | 'township' | 'population' | 'gdp' | 'landuse', string>
     webglSdkUrl: string
     webglWidgetsCssUrl: string
     realspace: Record<'whiteModel' | 'oblique' | 'lidar', string>
@@ -32,8 +32,12 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (config.map.crs !== 'EPSG4326' && config.map.crs !== 'EPSG3857') {
     throw new Error('map.crs 必须是 EPSG4326 或 EPSG3857')
   }
-  if (!config.supermap?.leafletSdkUrl || !config.supermap.mapServices?.base) {
-    throw new Error('缺少 supermap.leafletSdkUrl 或 supermap.mapServices.base')
+  if (
+    !config.supermap?.leafletSdkUrl ||
+    !config.supermap.mapServices?.base ||
+    !config.supermap.mapServices.township
+  ) {
+    throw new Error('缺少 supermap.leafletSdkUrl、supermap.mapServices.base 或 supermap.mapServices.township')
   }
 }
 
