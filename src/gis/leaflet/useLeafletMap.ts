@@ -1,72 +1,15 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
-import { enhanceTownshipOverlayPixels } from './enhanceOverlayPixels'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { loadIServerMapBounds } from './serviceBounds'
+import { loadTownshipFeatures } from './townshipFeatures'
 
-class IServerGeographicOverlay extends L.GridLayer {
-  private readonly serviceUrl: string
-  private readonly onTileError: () => void
-
-  constructor(serviceUrl: string, onTileError: () => void) {
-    super({ tileSize: 256, pane: 'overlayPane' })
-    this.serviceUrl = serviceUrl.replace(/\/+$/, '')
-    this.onTileError = onTileError
-  }
-
-  protected createTile(coords: L.Coords, done: L.DoneCallback) {
-    const tileSize = this.getTileSize()
-    const northWest = this._map.unproject(L.point(coords.x * tileSize.x, coords.y * tileSize.y), coords.z)
-    const southEast = this._map.unproject(
-      L.point((coords.x + 1) * tileSize.x, (coords.y + 1) * tileSize.y),
-      coords.z,
-    )
-    const canvas = document.createElement('canvas')
-    canvas.width = tileSize.x
-    canvas.height = tileSize.y
-    canvas.setAttribute('role', 'presentation')
-    const image = new Image(tileSize.x, tileSize.y)
-    image.crossOrigin = 'anonymous'
-    image.decoding = 'async'
-    image.addEventListener('load', () => {
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      if (!context) {
-        this.onTileError()
-        done(new Error('浏览器无法创建乡镇叠加图层画布'), canvas)
-        return
-      }
-
-      context.drawImage(image, 0, 0, tileSize.x, tileSize.y)
-      try {
-        const imageData = context.getImageData(0, 0, tileSize.x, tileSize.y)
-        enhanceTownshipOverlayPixels(imageData.data)
-        context.putImageData(imageData, 0, 0)
-      } catch {
-        // 跨域策略不允许读取像素时，仍显示 iServer 返回的原始透明图层。
-      }
-      done(undefined, canvas)
-    })
-    image.addEventListener('error', () => {
-      this.onTileError()
-      done(new Error('iServer 乡镇叠加图层加载失败'), canvas)
-    })
-
-    const params = new URLSearchParams({
-      width: String(tileSize.x),
-      height: String(tileSize.y),
-      redirect: 'false',
-      transparent: 'true',
-      cacheEnabled: 'false',
-      viewBounds: JSON.stringify({
-        left: northWest.lng,
-        bottom: southEast.lat,
-        right: southEast.lng,
-        top: northWest.lat,
-      }),
-    })
-    image.src = `${this.serviceUrl}/image.png?${params.toString()}`
-    return canvas
-  }
+const TOWNSHIP_STYLE: L.PathOptions = {
+  color: '#d6ed9f',
+  fillColor: '#146f54',
+  fillOpacity: 0.48,
+  opacity: 0.95,
+  weight: 1.4,
 }
 
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
@@ -110,17 +53,26 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       void loadSuperMapLeaflet(sdkUrl)
         .then((superMapLeaflet) => {
           if (disposed) return
-          const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, { transparent: false })
+          const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, {
+            transparent: false,
+            crossOrigin: true,
+          })
           baseLayer.on('tileerror', () => {
             error.value = '二维底图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
           })
           baseLayer.addTo(instance)
 
           overlayServiceUrls.forEach((overlayServiceUrl) => {
-            const overlayLayer = new IServerGeographicOverlay(overlayServiceUrl, () => {
-              error.value = '二维叠加图层响应异常，请检查 iServer 地址、动态图片与跨域配置。'
-            })
-            overlayLayer.addTo(instance)
+            void loadTownshipFeatures(overlayServiceUrl)
+              .then((features) => {
+                if (disposed) return
+                features.forEach((feature) => {
+                  L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
+                })
+              })
+              .catch(() => {
+                if (!disposed) error.value = '二维乡镇叠加层加载失败，请检查 iServer 查询接口与跨域配置。'
+              })
           })
 
           const focusServiceUrl = overlayServiceUrls[0]
