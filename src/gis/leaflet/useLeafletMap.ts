@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { enhanceTownshipOverlayPixels } from './enhanceOverlayPixels'
 import { loadSuperMapLeaflet } from './loadSdk'
+import { loadIServerMapBounds } from './serviceBounds'
 
 class IServerGeographicOverlay extends L.GridLayer {
   private readonly serviceUrl: string
@@ -90,6 +91,8 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
         zoomControl: false,
         attributionControl: false,
         preferCanvas: true,
+        zoomSnap: 0.25,
+        zoomDelta: 0.25,
         crs: crsCode === 'EPSG4326' ? L.CRS.EPSG4326 : L.CRS.EPSG3857,
       }).setView(center, zoom)
 
@@ -115,10 +118,22 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
           overlayServiceUrls.forEach((overlayServiceUrl) => {
             const overlayLayer = new IServerGeographicOverlay(overlayServiceUrl, () => {
-              error.value = '二维叠加图层响应异常，请检查 iServer 地址、动态投影与跨域配置。'
+              error.value = '二维叠加图层响应异常，请检查 iServer 地址、动态图片与跨域配置。'
             })
             overlayLayer.addTo(instance)
           })
+
+          const focusServiceUrl = overlayServiceUrls[0]
+          if (focusServiceUrl) {
+            void loadIServerMapBounds(focusServiceUrl)
+              .then((bounds) => {
+                if (disposed) return
+                instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })
+              })
+              .catch(() => {
+                if (!disposed) error.value = '乡镇图层范围读取失败，地图已使用默认中心点与缩放级别。'
+              })
+          }
         })
         .catch((cause: unknown) => {
           error.value = cause instanceof Error ? cause.message : 'SuperMap iClient Leaflet SDK 加载失败'

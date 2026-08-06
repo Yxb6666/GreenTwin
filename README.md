@@ -40,6 +40,7 @@ npm run build
 `http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township`。应用保持 EPSG:3857，
 加载原始坐标系为 EPSG:4326 的乡镇服务时，客户端按影像瓦片的经纬度范围请求透明 `image.png`，再由 Leaflet 对齐到
 EPSG:3857 底图；这是因为该 iServer 服务未启用动态投影。三维场景仍使用 `mapServices.base` 作为影像底图。
+乡镇服务加载后，地图会读取服务范围并自适应缩放、居中显示；`map.center` 和 `map.zoom` 仅作为范围读取失败时的回退值。
 
 原静态页面及其样式、脚本已保存在 `legacy/`，用于迁移效果对照。
 
