@@ -1,5 +1,6 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
+import { enhanceTownshipOverlayPixels } from './enhanceOverlayPixels'
 import { loadSuperMapLeaflet } from './loadSdk'
 
 class IServerGeographicOverlay extends L.GridLayer {
@@ -19,15 +20,34 @@ class IServerGeographicOverlay extends L.GridLayer {
       L.point((coords.x + 1) * tileSize.x, (coords.y + 1) * tileSize.y),
       coords.z,
     )
-    const image = document.createElement('img')
-    image.alt = ''
-    image.width = tileSize.x
-    image.height = tileSize.y
-    image.setAttribute('role', 'presentation')
-    image.addEventListener('load', () => done(undefined, image))
+    const canvas = document.createElement('canvas')
+    canvas.width = tileSize.x
+    canvas.height = tileSize.y
+    canvas.setAttribute('role', 'presentation')
+    const image = new Image(tileSize.x, tileSize.y)
+    image.crossOrigin = 'anonymous'
+    image.decoding = 'async'
+    image.addEventListener('load', () => {
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      if (!context) {
+        this.onTileError()
+        done(new Error('浏览器无法创建乡镇叠加图层画布'), canvas)
+        return
+      }
+
+      context.drawImage(image, 0, 0, tileSize.x, tileSize.y)
+      try {
+        const imageData = context.getImageData(0, 0, tileSize.x, tileSize.y)
+        enhanceTownshipOverlayPixels(imageData.data)
+        context.putImageData(imageData, 0, 0)
+      } catch {
+        // 跨域策略不允许读取像素时，仍显示 iServer 返回的原始透明图层。
+      }
+      done(undefined, canvas)
+    })
     image.addEventListener('error', () => {
       this.onTileError()
-      done(new Error('iServer 乡镇叠加图层加载失败'), image)
+      done(new Error('iServer 乡镇叠加图层加载失败'), canvas)
     })
 
     const params = new URLSearchParams({
@@ -44,7 +64,7 @@ class IServerGeographicOverlay extends L.GridLayer {
       }),
     })
     image.src = `${this.serviceUrl}/image.png?${params.toString()}`
-    return image
+    return canvas
   }
 }
 
