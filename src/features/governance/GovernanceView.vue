@@ -13,7 +13,7 @@ const issues = ref<GovernanceIssue[]>(initialIssues.map((issue) => ({ ...issue }
 const selectedId = ref(initialIssues[0]!.id)
 const toast = ref('')
 const filters = reactive({ keyword: '', type: 'all', town: 'all', village: 'all', urgency: 'all' })
-const { map, error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
 let toastTimer: number | undefined
 
 const types = computed(() => [...new Set(issues.value.map((issue) => issue.type))])
@@ -149,6 +149,7 @@ watch(filtered, () => {
           <div ref="mapContainer" class="map-container" />
           <MapToolbox
             :map="map"
+            :focus-bounds="focusBounds"
             :initial-center="config.map.center"
             :initial-zoom="config.map.zoom"
             export-name="兰考县乡村治理地图"

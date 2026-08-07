@@ -26,7 +26,7 @@ const reportOpen = ref(false)
 const isGeneratingReport = ref(false)
 const isExportingReport = ref(false)
 const weights = ref<Record<DimensionKey, number>>({ ecology: 34, life: 33, production: 33 })
-const { map, error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
 
 const scoredTowns = computed(() =>
   towns
@@ -181,6 +181,7 @@ onMounted(async () => {
           <div ref="mapContainer" class="map-container" />
           <MapToolbox
             :map="map"
+            :focus-bounds="focusBounds"
             :initial-center="config.map.center"
             :initial-zoom="config.map.zoom"
             export-name="兰考县三生空间评价地图"

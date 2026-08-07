@@ -1,7 +1,7 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
-import { loadIServerMapBounds } from './serviceBounds'
+import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
 import { loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
@@ -14,6 +14,7 @@ const TOWNSHIP_STYLE: L.PathOptions = {
 
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
+  const focusBounds = shallowRef<GeographicBounds | null>(null)
   const error = ref('')
   let resizeObserver: ResizeObserver | null = null
   let disposed = false
@@ -80,6 +81,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
             void loadIServerMapBounds(resolveTownshipMapServiceUrl(focusServiceUrl))
               .then((bounds) => {
                 if (disposed) return
+                focusBounds.value = bounds
                 instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })
               })
               .catch(() => {
@@ -101,8 +103,9 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     resizeObserver = null
     map.value?.remove()
     map.value = null
+    focusBounds.value = null
   }
 
   onBeforeUnmount(dispose)
-  return { map, error, initialize, dispose }
+  return { map, focusBounds, error, initialize, dispose }
 }

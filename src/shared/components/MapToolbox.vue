@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import L from 'leaflet'
+import { focusMapOnLayer } from '@/gis/leaflet/mapFocus'
 import { calculateGeodesicArea, formatArea, formatDistance } from '@/gis/leaflet/measurement'
+import type { GeographicBounds } from '@/gis/leaflet/serviceBounds'
 
 type MeasurementType = 'distance' | 'area'
 type BaseMapMode = 'natural' | 'ecology' | 'planning' | 'night'
 
 const props = defineProps<{
   map: L.Map | null
+  focusBounds: GeographicBounds | null
   initialCenter: [number, number]
   initialZoom: number
   exportName?: string
@@ -188,8 +191,8 @@ function setBaseMap(mode: BaseMapMode) {
 
 function resetView() {
   if (!props.map) return
-  props.map.flyTo(props.initialCenter, props.initialZoom, { duration: 0.8 })
-  notify('已回到默认视图')
+  focusMapOnLayer(props.map, props.focusBounds, props.initialCenter, props.initialZoom)
+  notify(props.focusBounds ? '已居中显示行政区划图层' : '图层范围不可用，已回到默认视图')
 }
 
 async function drawDomImage(
@@ -389,7 +392,7 @@ onBeforeUnmount(() => {
     <div class="map-toolbox__zoom" role="group" aria-label="地图缩放">
       <button type="button" aria-label="放大地图" title="放大" @click="map?.zoomIn()">＋</button>
       <button type="button" aria-label="缩小地图" title="缩小" @click="map?.zoomOut()">−</button>
-      <button type="button" aria-label="复位地图" title="回到默认视图" @click="resetView">
+      <button type="button" aria-label="以行政区划图层为中心" title="居中显示行政区划图层" @click="resetView">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6" /></svg>
       </button>
     </div>

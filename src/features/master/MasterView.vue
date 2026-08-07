@@ -17,7 +17,7 @@ import {
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { map, error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
 
 onMounted(async () => {
   await initialize(
@@ -88,6 +88,7 @@ onMounted(async () => {
           <div ref="mapContainer" class="map-container" />
           <MapToolbox
             :map="map"
+            :focus-bounds="focusBounds"
             :initial-center="config.map.center"
             :initial-zoom="config.map.zoom"
             export-name="兰考县综合决策地图"
