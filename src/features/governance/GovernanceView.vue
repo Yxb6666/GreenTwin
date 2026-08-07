@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
+import MapToolbox from '@/shared/components/MapToolbox.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { initialIssues, type GovernanceIssue, type IssueStatus } from './data'
@@ -12,7 +13,7 @@ const issues = ref<GovernanceIssue[]>(initialIssues.map((issue) => ({ ...issue }
 const selectedId = ref(initialIssues[0]!.id)
 const toast = ref('')
 const filters = reactive({ keyword: '', type: 'all', town: 'all', village: 'all', urgency: 'all' })
-const { error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
 let toastTimer: number | undefined
 
 const types = computed(() => [...new Set(issues.value.map((issue) => issue.type))])
@@ -96,7 +97,14 @@ function exportIssues() {
 }
 
 onMounted(async () => {
-  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
+  await initialize(
+    config.supermap.leafletSdkUrl,
+    config.supermap.mapServices.base,
+    config.map.center,
+    config.map.zoom,
+    config.map.crs,
+    [config.supermap.mapServices.township],
+  )
 })
 
 watch(filtered, () => {
@@ -139,6 +147,13 @@ watch(filtered, () => {
       <section class="governance-center">
         <section class="map-shell panel-frame governance-map">
           <div ref="mapContainer" class="map-container" />
+          <MapToolbox
+            :map="map"
+            :focus-bounds="focusBounds"
+            :initial-center="config.map.center"
+            :initial-zoom="config.map.zoom"
+            export-name="兰考县乡村治理地图"
+          />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 

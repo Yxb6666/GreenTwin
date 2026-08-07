@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
+import MapToolbox from '@/shared/components/MapToolbox.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
@@ -25,7 +26,7 @@ const reportOpen = ref(false)
 const isGeneratingReport = ref(false)
 const isExportingReport = ref(false)
 const weights = ref<Record<DimensionKey, number>>({ ecology: 34, life: 33, production: 33 })
-const { error: mapError, initialize } = useLeafletMap(mapContainer)
+const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
 
 const scoredTowns = computed(() =>
   towns
@@ -123,7 +124,14 @@ watch(
 )
 
 onMounted(async () => {
-  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs)
+  await initialize(
+    config.supermap.leafletSdkUrl,
+    config.supermap.mapServices.base,
+    config.map.center,
+    config.map.zoom,
+    config.map.crs,
+    [config.supermap.mapServices.township],
+  )
 })
 </script>
 
@@ -171,6 +179,13 @@ onMounted(async () => {
       <section class="sansheng-center">
         <section class="map-shell panel-frame sansheng-map">
           <div ref="mapContainer" class="map-container" />
+          <MapToolbox
+            :map="map"
+            :focus-bounds="focusBounds"
+            :initial-center="config.map.center"
+            :initial-zoom="config.map.zoom"
+            export-name="兰考县三生空间评价地图"
+          />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
