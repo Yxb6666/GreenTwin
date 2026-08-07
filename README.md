@@ -29,6 +29,7 @@ npm run build
 - 二维地图中心点、缩放级别和坐标系；
 - SuperMap iClient for Leaflet SDK 地址；
 - SuperMap iServer 地图服务地址；
+- SuperMap iServer DEM 影像服务、集合与影像条目；
 - SuperMap WebGL SDK 地址；
 - 白膜、倾斜摄影和点云 S3M 服务地址；
 - 业务后端基础地址和请求超时。
@@ -41,6 +42,8 @@ npm run build
 加载原始坐标系为 EPSG:4326 的乡镇服务时，客户端按影像瓦片的经纬度范围请求透明 `image.png`，再由 Leaflet 对齐到
 EPSG:3857 底图；这是因为该 iServer 服务未启用动态投影。三维场景仍使用 `mapServices.base` 作为影像底图。
 行政区划叠加层绘制服务返回的全部 20 个图面单元，不按行政编码过滤仪封园艺场、造纸林场、柳林林场和兰考林场。
+主控大屏通过 `supermap.dem` 接入 `Lankao-DEM` 影像集合：地图叠加服务端渲染的高程栅格，DEM 面板读取 STAC
+元数据、真实缩略图和栅格值抽样结果，不再展示静态模拟地形及占位指标。
 乡镇服务加载后，地图会读取服务范围并自适应缩放、居中显示；`map.center` 和 `map.zoom` 仅作为范围读取失败时的回退值。
 
 原静态页面及其样式、脚本已保存在 `legacy/`，用于迁移效果对照。

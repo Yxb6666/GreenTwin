@@ -12,6 +12,12 @@ const TOWNSHIP_STYLE: L.PathOptions = {
   weight: 1.4,
 }
 
+export interface DemRasterOverlay {
+  serviceUrl: string
+  collectionId: string
+  renderingRule: Record<string, unknown>
+}
+
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
   const focusBounds = shallowRef<GeographicBounds | null>(null)
@@ -26,6 +32,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     zoom: number,
     crsCode: 'EPSG4326' | 'EPSG3857',
     overlayServiceUrls: string[] = [],
+    demOverlay?: DemRasterOverlay,
   ) {
     await nextTick()
     if (!container.value || map.value) return
@@ -63,6 +70,25 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
           })
           baseLayer.addTo(instance)
 
+          const addDemLayer = () => {
+            if (!demOverlay || disposed) return
+            const collectionUrl = `${demOverlay.serviceUrl.replace(/\/+$/, '')}/collections/${encodeURIComponent(demOverlay.collectionId)}`
+            const tileQuery = new URLSearchParams({
+              transparent: 'true',
+              cacheEnabled: 'true',
+              renderingRule: JSON.stringify(demOverlay.renderingRule),
+            }).toString()
+            const imageTileLayer = L.tileLayer(`${collectionUrl}/tile.png?${tileQuery}&z={z}&x={x}&y={y}`, {
+              zoomOffset: 1,
+              opacity: 0.68,
+              crossOrigin: true,
+            })
+            imageTileLayer.on('tileerror', () => {
+              if (!disposed) error.value = 'DEM 栅格瓦片加载失败，请检查影像服务与跨域配置。'
+            })
+            imageTileLayer.addTo(instance)
+          }
+
           overlayServiceUrls.forEach((overlayServiceUrl) => {
             void loadTownshipFeatures(overlayServiceUrl)
               .then((features) => {
@@ -83,10 +109,16 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                 if (disposed) return
                 focusBounds.value = bounds
                 instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })
+                addDemLayer()
               })
               .catch(() => {
-                if (!disposed) error.value = '乡镇图层范围读取失败，地图已使用默认中心点与缩放级别。'
+                if (!disposed) {
+                  error.value = '乡镇图层范围读取失败，地图已使用默认中心点与缩放级别。'
+                  addDemLayer()
+                }
               })
+          } else {
+            addDemLayer()
           }
         })
         .catch((cause: unknown) => {

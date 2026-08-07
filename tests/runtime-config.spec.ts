@@ -12,6 +12,11 @@ interface RuntimeConfigFixture {
       base: string
       township: string
     }
+    dem: {
+      serviceUrl: string
+      collectionId: string
+      itemId: string
+    }
   }
 }
 
@@ -24,6 +29,11 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.supermap.mapServices.township).toBe(
       'http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest',
     )
+    expect(config.supermap.dem).toEqual({
+      serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoDem/restjsr',
+      collectionId: 'Lankao-DEM',
+      itemId: '1',
+    })
     expect(config.map.crs).toBe('EPSG3857')
     expect(config.map.center).toEqual([34.82, 114.82])
   })

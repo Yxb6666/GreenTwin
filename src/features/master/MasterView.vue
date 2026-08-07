@@ -6,6 +6,7 @@ import MapToolbox from '@/shared/components/MapToolbox.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
+import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import {
   gdpTrend,
   latestDensityRecord,
@@ -18,6 +19,9 @@ import {
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const { map, focusBounds, error: mapError, initialize } = useLeafletMap(mapContainer)
+const demSummary = ref<DemSummary | null>(null)
+const demError = ref('')
+const demLoading = ref(true)
 
 onMounted(async () => {
   await initialize(
@@ -27,7 +31,24 @@ onMounted(async () => {
     config.map.zoom,
     config.map.crs,
     [config.supermap.mapServices.township],
+    {
+      serviceUrl: config.supermap.dem.serviceUrl,
+      collectionId: config.supermap.dem.collectionId,
+      renderingRule: DEM_RENDERING_RULE,
+    },
   )
+
+  try {
+    demSummary.value = await loadDemSummary(
+      config.supermap.dem.serviceUrl,
+      config.supermap.dem.collectionId,
+      config.supermap.dem.itemId,
+    )
+  } catch (cause) {
+    demError.value = cause instanceof Error ? cause.message : 'DEM 数据加载失败'
+  } finally {
+    demLoading.value = false
+  }
 })
 </script>
 
@@ -96,16 +117,38 @@ onMounted(async () => {
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
-        <PanelCard title="DEM 数据三维表达" meta="高程 / 坡度 / 低洼风险">
+        <PanelCard
+          title="DEM 栅格数据"
+          :meta="demSummary ? `${demSummary.collectionId} / ${demSummary.crs}` : 'SuperMap 影像服务'"
+        >
           <div class="dem-overview">
-            <div class="terrain-model" aria-hidden="true">
-              <i v-for="index in 15" :key="index" :style="{ '--height': `${22 + ((index * 23) % 66)}%` }" />
-            </div>
+            <figure class="dem-preview">
+              <img v-if="demSummary?.thumbnailUrl" :src="demSummary.thumbnailUrl" alt="兰考县 DEM 栅格缩略图" />
+              <div v-else class="dem-state">{{ demLoading ? '正在读取 DEM 栅格…' : demError }}</div>
+              <figcaption v-if="demSummary">
+                <span>实时栅格</span><b>{{ demSummary.fileName }}</b><em>有效抽样 {{ demSummary.validSampleCount }} 点</em>
+              </figcaption>
+            </figure>
             <div class="dem-stats">
-              <article><span>平均高程</span><strong>63.8 m</strong></article>
-              <article><span>最大坡度</span><strong>8.6°</strong></article>
-              <article><span>低洼网格</span><strong>124</strong></article>
-              <article><span>建设适宜区</span><strong>71.2%</strong></article>
+              <article>
+                <span>抽样平均高程</span>
+                <strong>{{ demSummary?.averageElevationM != null ? `${demSummary.averageElevationM} m` : '—' }}</strong>
+              </article>
+              <article>
+                <span>抽样高程范围</span>
+                <strong v-if="demSummary?.minimumElevationM != null && demSummary.maximumElevationM != null">
+                  {{ demSummary.minimumElevationM }}–{{ demSummary.maximumElevationM }} m
+                </strong>
+                <strong v-else>—</strong>
+              </article>
+              <article>
+                <span>栅格尺寸</span>
+                <strong>{{ demSummary ? `${demSummary.width} × ${demSummary.height}` : '—' }}</strong>
+              </article>
+              <article>
+                <span>像元分辨率</span>
+                <strong>{{ demSummary ? `${demSummary.pixelSizeDegrees.toFixed(6)}°` : '—' }}</strong>
+              </article>
             </div>
           </div>
         </PanelCard>
@@ -238,24 +281,66 @@ onMounted(async () => {
   grid-template-columns: minmax(260px, 1fr) 250px;
 }
 
-.terrain-model {
-  display: flex;
-  align-items: end;
-  gap: 2px;
-  padding: 16px 20px 5px;
+.dem-preview {
+  position: relative;
+  min-width: 0;
+  margin: 0;
   overflow: hidden;
-  perspective: 500px;
   border: 1px solid rgba(61, 214, 196, 0.12);
-  background: linear-gradient(to bottom, rgba(61, 214, 196, 0.03), rgba(61, 214, 196, 0.09));
-  transform: skewX(-7deg);
+  background: linear-gradient(135deg, rgba(14, 52, 47, 0.9), rgba(6, 24, 23, 0.96));
 }
 
-.terrain-model i {
-  width: 7%;
-  height: var(--height);
-  background: linear-gradient(to top, #1d5548, #80cc79 55%, #d9c069);
-  clip-path: polygon(20% 100%, 0 30%, 42% 0, 100% 45%, 82% 100%);
-  opacity: 0.9;
+.dem-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.2) saturate(1.4) hue-rotate(90deg) contrast(1.18);
+}
+
+.dem-preview::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(5, 25, 22, 0.14), transparent 55%, rgba(8, 31, 28, 0.25));
+}
+
+.dem-preview figcaption {
+  position: absolute;
+  z-index: 1;
+  right: 8px;
+  bottom: 7px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  color: #dff6ec;
+  background: rgba(4, 24, 21, 0.76);
+  backdrop-filter: blur(4px);
+  font-size: 9px;
+}
+
+.dem-preview figcaption span {
+  color: var(--cyan);
+}
+
+.dem-preview figcaption b {
+  font-family: var(--font-data);
+}
+
+.dem-preview figcaption em {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-style: normal;
+}
+
+.dem-state {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--text-soft);
+  font-size: 11px;
 }
 
 .dem-stats {
@@ -280,7 +365,7 @@ onMounted(async () => {
 .dem-stats strong {
   margin-top: 6px;
   color: var(--cyan);
-  font: 17px var(--font-data);
+  font: 15px var(--font-data);
 }
 
 .land-use {

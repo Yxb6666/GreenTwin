@@ -13,6 +13,11 @@ export interface RuntimeConfig {
   supermap: {
     leafletSdkUrl: string
     mapServices: Record<'base' | 'township' | 'population' | 'gdp' | 'landuse', string>
+    dem: {
+      serviceUrl: string
+      collectionId: string
+      itemId: string
+    }
     webglSdkUrl: string
     webglWidgetsCssUrl: string
     realspace: Record<'whiteModel' | 'oblique' | 'lidar', string>
@@ -35,9 +40,12 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (
     !config.supermap?.leafletSdkUrl ||
     !config.supermap.mapServices?.base ||
-    !config.supermap.mapServices.township
+    !config.supermap.mapServices.township ||
+    !config.supermap.dem?.serviceUrl ||
+    !config.supermap.dem.collectionId ||
+    !config.supermap.dem.itemId
   ) {
-    throw new Error('缺少 supermap.leafletSdkUrl、supermap.mapServices.base 或 supermap.mapServices.township')
+    throw new Error('缺少 SuperMap SDK、二维地图或 DEM 影像服务配置')
   }
 }
 
