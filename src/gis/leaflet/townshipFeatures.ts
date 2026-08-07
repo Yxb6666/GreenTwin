@@ -64,15 +64,26 @@ export function parseTownshipFeatures(value: unknown): TownshipFeature[] {
   })
 }
 
+export function resolveTownshipMapServiceUrl(serviceUrl: string): string {
+  const normalizedUrl = serviceUrl.replace(/\/+$/, '')
+  const serviceRootMatch = normalizedUrl.match(/\/services\/([^/]+)\/rest$/i)
+  if (!serviceRootMatch) return normalizedUrl
+
+  const mapName = serviceRootMatch[1]
+  return `${normalizedUrl}/maps/${mapName}`
+}
+
 export async function loadTownshipFeatures(serviceUrl: string): Promise<TownshipFeature[]> {
-  const response = await fetch(`${serviceUrl.replace(/\/+$/, '')}/queryResults.json?returnContent=true`, {
+  const mapServiceUrl = resolveTownshipMapServiceUrl(serviceUrl)
+  const datasetName = decodeURIComponent(mapServiceUrl.slice(mapServiceUrl.lastIndexOf('/') + 1)).toLowerCase()
+  const response = await fetch(`${mapServiceUrl}/queryResults.json?returnContent=true`, {
     method: 'POST',
     cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       queryMode: 'SqlQuery',
       queryParameters: {
-        queryParams: [{ name: 'Lankao_Township', attributeFilter: '1=1' }],
+        queryParams: [{ name: datasetName, attributeFilter: '1=1' }],
         startRecord: 0,
         expectCount: 100,
         queryOption: 'ATTRIBUTEANDGEOMETRY',

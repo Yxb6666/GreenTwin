@@ -2,7 +2,7 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { loadIServerMapBounds } from './serviceBounds'
-import { loadTownshipFeatures } from './townshipFeatures'
+import { loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
   color: '#d6ed9f',
@@ -77,7 +77,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
           const focusServiceUrl = overlayServiceUrls[0]
           if (focusServiceUrl) {
-            void loadIServerMapBounds(focusServiceUrl)
+            void loadIServerMapBounds(resolveTownshipMapServiceUrl(focusServiceUrl))
               .then((bounds) => {
                 if (disposed) return
                 instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })

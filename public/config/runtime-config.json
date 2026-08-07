@@ -12,7 +12,7 @@
     "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",
     "mapServices": {
       "base": "https://www.supermapol.com/proxy/y8f150ad/iserver/services/map-geovis-img/rest/maps/GEOVIS_Img",
-      "township": "http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township",
+      "township": "http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest",
       "population": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/population_density",
       "gdp": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/gdp_grid",
       "landuse": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/land_use"

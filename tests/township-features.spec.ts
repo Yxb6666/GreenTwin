@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { isTownshipAdministrativeCode, parseTownshipFeatures } from '@/gis/leaflet/townshipFeatures'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  isTownshipAdministrativeCode,
+  loadTownshipFeatures,
+  parseTownshipFeatures,
+  resolveTownshipMapServiceUrl,
+} from '@/gis/leaflet/townshipFeatures'
 
 function feature(code: string, parts = [4]) {
   return {
@@ -17,6 +22,33 @@ function feature(code: string, parts = [4]) {
 }
 
 describe('乡镇要素筛选', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('将 iServer 服务根地址解析为同名地图资源', () => {
+    expect(
+      resolveTownshipMapServiceUrl('http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest/'),
+    ).toBe('http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest/maps/Lankao_map_units')
+  })
+
+  it('使用解析后的地图地址和小写数据集名查询行政区划要素', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ recordsets: [{ features: [feature('410225101')] }] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await loadTownshipFeatures('http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest')
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest/maps/Lankao_map_units/queryResults.json?returnContent=true',
+    )
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(options.body)).queryParameters.queryParams).toEqual([
+      { name: 'lankao_map_units', attributeFilter: '1=1' },
+    ])
+  })
+
   it('保留街道、镇、乡并排除林场等类似乡级单位', () => {
     expect(isTownshipAdministrativeCode('410225101')).toBe(true)
     expect(isTownshipAdministrativeCode('410225210')).toBe(true)

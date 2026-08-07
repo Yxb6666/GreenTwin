@@ -35,9 +35,9 @@ npm run build
 
 该文件会原样复制到构建产物，可以在构建后按现场环境修改。前端公开配置中不要存放密码、私钥或长期令牌。
 
-当前二维业务地图使用 `supermap.mapServices.base` 作为影像底图，并将 `supermap.mapServices.township` 作为透明乡镇边界叠加层。
-乡镇服务地址应指向 iServer REST 目录下可直接加载的地图资源，例如
-`http://118.89.55.214:8090/iserver/services/Lankao_Township/rest/maps/Lankao_Township`。应用保持 EPSG:3857，
+当前二维业务地图使用 `supermap.mapServices.base` 作为影像底图，并将 `supermap.mapServices.township` 作为透明行政区划边界叠加层。
+行政区划服务地址可指向发布地图的 iServer REST 服务根目录，例如
+`http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest`；应用会自动解析同名地图资源及要素查询地址。应用保持 EPSG:3857，
 加载原始坐标系为 EPSG:4326 的乡镇服务时，客户端按影像瓦片的经纬度范围请求透明 `image.png`，再由 Leaflet 对齐到
 EPSG:3857 底图；这是因为该 iServer 服务未启用动态投影。三维场景仍使用 `mapServices.base` 作为影像底图。
 乡镇服务加载后，地图会读取服务范围并自适应缩放、居中显示；`map.center` 和 `map.zoom` 仅作为范围读取失败时的回退值。
