@@ -22,6 +22,13 @@ export interface MasterMapTheme {
 export interface ThemeLegendItem {
   label: string
   color: string
+  value?: number
+}
+
+export interface TownshipMetricBreakdown {
+  label: string
+  value: number
+  color: string
 }
 
 export interface TownshipThemeMetric {
@@ -31,6 +38,7 @@ export interface TownshipThemeMetric {
   color: string
   radius?: number
   details?: string[]
+  breakdown?: TownshipMetricBreakdown[]
 }
 
 export const landUseSource = [
@@ -216,6 +224,11 @@ export function resolveTownshipThemeMetric(
     const publicService = Math.round((sanshengTown?.life.poiDensity ?? 50 + (seed % 28)) * 0.72)
     const industry = Math.round((sanshengTown?.production.industryPoi ?? 48 + (seed % 26)) * 0.56)
     const cultureTourism = 6 + (seed % 16)
+    const breakdown = [
+      { ...masterMapThemeLegends.poi[0]!, value: publicService },
+      { ...masterMapThemeLegends.poi[1]!, value: industry },
+      { ...masterMapThemeLegends.poi[2]!, value: cultureTourism },
+    ]
     const total = publicService + industry + cultureTourism
     return {
       value: total,
@@ -223,7 +236,8 @@ export function resolveTownshipThemeMetric(
       meta: 'POI 聚合点',
       color: scaleColor(total, 70, 130, ['#2d8272', '#3dd6c4', '#54c8ff', '#f0d270']),
       radius: clamp(12 + total / 9, 16, 28),
-      details: [`公共服务 ${publicService}`, `产业 ${industry}`, `文旅 ${cultureTourism}`],
+      details: breakdown.map((item) => `${item.label} ${item.value}`),
+      breakdown,
     }
   }
 

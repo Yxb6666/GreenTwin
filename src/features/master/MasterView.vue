@@ -7,7 +7,10 @@ import MapToolbox from '@/shared/components/MapToolbox.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import type { TownshipFeature } from '@/gis/leaflet/townshipFeatures'
+import {
+  townshipRepresentativePoint,
+  type TownshipFeature,
+} from '@/gis/leaflet/townshipFeatures'
 import { initialIssues } from '@/features/governance/data'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import {
@@ -24,6 +27,7 @@ import {
   masterMapThemes,
   resolveTownshipThemeMetric,
   type MasterMapThemeKey,
+  type ThemeLegendItem,
   type TownshipThemeMetric,
 } from '@/features/master/mapThemes'
 
@@ -40,7 +44,11 @@ let thematicLayer: L.LayerGroup | null = null
 const activeMapThemeConfig = computed(
   () => masterMapThemes.find((theme) => theme.key === activeMapTheme.value) ?? masterMapThemes[0]!,
 )
-const activeMapLegend = computed(() => masterMapThemeLegends[activeMapTheme.value])
+const activeMapLegend = computed(() =>
+  activeMapTheme.value === 'poi'
+    ? buildPoiLegend()
+    : masterMapThemeLegends[activeMapTheme.value],
+)
 const selectedTownshipMetric = computed(() => {
   if (!selectedTownship.value) return null
   const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedTownship.value?.code)
@@ -103,6 +111,29 @@ function clearActiveLandUse() {
   activeLandUse.value = null
 }
 
+function buildPoiLegend(): ThemeLegendItem[] {
+  const totals = new Map(
+    masterMapThemeLegends.poi.map((item) => [
+      item.label,
+      { ...item, value: 0 },
+    ]),
+  )
+
+  townshipFeatures.value.forEach((feature, index) => {
+    const metric = resolveTownshipThemeMetric('poi', feature, index, initialIssues)
+    metric.breakdown?.forEach((item) => {
+      const previous = totals.get(item.label)
+      totals.set(item.label, {
+        label: item.label,
+        color: item.color,
+        value: (previous?.value ?? 0) + item.value,
+      })
+    })
+  })
+
+  return [...totals.values()]
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = {
@@ -138,13 +169,21 @@ function polygonStyle(metric: TownshipThemeMetric, selected: boolean): L.PathOpt
 }
 
 function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
-  const details = metric.details?.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('') ?? ''
+  const details =
+    metric.breakdown
+      ?.map(
+        (item) =>
+          `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)} ${item.value}</span>`,
+      )
+      .join('') ??
+    metric.details?.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('') ??
+    ''
   return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
 }
 
 function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric) {
   if (!thematicLayer) return
-  const center = townshipBounds(feature).getCenter()
+  const center = L.latLng(townshipRepresentativePoint(feature))
   const isGovernance = activeMapTheme.value === 'governance'
 
   L.circleMarker(center, {
@@ -343,12 +382,26 @@ onMounted(async () => {
               <li v-for="item in activeMapLegend" :key="item.label">
                 <i :style="{ background: item.color }" />
                 <span>{{ item.label }}</span>
+                <b v-if="item.value != null">{{ item.value }} 个</b>
               </li>
             </ul>
             <div v-if="selectedTownship && selectedTownshipMetric" class="master-map-selection">
               <span>当前行政区</span>
-              <strong>{{ selectedTownship.name }}</strong>
+              <strong>{{ townshipName(selectedTownship) }}</strong>
               <em>{{ selectedTownshipMetric.label }}</em>
+              <div
+                v-if="selectedTownshipMetric.breakdown?.length"
+                class="master-map-breakdown"
+              >
+                <span
+                  v-for="item in selectedTownshipMetric.breakdown"
+                  :key="item.label"
+                >
+                  <i :style="{ background: item.color }" />
+                  <b>{{ item.label }}</b>
+                  <em>{{ item.value }} 个</em>
+                </span>
+              </div>
             </div>
           </aside>
           <MapToolbox
@@ -723,14 +776,22 @@ onMounted(async () => {
 }
 
 .master-map-legend li span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.master-map-legend li b {
+  margin-left: auto;
+  color: var(--text);
+  font: 10px var(--font-data);
+  white-space: nowrap;
+}
+
 .master-map-selection {
   display: grid;
-  gap: 2px;
+  gap: 5px;
   padding: 8px;
   border: 1px solid rgba(61, 214, 196, 0.2);
   border-radius: 6px;
@@ -750,6 +811,44 @@ onMounted(async () => {
 .master-map-selection em {
   color: var(--cyan);
   font: normal 13px var(--font-data);
+}
+
+.master-map-breakdown {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.master-map-breakdown span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.master-map-breakdown i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(234, 255, 251, 0.34);
+  border-radius: 999px;
+}
+
+.master-map-breakdown b {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.master-map-breakdown em {
+  margin-left: auto;
+  color: var(--text);
+  font: normal 10px var(--font-data);
+  white-space: nowrap;
 }
 
 :global(.master-map-tooltip) {
@@ -789,6 +888,20 @@ onMounted(async () => {
   margin-top: 2px;
   color: var(--text-soft);
   font-size: 9px;
+}
+
+:global(.master-map-tooltip span) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:global(.master-map-tooltip span i) {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(234, 255, 251, 0.34);
+  border-radius: 999px;
 }
 
 :global(.master-cluster-label) {

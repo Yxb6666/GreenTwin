@@ -36,10 +36,16 @@ describe('主控专题地图指标', () => {
     expect(metric.details).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^公共服务 /),
-        expect.stringMatching(/^产业 /),
-        expect.stringMatching(/^文旅 /),
+        expect.stringMatching(/^产业节点 /),
+        expect.stringMatching(/^文旅资源 /),
       ]),
     )
+    expect(metric.breakdown?.map(({ label }) => label)).toEqual([
+      '公共服务',
+      '产业节点',
+      '文旅资源',
+    ])
+    expect(metric.breakdown?.reduce((sum, item) => sum + item.value, 0)).toBe(metric.value)
   })
 
   it('为土地利用专题使用主导用地分类颜色', () => {

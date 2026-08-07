@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  isPointInsideTownship,
   loadTownshipFeatures,
   parseTownshipFeatures,
   resolveTownshipMapServiceUrl,
+  townshipRepresentativePoint,
+  type TownshipFeature,
 } from '@/gis/leaflet/townshipFeatures'
 
 function feature(code: string, parts = [4]) {
@@ -77,7 +80,111 @@ describe('行政区划要素解析', () => {
     ])
   })
 
+  it('按字段名定位行政区编码和名称', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [
+        {
+          fields: ['SMID', 'NAME', 'ADCODE'],
+          fieldCaptions: ['标识', '名称', '行政区代码'],
+          features: [
+            {
+              ...feature('410225108'),
+              fieldValues: [7, '仪封镇', '410225108'],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result[0]).toMatchObject({ code: '410225108', name: '仪封镇' })
+  })
+
+  it('服务名称字段乱码时使用官方编码名称兜底', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [
+        {
+          fields: ['ADCODE', 'NAME'],
+          features: [
+            {
+              ...feature('410225108'),
+              fieldValues: ['410225108', '绱()篱闂�'],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result[0]).toMatchObject({ code: '410225108', name: '仪封镇' })
+  })
+
+  it('服务名称字段是可疑汉字乱码时仍优先使用官方名称', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [
+        {
+          fields: ['ADCODE', 'NAME'],
+          features: [
+            {
+              ...feature('410225101'),
+              fieldValues: ['410225101', '缂闃抽晣'],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result[0]).toMatchObject({ code: '410225101', name: '堌阳镇' })
+  })
+
+  it('服务返回旧源编码时映射到当前行政区名称', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [
+        {
+          fields: ['ADCODE', 'NAME'],
+          features: [
+            {
+              ...feature('410225210'),
+              fieldValues: ['410225210', '浠皝闀�'],
+            },
+            {
+              ...feature('410225204'),
+              fieldValues: ['410225204', '璋疯惀闀�'],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result.map(({ code, name }) => ({ code, name }))).toEqual([
+      { code: '410225210', name: '仪封镇' },
+      { code: '410225204', name: '谷营镇' },
+    ])
+  })
+
+  it('为不规则行政区生成落在面内的代表点', () => {
+    const irregularFeature: TownshipFeature = {
+      code: '410225002',
+      name: '桐乡街道',
+      rings: [
+        [
+          [0, 0],
+          [0, 4],
+          [1, 4],
+          [1, 1],
+          [4, 1],
+          [4, 0],
+          [0, 0],
+        ],
+      ],
+    }
+    const boundsCenter: [number, number] = [2, 2]
+    const representativePoint = townshipRepresentativePoint(irregularFeature)
+
+    expect(isPointInsideTownship(boundsCenter, irregularFeature)).toBe(false)
+    expect(isPointInsideTownship(representativePoint, irregularFeature)).toBe(true)
+  })
+
   it('丢弃点数与分段信息不一致的损坏几何', () => {
     expect(parseTownshipFeatures({ recordsets: [{ features: [feature('410225101', [5])] }] })).toEqual([])
   })
 })
+
