@@ -23,6 +23,65 @@ const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
 
+const landUseSource = [
+  { name: '耕地与设施农业', shortLabel: '耕地', value: 42, color: '#d6b657' },
+  { name: '林地草地', shortLabel: '林草', value: 19, color: '#4da668' },
+  { name: '村庄建设用地', shortLabel: '村建', value: 17, color: '#d26d57' },
+  { name: '水域沟渠', shortLabel: '水域', value: 10, color: '#48a5cc' },
+  { name: '其他用地', shortLabel: '其他', value: 12, color: '#345349' },
+]
+
+function pointOnCircle(angle: number, radius: number) {
+  const radians = ((angle - 90) * Math.PI) / 180
+  return {
+    x: 60 + radius * Math.cos(radians),
+    y: 60 + radius * Math.sin(radians),
+  }
+}
+
+let landUseStartAngle = 0
+const landUseSlices = landUseSource.map((item) => {
+  const startAngle = landUseStartAngle
+  const endAngle = startAngle + item.value * 3.6
+  const start = pointOnCircle(startAngle, 50)
+  const end = pointOnCircle(endAngle, 50)
+  const midpoint = pointOnCircle((startAngle + endAngle) / 2, 4)
+  const label = pointOnCircle((startAngle + endAngle) / 2, 31)
+  landUseStartAngle = endAngle
+
+  return {
+    ...item,
+    path: `M 60 60 L ${start.x} ${start.y} A 50 50 0 ${item.value > 50 ? 1 : 0} 1 ${end.x} ${end.y} Z`,
+    offsetX: midpoint.x - 60,
+    offsetY: midpoint.y - 60,
+    labelX: label.x,
+    labelY: label.y,
+  }
+})
+
+const activeLandUse = ref<(typeof landUseSlices)[number] | null>(null)
+const landTooltipPosition = ref({ x: 60, y: 20 })
+
+function updateLandTooltip(event: PointerEvent) {
+  const svg = (event.currentTarget as SVGPathElement).ownerSVGElement
+  if (!svg) return
+  const bounds = svg.getBoundingClientRect()
+  landTooltipPosition.value = {
+    x: Math.min(96, Math.max(24, ((event.clientX - bounds.left) / bounds.width) * 120)),
+    y: Math.min(108, Math.max(20, ((event.clientY - bounds.top) / bounds.height) * 120)),
+  }
+}
+
+function activateLandUse(item: (typeof landUseSlices)[number], event?: PointerEvent) {
+  activeLandUse.value = item
+  if (event) updateLandTooltip(event)
+  else landTooltipPosition.value = { x: 60, y: 22 }
+}
+
+function clearActiveLandUse() {
+  activeLandUse.value = null
+}
+
 onMounted(async () => {
   await initialize(
     config.supermap.leafletSdkUrl,
@@ -157,12 +216,77 @@ onMounted(async () => {
       <aside class="master-side">
         <PanelCard title="土地利用数据" meta="国土空间结构">
           <div class="land-use">
-            <div class="land-donut"><strong>42%</strong><span>耕地</span></div>
-            <ul>
-              <li><i class="farm" />耕地与设施农业 <b>42%</b></li>
-              <li><i class="forest" />林地草地 <b>19%</b></li>
-              <li><i class="build" />村庄建设用地 <b>17%</b></li>
-              <li><i class="water" />水域沟渠 <b>10%</b></li>
+            <div class="land-chart">
+              <div class="land-chart-note">
+                <span>主导类型</span>
+                <strong>耕地</strong>
+              </div>
+              <div class="land-visual" @mouseleave="clearActiveLandUse">
+                <svg
+                  class="land-pie"
+                  viewBox="0 0 120 120"
+                  role="img"
+                  aria-label="土地利用结构饼图"
+                >
+                  <path
+                    v-for="item in landUseSlices"
+                    :key="item.name"
+                    class="land-slice"
+                    :class="{ 'is-active': activeLandUse?.name === item.name }"
+                    :d="item.path"
+                    :fill="item.color"
+                    :style="{
+                      '--slice-offset-x': `${item.offsetX}px`,
+                      '--slice-offset-y': `${item.offsetY}px`,
+                    }"
+                    tabindex="0"
+                    :aria-label="`${item.name} ${item.value}%`"
+                    @pointerenter="activateLandUse(item, $event)"
+                    @pointermove="updateLandTooltip"
+                    @pointerleave="clearActiveLandUse"
+                    @focus="activateLandUse(item)"
+                    @blur="clearActiveLandUse"
+                  >
+                    <title>{{ item.name }}：{{ item.value }}%</title>
+                  </path>
+                  <text
+                    v-for="item in landUseSlices"
+                    :key="`${item.name}-label`"
+                    class="land-label"
+                    :class="{ 'is-active': activeLandUse?.name === item.name }"
+                    :x="item.labelX"
+                    :y="item.labelY"
+                    :style="{
+                      '--slice-offset-x': `${item.offsetX}px`,
+                      '--slice-offset-y': `${item.offsetY}px`,
+                    }"
+                  >
+                    {{ item.shortLabel }}
+                  </text>
+                </svg>
+                <div
+                  v-if="activeLandUse"
+                  class="land-tooltip"
+                  :style="{
+                    left: `${landTooltipPosition.x}px`,
+                    top: `${landTooltipPosition.y}px`,
+                  }"
+                  aria-hidden="true"
+                >
+                  <span><i :style="{ background: activeLandUse.color }" />{{ activeLandUse.name }}</span>
+                  <strong>{{ activeLandUse.value }}%</strong>
+                </div>
+              </div>
+              <div class="land-chart-note is-right">
+                <span>用地分类</span>
+                <strong>5 类</strong>
+              </div>
+            </div>
+            <ul class="land-legend">
+              <li><span><i class="farm" />耕地与设施农业</span><b>42%</b></li>
+              <li><span><i class="forest" />林地草地</span><b>19%</b></li>
+              <li><span><i class="build" />村庄建设用地</span><b>17%</b></li>
+              <li><span><i class="water" />水域沟渠</span><b>10%</b></li>
             </ul>
           </div>
         </PanelCard>
@@ -370,57 +494,181 @@ onMounted(async () => {
 
 .land-use {
   display: grid;
-  align-items: center;
   height: 100%;
-  gap: 12px;
-  grid-template-columns: 96px 1fr;
+  min-height: 0;
+  gap: 14px;
+  grid-template-rows: minmax(112px, 1fr) auto;
 }
 
-.land-donut {
+.land-chart {
   display: grid;
-  place-content: center;
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  background: conic-gradient(#d6b657 0 42%, #4da668 42% 61%, #d26d57 61% 78%, #48a5cc 78% 88%, #345349 88%);
-  box-shadow: inset 0 0 0 16px #10201f;
-  text-align: center;
+  width: 100%;
+  min-height: 0;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  place-items: center;
 }
 
-.land-donut strong {
-  font: 17px var(--font-data);
-}
-
-.land-donut span {
+.land-chart-note {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+  padding-top: 6px;
   color: var(--text-soft);
-  font-size: 9px;
+  border-top: 1px solid rgba(61, 214, 196, 0.2);
+  font-size: 8px;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.land-use ul {
+.land-chart-note strong {
+  color: var(--text);
+  font: 600 11px var(--font-display);
+}
+
+.land-chart-note.is-right {
+  text-align: left;
+}
+
+.land-visual {
+  position: relative;
+  width: 126px;
+  height: 126px;
+}
+
+.land-pie {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 8px 18px rgba(2, 18, 16, 0.24));
+}
+
+.land-slice {
+  cursor: pointer;
+  outline: none;
+  stroke: #10201f;
+  stroke-width: 1.4;
+  transition:
+    transform 160ms ease,
+    filter 160ms ease,
+    opacity 160ms ease;
+  transform-origin: center;
+}
+
+.land-pie:has(.land-slice:hover) .land-slice:not(:hover),
+.land-pie:has(.land-slice:focus-visible) .land-slice:not(:focus-visible) {
+  opacity: 0.7;
+}
+
+.land-slice:hover,
+.land-slice.is-active,
+.land-slice:focus-visible {
+  filter: brightness(1.12) drop-shadow(0 3px 5px rgba(3, 18, 16, 0.55));
+  transform: translate(var(--slice-offset-x), var(--slice-offset-y));
+}
+
+.land-label {
+  fill: #edf8f4;
+  stroke: rgba(6, 28, 25, 0.44);
+  stroke-width: 0.8px;
+  paint-order: stroke;
+  font: 400 8px var(--font-display);
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: central;
+  transition: transform 160ms ease;
+}
+
+.land-label.is-active {
+  transform: translate(var(--slice-offset-x), var(--slice-offset-y));
+}
+
+.land-tooltip {
+  position: absolute;
+  z-index: 2;
   display: grid;
-  gap: 8px;
+  min-width: 92px;
+  gap: 4px;
+  padding: 7px 9px;
+  color: var(--text-soft);
+  border: 1px solid rgba(61, 214, 196, 0.24);
+  background: rgba(6, 28, 25, 0.94);
+  box-shadow: 0 8px 22px rgba(1, 14, 12, 0.42);
+  font-size: 9px;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 8px));
+  white-space: nowrap;
+}
+
+.land-tooltip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.land-tooltip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.land-tooltip strong {
+  color: var(--text);
+  font: 13px var(--font-data);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .land-slice,
+  .land-label {
+    transition: none;
+  }
+}
+
+.land-legend {
+  display: grid;
+  gap: 6px 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.land-use li {
+.land-legend li {
   display: flex;
+  align-items: center;
+  min-width: 0;
   gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(61, 214, 196, 0.08);
+  background: rgba(255, 255, 255, 0.018);
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: 9px;
 }
 
-.land-use li i {
-  width: 7px;
-  height: 7px;
-  margin-top: 3px;
+.land-legend li span {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  gap: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.land-legend li i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
   border-radius: 50%;
 }
 
-.land-use li b {
+.land-legend li b {
   margin-left: auto;
   color: var(--text);
+  font: 10px var(--font-data);
 }
 
 .farm { background: #d6b657; }
@@ -478,6 +726,10 @@ onMounted(async () => {
   .master-layout { grid-template-columns: 260px minmax(460px, 1fr) 270px; gap: 8px; }
   .master-side, .master-center { gap: 8px; }
   .master-center { grid-template-rows: minmax(0, 1fr) 170px; }
+  .land-use { gap: 8px; grid-template-rows: minmax(82px, 1fr) auto; }
+  .land-visual { width: 96px; height: 96px; }
+  .land-legend { gap: 4px 6px; }
+  .land-legend li { padding: 4px 6px; }
   .issue-stack article { padding: 5px 6px; }
 }
 </style>
