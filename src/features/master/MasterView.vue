@@ -79,7 +79,7 @@ onMounted(async () => {
         </PanelCard>
 
         <PanelCard title="三生综合评价" meta="县域协同指数">
-          <RadarChart :labels="['生态', '生活', '生产', '治理']" :values="[88, 82, 90, 78]" />
+          <RadarChart :labels="['生态', '生活', '生产']" :values="[88, 82, 90]" />
         </PanelCard>
       </aside>
 
