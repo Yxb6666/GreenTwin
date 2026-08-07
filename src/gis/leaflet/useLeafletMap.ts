@@ -2,7 +2,11 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
-import { loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
+import {
+  loadTownshipFeatures,
+  resolveTownshipMapServiceUrl,
+  type TownshipFeature,
+} from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
   color: '#d6ed9f',
@@ -21,6 +25,7 @@ export interface DemRasterOverlay {
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
   const focusBounds = shallowRef<GeographicBounds | null>(null)
+  const townshipFeatures = shallowRef<TownshipFeature[]>([])
   const error = ref('')
   let resizeObserver: ResizeObserver | null = null
   let disposed = false
@@ -93,6 +98,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
             void loadTownshipFeatures(overlayServiceUrl)
               .then((features) => {
                 if (disposed) return
+                townshipFeatures.value = [...townshipFeatures.value, ...features]
                 features.forEach((feature) => {
                   L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
                 })
@@ -136,8 +142,9 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     map.value?.remove()
     map.value = null
     focusBounds.value = null
+    townshipFeatures.value = []
   }
 
   onBeforeUnmount(dispose)
-  return { map, focusBounds, error, initialize, dispose }
+  return { map, focusBounds, townshipFeatures, error, initialize, dispose }
 }
