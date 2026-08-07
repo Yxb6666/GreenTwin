@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  isTownshipAdministrativeCode,
   loadTownshipFeatures,
   parseTownshipFeatures,
   resolveTownshipMapServiceUrl,
@@ -21,7 +20,7 @@ function feature(code: string, parts = [4]) {
   }
 }
 
-describe('乡镇要素筛选', () => {
+describe('行政区划要素解析', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('将 iServer 服务根地址解析为同名地图资源', () => {
@@ -49,15 +48,17 @@ describe('乡镇要素筛选', () => {
     ])
   })
 
-  it('保留街道、镇、乡并排除林场等类似乡级单位', () => {
-    expect(isTownshipAdministrativeCode('410225101')).toBe(true)
-    expect(isTownshipAdministrativeCode('410225210')).toBe(true)
-    expect(isTownshipAdministrativeCode('410225402')).toBe(false)
+  it('保留服务返回的乡镇和类似乡级单位', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [{ features: [feature('410225101'), feature('410225402')] }],
+    })
+
+    expect(result.map(({ code }) => code)).toEqual(['410225101', '410225402'])
   })
 
   it('将 iServer 坐标转换为 Leaflet 纬经度坐标', () => {
     const result = parseTownshipFeatures({
-      recordsets: [{ features: [feature('410225101'), feature('410225402')] }],
+      recordsets: [{ features: [feature('410225101')] }],
     })
 
     expect(result).toEqual([

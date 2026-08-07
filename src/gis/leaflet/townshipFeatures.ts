@@ -25,19 +25,12 @@ interface IServerQueryResult {
   }>
 }
 
-export function isTownshipAdministrativeCode(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{9}$/.test(value)) return false
-  return Number(value.slice(-3)) < 400
-}
-
 export function parseTownshipFeatures(value: unknown): TownshipFeature[] {
   if (!value || typeof value !== 'object') return []
 
   const features = (value as IServerQueryResult).recordsets?.[0]?.features ?? []
   return features.flatMap((feature) => {
-    const code = feature.fieldValues?.[0]
-    if (!isTownshipAdministrativeCode(code)) return []
-
+    const code = String(feature.fieldValues?.[0] ?? '')
     const points = feature.geometry?.points ?? []
     const partSizes = feature.geometry?.parts ?? []
     const rings: TownshipRing[] = []
