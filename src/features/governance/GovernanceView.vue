@@ -6,6 +6,7 @@ import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
+import GovernanceIssueDetail from './GovernanceIssueDetail.vue'
 import {
   issueStatuses,
   loadGovernanceIssues,
@@ -24,6 +25,7 @@ const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const issues = ref<GovernanceIssue[]>([])
 const selectedId = ref('')
+const detailOpen = ref(false)
 const toast = ref('')
 const dataError = ref('')
 const spatialIds = ref<Set<string> | null>(null)
@@ -204,6 +206,16 @@ function selectIssue(issue: GovernanceIssue, focus = false) {
       Math.max(map.value.getZoom(), 12.5),
       { duration: 0.7 },
     )
+}
+
+function openIssueDetail() {
+  if (selected.value) detailOpen.value = true
+}
+
+function locateDetailIssue() {
+  const issue = selected.value
+  detailOpen.value = false
+  if (issue) selectIssue(issue, true)
 }
 
 function refreshIssueMarkers() {
@@ -708,6 +720,13 @@ onBeforeUnmount(() => {
                 </dd>
               </div>
             </dl>
+            <button
+              class="issue-detail__more"
+              type="button"
+              @click="openIssueDetail"
+            >
+              查看完整处置详情 <span aria-hidden="true">→</span>
+            </button>
           </div>
           <p v-else class="empty-state">请选择一个问题</p>
         </PanelCard>
@@ -734,6 +753,17 @@ onBeforeUnmount(() => {
         </PanelCard>
       </aside>
     </div>
+    <Teleport to="body">
+      <Transition name="detail-page">
+        <GovernanceIssueDetail
+          v-if="detailOpen && selected"
+          :issue="selected"
+          @close="detailOpen = false"
+          @locate="locateDetailIssue"
+          @update-status="updateStatus"
+        />
+      </Transition>
+    </Teleport>
     <Transition name="module"
       ><div v-if="toast" class="toast">{{ toast }}</div></Transition
     >
@@ -1115,6 +1145,40 @@ onBeforeUnmount(() => {
   font-size: 9px;
 }
 
+.issue-detail__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 30px;
+  margin-top: 9px;
+  gap: 8px;
+  color: var(--cyan);
+  border: 1px solid rgba(61, 214, 196, 0.32);
+  border-radius: 5px;
+  background: linear-gradient(90deg, rgba(61, 214, 196, 0.08), rgba(61, 214, 196, 0.03));
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.issue-detail__more span {
+  font-size: 13px;
+  transition: transform 160ms ease;
+}
+
+.issue-detail__more:hover,
+.issue-detail__more:focus-visible {
+  color: #eafffb;
+  border-color: var(--line-bright);
+  outline: none;
+  background: rgba(61, 214, 196, 0.13);
+}
+
+.issue-detail__more:hover span,
+.issue-detail__more:focus-visible span {
+  transform: translateX(3px);
+}
+
 :global(.map-is-spatial-querying),
 :global(.map-is-spatial-querying *) {
   cursor: crosshair !important;
@@ -1277,6 +1341,36 @@ onBeforeUnmount(() => {
   background: rgba(9, 34, 32, 0.94);
   box-shadow: var(--shadow);
   font-size: 11px;
+}
+
+.detail-page-enter-active,
+.detail-page-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.detail-page-enter-active :deep(.issue-detail-page__canvas),
+.detail-page-leave-active :deep(.issue-detail-page__canvas) {
+  transition: transform 220ms ease;
+}
+
+.detail-page-enter-from,
+.detail-page-leave-to {
+  opacity: 0;
+}
+
+.detail-page-enter-from :deep(.issue-detail-page__canvas),
+.detail-page-leave-to :deep(.issue-detail-page__canvas) {
+  transform: translateY(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .issue-detail__more span,
+  .detail-page-enter-active,
+  .detail-page-leave-active,
+  .detail-page-enter-active :deep(.issue-detail-page__canvas),
+  .detail-page-leave-active :deep(.issue-detail-page__canvas) {
+    transition: none;
+  }
 }
 
 @media (max-width: 1440px) {
