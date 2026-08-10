@@ -99,62 +99,19 @@ async function submit() {
           </p>
         </div>
 
-        <div class="twin-map" aria-hidden="true">
-          <div class="twin-map__status"><i></i> 数据孪生在线</div>
-          <svg viewBox="0 0 620 280" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <linearGradient id="parcel-fill" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0" stop-color="#3dd6c4" stop-opacity=".18" />
-                <stop offset="1" stop-color="#78d787" stop-opacity=".03" />
-              </linearGradient>
-              <filter
-                id="node-glow"
-                x="-100%"
-                y="-100%"
-                width="300%"
-                height="300%"
-              >
-                <feGaussianBlur stdDeviation="5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <g class="parcel-lines">
-              <path
-                d="M16 192 98 74l109 25 48-50 116 27 47-37 184 80-23 111-191 30-164-20Z"
-              />
-              <path
-                d="m98 74 38 90 88 76M207 99l43 75 138 86M255 49l-5 125M371 76l17 184M418 39l-30 221M136 164l114 10 168-135M250 174l229 56M371 76l108 154"
-              />
-              <path
-                d="M38 202 162 44M74 227 197 57M438 52l-96 197M477 69l-87 176"
-                opacity=".35"
-              />
-            </g>
-            <g class="contour-lines">
-              <path d="M35 128c92-62 132-9 220-52s153 7 250 18" />
-              <path d="M14 160c95-54 147-8 239-47s168 5 278 24" />
-              <path d="M50 213c86-28 137-5 221-34 92-32 167-5 249 15" />
-            </g>
-            <g class="map-nodes" filter="url(#node-glow)">
-              <circle cx="136" cy="164" r="5" />
-              <circle cx="250" cy="174" r="5" />
-              <circle cx="371" cy="76" r="5" />
-              <circle cx="388" cy="260" r="5" />
-              <circle cx="479" cy="230" r="5" />
-            </g>
-            <path
-              class="active-parcel"
-              d="m207 99 43 75 138 86-17-184-116-27z"
-            />
-          </svg>
-          <div class="twin-map__scan"></div>
-          <span class="map-label map-label--one">生态空间</span>
-          <span class="map-label map-label--two">生产空间</span>
-          <span class="map-label map-label--three">生活空间</span>
-        </div>
+        <figure class="jiao-story">
+          <img
+            src="/branding/jiao-yulu-hero.png"
+            alt="焦裕禄在兰考与群众治理风沙、建设防护林的纪念性画面"
+          />
+          <figcaption>
+            <p>精神坐标 · 兰考</p>
+            <strong>焦裕禄精神</strong>
+            <span
+              >亲民爱民 · 艰苦奋斗<br />科学求实 · 迎难而上 · 无私奉献</span
+            >
+          </figcaption>
+        </figure>
 
         <ul class="module-signals" aria-label="平台能力">
           <li><span>01</span> 综合态势</li>
@@ -456,95 +413,83 @@ async function submit() {
   font-size: 13px;
   line-height: 1.85;
 }
-.twin-map {
+.jiao-story {
   position: relative;
   height: 220px;
   margin: auto -8px 18px;
   overflow: hidden;
   border: 1px solid rgba(61, 214, 196, 0.16);
   border-radius: 12px;
-  background:
-    radial-gradient(
-      circle at 58% 50%,
-      rgba(61, 214, 196, 0.12),
-      transparent 42%
-    ),
-    rgba(2, 15, 15, 0.5);
+  isolation: isolate;
+  background: #061917;
 }
-.twin-map svg {
+.jiao-story::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(4, 25, 23, 0.98) 0%,
+      rgba(4, 25, 23, 0.9) 31%,
+      rgba(4, 25, 23, 0.28) 66%,
+      rgba(4, 25, 23, 0.08) 100%
+    ),
+    linear-gradient(0deg, rgba(3, 17, 16, 0.58), transparent 60%);
+  content: '';
+}
+.jiao-story img {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  object-position: 54% 43%;
+  filter: grayscale(0.35) saturate(0.58) brightness(0.68) contrast(1.08);
+  transform: scale(1.015);
 }
-.parcel-lines {
-  fill: url('#parcel-fill');
-  stroke: rgba(94, 220, 200, 0.5);
-  stroke-width: 1;
-}
-.contour-lines {
-  fill: none;
-  stroke: rgba(120, 215, 135, 0.22);
-  stroke-dasharray: 4 7;
-}
-.map-nodes {
-  fill: #caffd2;
-  stroke: var(--green);
-}
-.active-parcel {
-  fill: rgba(61, 214, 196, 0.1);
-  stroke: var(--cyan);
-  stroke-width: 1.6;
-}
-.twin-map__status {
+.jiao-story figcaption {
   position: absolute;
   z-index: 2;
-  top: 12px;
-  right: 12px;
+  top: 50%;
+  left: 28px;
+  width: 45%;
+  margin: 0;
+  transform: translateY(-50%);
+}
+.jiao-story figcaption p {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
-  border: 1px solid rgba(120, 215, 135, 0.2);
-  border-radius: 99px;
-  color: #bcefc3;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: rgba(61, 214, 196, 0.78);
   font: 9px var(--font-data);
-  background: rgba(4, 18, 17, 0.8);
+  letter-spacing: 0.14em;
 }
-.twin-map__status i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
+.jiao-story figcaption p::before {
+  width: 18px;
+  height: 1px;
+  background: currentColor;
+  content: '';
 }
-.twin-map__scan {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 24%;
-  width: 1px;
-  background: linear-gradient(transparent, var(--cyan), transparent);
-  box-shadow: 0 0 16px 2px rgba(61, 214, 196, 0.22);
-  animation: map-scan 5.5s ease-in-out infinite alternate;
+.jiao-story figcaption strong,
+.jiao-story figcaption span {
+  display: block;
 }
-.map-label {
-  position: absolute;
-  padding: 3px 6px;
-  border-left: 1px solid var(--cyan);
-  color: rgba(225, 255, 249, 0.78);
-  font-size: 9px;
-  background: rgba(5, 20, 19, 0.7);
+.jiao-story figcaption strong {
+  color: #f0f4e8;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
 }
-.map-label--one {
-  top: 42%;
-  left: 14%;
-}
-.map-label--two {
-  top: 57%;
-  left: 48%;
-}
-.map-label--three {
-  right: 11%;
-  bottom: 20%;
+.jiao-story figcaption span {
+  margin-top: 10px;
+  color: rgba(220, 232, 219, 0.72);
+  font-size: 10px;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
 }
 .module-signals {
   display: grid;
@@ -784,11 +729,6 @@ async function submit() {
   margin: 0 5px;
   color: #67a096;
 }
-@keyframes map-scan {
-  to {
-    left: 78%;
-  }
-}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -813,14 +753,27 @@ async function submit() {
   .auth-visual__copy h1 {
     font-size: clamp(30px, 7vw, 44px);
   }
-  .twin-map {
+  .auth-visual__copy > p:last-child {
+    width: 48%;
+  }
+  .jiao-story {
     position: absolute;
     right: 22px;
     bottom: 24px;
     width: 46%;
     height: 142px;
     margin: 0;
-    opacity: 0.82;
+  }
+  .jiao-story figcaption {
+    left: 16px;
+    width: 50%;
+  }
+  .jiao-story figcaption p,
+  .jiao-story figcaption span {
+    display: none;
+  }
+  .jiao-story figcaption strong {
+    font-size: 17px;
   }
   .module-signals {
     width: 48%;
@@ -846,7 +799,7 @@ async function submit() {
     padding: 24px;
   }
   .brand-lockup span,
-  .twin-map,
+  .jiao-story,
   .module-signals,
   .auth-visual__copy > p:last-child {
     display: none;
