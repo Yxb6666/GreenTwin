@@ -129,6 +129,23 @@ const statusColors: Record<IssueStatus, string> = {
   已办结: '#839b95',
 }
 
+const statusStats = computed(() =>
+  issueStatuses.map((status) => {
+    const count = filtered.value.filter(
+      (issue) => issue.status === status,
+    ).length
+
+    return {
+      status,
+      count,
+      color: statusColors[status],
+      share: summary.value.total
+        ? Math.round((count / summary.value.total) * 100)
+        : 0,
+    }
+  }),
+)
+
 function resetFilters() {
   Object.assign(filters, {
     keyword: '',
@@ -587,24 +604,42 @@ onBeforeUnmount(() => {
           </PanelCard>
           <PanelCard title="处置状态统计">
             <div class="status-visual">
-              <div
-                class="status-donut"
-                :style="{ '--rate': `${summary.rate * 3.6}deg` }"
-              >
-                <strong>{{ summary.rate }}%</strong><span>闭环率</span>
+              <div class="status-summary">
+                <div
+                  class="status-donut"
+                  :style="{ '--rate': `${summary.rate * 3.6}deg` }"
+                >
+                  <strong>{{ summary.rate }}%</strong><span>闭环率</span>
+                </div>
+                <p>
+                  <strong>
+                    {{ summary.closed }}<small>/{{ summary.total }}</small>
+                  </strong>
+                  <span>已完成处置</span>
+                </p>
               </div>
               <ul>
-                <li v-for="status in issueStatuses" :key="status">
+                <li v-for="(item, index) in statusStats" :key="item.status">
                   <button
                     type="button"
-                    :class="{ active: filters.status === status }"
-                    @click="filterByStatus(status)"
+                    :class="{ active: filters.status === item.status }"
+                    :style="{
+                      '--status-color': item.color,
+                      '--status-share': `${item.share}%`,
+                    }"
+                    :title="`筛选${item.status}问题`"
+                    @click="filterByStatus(item.status)"
                   >
-                    <i :style="{ background: statusColors[status] }" />{{
-                      status
-                    }}<b>{{
-                      filtered.filter((issue) => issue.status === status).length
-                    }}</b>
+                    <span class="status-stat__heading">
+                      <small>{{ String(index + 1).padStart(2, '0') }}</small>
+                      <i />
+                      {{ item.status }}
+                    </span>
+                    <b>{{ item.count }}</b>
+                    <em>{{ item.share }}%</em>
+                    <span class="status-stat__track" aria-hidden="true">
+                      <i />
+                    </span>
                   </button>
                 </li>
               </ul>
@@ -810,20 +845,36 @@ onBeforeUnmount(() => {
   display: grid;
   align-items: center;
   height: 100%;
-  grid-template-columns: 112px 1fr;
+  min-height: 0;
+  padding: 5px 8px;
+  gap: 14px;
+  grid-template-columns: minmax(140px, 0.75fr) minmax(0, 2fr);
+}
+
+.status-summary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 78%;
+  gap: 9px;
+  padding-right: 14px;
+  border-right: 1px solid rgba(122, 203, 190, 0.14);
 }
 
 .status-donut {
   display: grid;
+  flex: 0 0 auto;
   place-content: center;
-  width: 96px;
-  height: 96px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   background: conic-gradient(
     var(--cyan) var(--rate),
     rgba(255, 255, 255, 0.06) 0
   );
-  box-shadow: inset 0 0 0 15px #10201f;
+  box-shadow:
+    inset 0 0 0 14px #10201f,
+    0 0 24px rgba(61, 214, 196, 0.06);
   text-align: center;
 }
 
@@ -834,44 +885,113 @@ onBeforeUnmount(() => {
   color: var(--text-soft);
   font-size: 8px;
 }
+.status-summary p {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  margin: 0;
+}
+.status-summary p strong {
+  color: var(--text);
+  font: 18px var(--font-data);
+  white-space: nowrap;
+}
+.status-summary p small {
+  color: var(--text-dim);
+  font-size: 9px;
+}
+.status-summary p span {
+  color: var(--text-soft);
+  font-size: 8px;
+  white-space: nowrap;
+}
 .status-visual ul {
   display: grid;
-  gap: 7px;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .status-visual li {
+  min-width: 0;
+  min-height: 0;
   color: var(--text-soft);
   font-size: 9px;
 }
 .status-visual li button {
-  display: flex;
+  position: relative;
+  display: grid;
+  align-items: center;
   width: 100%;
-  padding: 3px 5px;
-  gap: 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  height: 100%;
+  min-height: 46px;
+  padding: 7px 9px 8px;
+  gap: 2px 8px;
+  border: 1px solid rgba(122, 203, 190, 0.1);
+  border-radius: 5px;
   color: inherit;
-  background: transparent;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.018);
   font-size: inherit;
   cursor: pointer;
+  overflow: hidden;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr 3px;
 }
 .status-visual li button:hover,
 .status-visual li button.active {
   color: var(--text);
-  border-color: rgba(61, 214, 196, 0.28);
-  background: rgba(61, 214, 196, 0.08);
+  border-color: var(--status-color);
+  background: rgba(61, 214, 196, 0.055);
+  box-shadow: inset 2px 0 0 var(--status-color);
 }
-.status-visual li i {
+.status-stat__heading {
+  display: flex;
+  align-items: center;
+  grid-column: 1 / -1;
+  gap: 5px;
+  white-space: nowrap;
+}
+.status-stat__heading small {
+  color: var(--text-dim);
+  font: 7px var(--font-data);
+  letter-spacing: 0.08em;
+}
+.status-stat__heading > i {
   width: 7px;
   height: 7px;
-  margin-top: 2px;
   border-radius: 50%;
+  background: var(--status-color);
+  box-shadow: 0 0 7px var(--status-color);
 }
 .status-visual li b {
-  margin-left: auto;
   color: var(--text);
+  font: 18px/1 var(--font-data);
+  align-self: end;
+}
+.status-visual li em {
+  color: var(--status-color);
+  font: normal 9px var(--font-data);
+  align-self: end;
+}
+.status-stat__track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  grid-column: 1 / -1;
+  overflow: hidden;
+}
+.status-stat__track > i {
+  display: block;
+  width: var(--status-share);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--status-color);
+  opacity: 0.8;
 }
 
 .governance-charts .data-bar {
