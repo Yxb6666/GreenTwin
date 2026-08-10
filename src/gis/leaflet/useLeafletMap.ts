@@ -2,9 +2,13 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
-import { loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
+import {
+  loadTownshipFeatures,
+  resolveTownshipMapServiceUrl,
+} from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
+  pane: 'townshipOverlayPane',
   color: '#d6ed9f',
   fillColor: '#146f54',
   fillOpacity: 0.48,
@@ -54,19 +58,29 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
       map.value = instance
 
-      resizeObserver = new ResizeObserver(() => instance.invalidateSize({ animate: false }))
+      const townshipPane = instance.createPane('townshipOverlayPane')
+      townshipPane.style.zIndex = '410'
+      townshipPane.style.pointerEvents = 'none'
+
+      resizeObserver = new ResizeObserver(() =>
+        instance.invalidateSize({ animate: false }),
+      )
       resizeObserver.observe(container.value)
       window.setTimeout(() => instance.invalidateSize({ animate: false }), 80)
 
       void loadSuperMapLeaflet(sdkUrl)
         .then((superMapLeaflet) => {
           if (disposed) return
-          const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, {
-            transparent: false,
-            crossOrigin: true,
-          })
+          const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(
+            serviceUrl,
+            {
+              transparent: false,
+              crossOrigin: true,
+            },
+          )
           baseLayer.on('tileerror', () => {
-            error.value = '二维底图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
+            error.value =
+              '二维底图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
           })
           baseLayer.addTo(instance)
 
@@ -78,13 +92,17 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               cacheEnabled: 'true',
               renderingRule: JSON.stringify(demOverlay.renderingRule),
             }).toString()
-            const imageTileLayer = L.tileLayer(`${collectionUrl}/tile.png?${tileQuery}&z={z}&x={x}&y={y}`, {
-              zoomOffset: 1,
-              opacity: 0.68,
-              crossOrigin: true,
-            })
+            const imageTileLayer = L.tileLayer(
+              `${collectionUrl}/tile.png?${tileQuery}&z={z}&x={x}&y={y}`,
+              {
+                zoomOffset: 1,
+                opacity: 0.68,
+                crossOrigin: true,
+              },
+            )
             imageTileLayer.on('tileerror', () => {
-              if (!disposed) error.value = 'DEM 栅格瓦片加载失败，请检查影像服务与跨域配置。'
+              if (!disposed)
+                error.value = 'DEM 栅格瓦片加载失败，请检查影像服务与跨域配置。'
             })
             imageTileLayer.addTo(instance)
           }
@@ -98,22 +116,31 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                 })
               })
               .catch(() => {
-                if (!disposed) error.value = '二维乡镇叠加层加载失败，请检查 iServer 查询接口与跨域配置。'
+                if (!disposed)
+                  error.value =
+                    '二维乡镇叠加层加载失败，请检查 iServer 查询接口与跨域配置。'
               })
           })
 
           const focusServiceUrl = overlayServiceUrls[0]
           if (focusServiceUrl) {
-            void loadIServerMapBounds(resolveTownshipMapServiceUrl(focusServiceUrl))
+            void loadIServerMapBounds(
+              resolveTownshipMapServiceUrl(focusServiceUrl),
+            )
               .then((bounds) => {
                 if (disposed) return
                 focusBounds.value = bounds
-                instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })
+                instance.fitBounds(bounds, {
+                  animate: false,
+                  padding: [20, 20],
+                  maxZoom: 11.5,
+                })
                 addDemLayer()
               })
               .catch(() => {
                 if (!disposed) {
-                  error.value = '乡镇图层范围读取失败，地图已使用默认中心点与缩放级别。'
+                  error.value =
+                    '乡镇图层范围读取失败，地图已使用默认中心点与缩放级别。'
                   addDemLayer()
                 }
               })
@@ -122,10 +149,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
           }
         })
         .catch((cause: unknown) => {
-          error.value = cause instanceof Error ? cause.message : 'SuperMap iClient Leaflet SDK 加载失败'
+          error.value =
+            cause instanceof Error
+              ? cause.message
+              : 'SuperMap iClient Leaflet SDK 加载失败'
         })
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : '二维地图初始化失败'
+      error.value =
+        cause instanceof Error ? cause.message : '二维地图初始化失败'
     }
   }
 

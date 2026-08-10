@@ -1,0 +1,3384 @@
+{
+  "type": "FeatureCollection",
+  "name": "lankao_governance_issues_demo",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "metadata": {
+    "title": "兰考县乡村治理问题场景模拟要素",
+    "generatedOn": "2026-08-07",
+    "featureCount": 116,
+    "generationModel": "乡镇差异配额 + 多中心高斯热点 + 少量离散点",
+    "purpose": "空间查询、属性查询及图表联动演示",
+    "disclaimer": "本数据为可复现的场景模拟数据，不代表真实事件、人员或法定位置。"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "GK-2026-001",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.749274,
+          34.856417
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "夹河滩村生产路散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "李悦",
+        "phone": "13810001096",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201002",
+        "village": "夹河滩村",
+        "address": "夹河滩村生产路",
+        "time": "2026-08-07T18:59:00+08:00",
+        "urgency": "中",
+        "status": "待审核",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-001"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-002",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.794487,
+          34.85299
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "供水压力不足",
+        "description": "盆窑社区产业片区用水高峰时段末端管网水压偏低。",
+        "contact": "董静",
+        "phone": "13810001019",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002001",
+        "village": "盆窑社区",
+        "address": "盆窑社区产业片区",
+        "time": "2026-08-07T14:17:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-002"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-003",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.033027,
+          34.838959
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "园区占道堆料",
+        "description": "葡萄架村排水沟存在临时堆料，占用生产车辆通道。",
+        "contact": "贾峰",
+        "phone": "13810001105",
+        "townCode": "410225208",
+        "town": "葡萄架乡",
+        "villageCode": "410225208001",
+        "village": "葡萄架村",
+        "address": "葡萄架村排水沟",
+        "time": "2026-08-07T11:44:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-003"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-004",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.788433,
+          34.961364
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "雷集村便民路散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "沈妍",
+        "phone": "13810001075",
+        "townCode": "410225106",
+        "town": "东坝头镇",
+        "villageCode": "410225106002",
+        "village": "雷集村",
+        "address": "雷集村便民路",
+        "time": "2026-08-07T10:12:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-004"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-005",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.807409,
+          34.78391
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "宅基地越界",
+        "description": "桂李寨社区村口新建院墙疑似超出宅基地批准范围。",
+        "contact": "谢超",
+        "phone": "13810001030",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003004",
+        "village": "桂李寨社区",
+        "address": "桂李寨社区村口",
+        "time": "2026-08-07T08:32:00+08:00",
+        "urgency": "高",
+        "status": "待审核",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-005"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-006",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.799765,
+          34.81785
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "城中社区村口公厕保洁不及时，配套设施存在异味。",
+        "contact": "于冰",
+        "phone": "13810001007",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001002",
+        "village": "城中社区",
+        "address": "城中社区村口",
+        "time": "2026-08-07T08:24:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-006"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-007",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.82973,
+          34.797543
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "健身器材损坏",
+        "description": "何寨社区排水沟健身器材连接件松动，存在使用风险。",
+        "contact": "蔡洁",
+        "phone": "13810001039",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区排水沟",
+        "time": "2026-08-07T07:55:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-007"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-008",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.940409,
+          34.796248
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "圈头村生产路公厕保洁不及时，配套设施存在异味。",
+        "contact": "叶刚",
+        "phone": "13810001087",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108003",
+        "village": "圈头村",
+        "address": "圈头村生产路",
+        "time": "2026-08-07T05:10:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-008"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-009",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.802287,
+          34.774974
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "何寨社区村口灌溉机井控制柜无法正常启动。",
+        "contact": "周磊",
+        "phone": "13810001034",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区村口",
+        "time": "2026-08-06T20:27:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-009"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-010",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.153603,
+          34.924658
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "道路破损",
+        "description": "南彰村排水沟路面出现沉陷和裂缝，影响车辆通行。",
+        "contact": "杨浩",
+        "phone": "13810001048",
+        "townCode": "410225102",
+        "town": "南彰镇",
+        "villageCode": "410225102001",
+        "village": "南彰村",
+        "address": "南彰村排水沟",
+        "time": "2026-08-06T20:26:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-010"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-011",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.189053,
+          34.836054
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "焦李河村排水沟灌溉机井控制柜无法正常启动。",
+        "contact": "阎悦",
+        "phone": "13810001056",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103002",
+        "village": "焦李河村",
+        "address": "焦李河村排水沟",
+        "time": "2026-08-06T17:32:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-011"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-012",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.14783,
+          34.836264
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "供水压力不足",
+        "description": "城南村便民路用水高峰时段末端管网水压偏低。",
+        "contact": "林刚",
+        "phone": "13810001055",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103001",
+        "village": "城南村",
+        "address": "城南村便民路",
+        "time": "2026-08-06T13:54:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-012"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-013",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.149596,
+          34.938148
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "道路破损",
+        "description": "南彰村排水沟路面出现沉陷和裂缝，影响车辆通行。",
+        "contact": "余静",
+        "phone": "13810001051",
+        "townCode": "410225102",
+        "town": "南彰镇",
+        "villageCode": "410225102001",
+        "village": "南彰村",
+        "address": "南彰村排水沟",
+        "time": "2026-08-06T11:22:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-013"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-014",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.967075,
+          34.762865
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "广播设备故障",
+        "description": "仪封村主干道应急广播终端无声音，需检修线路。",
+        "contact": "沈勇",
+        "phone": "13810001085",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108001",
+        "village": "仪封村",
+        "address": "仪封村主干道",
+        "time": "2026-08-06T09:02:00+08:00",
+        "urgency": "中",
+        "status": "待审核",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-014"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-015",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.162029,
+          34.923871
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "南彰村文化广场连续多盏路灯无法正常照明。",
+        "contact": "李琳",
+        "phone": "13810001052",
+        "townCode": "410225102",
+        "town": "南彰镇",
+        "villageCode": "410225102001",
+        "village": "南彰村",
+        "address": "南彰村文化广场",
+        "time": "2026-08-06T04:40:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-015"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-016",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.091121,
+          34.953587
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在何二庄村排水沟集中堆放，未及时清运。",
+        "contact": "贾芳",
+        "phone": "13810001101",
+        "townCode": "410225206",
+        "town": "孟寨乡",
+        "villageCode": "410225206002",
+        "village": "何二庄村",
+        "address": "何二庄村排水沟",
+        "time": "2026-08-05T14:10:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-016"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-017",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.933651,
+          34.798424
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "冷库噪声",
+        "description": "仪封村主干道冷链设备夜间运行噪声影响周边居民。",
+        "contact": "徐芳",
+        "phone": "13810001084",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108001",
+        "village": "仪封村",
+        "address": "仪封村主干道",
+        "time": "2026-08-05T13:03:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-017"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-018",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.732605,
+          34.831846
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "三义寨村排水沟连续多盏路灯无法正常照明。",
+        "contact": "宋静",
+        "phone": "13810001099",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201001",
+        "village": "三义寨村",
+        "address": "三义寨村排水沟",
+        "time": "2026-08-05T12:28:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-018"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-019",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.809091,
+          34.814491
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在城中社区产业片区集中堆放，未及时清运。",
+        "contact": "萧洁",
+        "phone": "13810001005",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001002",
+        "village": "城中社区",
+        "address": "城中社区产业片区",
+        "time": "2026-08-05T11:12:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-019"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-020",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.890989,
+          34.933239
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "爪营村居民点灌溉机井控制柜无法正常启动。",
+        "contact": "萧琳",
+        "phone": "13810001066",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105002",
+        "village": "爪营村",
+        "address": "爪营村居民点",
+        "time": "2026-08-05T07:45:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-020"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-021",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.943033,
+          34.972331
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "沟渠填埋",
+        "description": "梁寨村文化广场排水沟被土方局部填埋，影响排涝。",
+        "contact": "何敏",
+        "phone": "13810001040",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101002",
+        "village": "梁寨村",
+        "address": "梁寨村文化广场",
+        "time": "2026-08-04T14:09:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-021"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-022",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.740086,
+          34.82429
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "露天焚烧",
+        "description": "三义寨村便民路发现秸秆焚烧痕迹，需巡查复核。",
+        "contact": "曾芳",
+        "phone": "13810001100",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201001",
+        "village": "三义寨村",
+        "address": "三义寨村便民路",
+        "time": "2026-08-04T11:12:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-022"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-023",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.804147,
+          34.853248
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "盆窑社区主干道公厕保洁不及时，配套设施存在异味。",
+        "contact": "许芳",
+        "phone": "13810001025",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002001",
+        "village": "盆窑社区",
+        "address": "盆窑社区主干道",
+        "time": "2026-08-04T03:07:00+08:00",
+        "urgency": "低",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-023"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-024",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.856967,
+          34.828136
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "西岗头社区主干道公厕保洁不及时，配套设施存在异味。",
+        "contact": "赵刚",
+        "phone": "13810001002",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001003",
+        "village": "西岗头社区",
+        "address": "西岗头社区主干道",
+        "time": "2026-08-03T17:01:00+08:00",
+        "urgency": "低",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-024"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-025",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.890429,
+          34.866256
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "薛楼社区主干道公厕保洁不及时，配套设施存在异味。",
+        "contact": "罗刚",
+        "phone": "13810001027",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002002",
+        "village": "薛楼社区",
+        "address": "薛楼社区主干道",
+        "time": "2026-08-03T12:04:00+08:00",
+        "urgency": "低",
+        "status": "待审核",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-025"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-026",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.836532,
+          34.842482
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "南街社区主干道上方线缆低垂，车辆通行存在风险。",
+        "contact": "赵敏",
+        "phone": "13810001013",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区主干道",
+        "time": "2026-08-03T07:55:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-026"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-027",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.785217,
+          34.838292
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "供水压力不足",
+        "description": "王庄社区居民点用水高峰时段末端管网水压偏低。",
+        "contact": "赵敏",
+        "phone": "13810001022",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002003",
+        "village": "王庄社区",
+        "address": "王庄社区居民点",
+        "time": "2026-08-03T03:58:00+08:00",
+        "urgency": "低",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-027"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-028",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.841002,
+          34.821702
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "排水涵管堵塞",
+        "description": "南街社区主干道排水涵管淤积，雨天容易形成积水。",
+        "contact": "冯悦",
+        "phone": "13810001011",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区主干道",
+        "time": "2026-08-02T21:10:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-028"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-029",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.828775,
+          34.826002
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "疑似违建",
+        "description": "南街社区排水沟发现新增硬化斑块，需核查审批手续。",
+        "contact": "冯妍",
+        "phone": "13810001001",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区排水沟",
+        "time": "2026-08-02T13:35:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-029"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-030",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.82757,
+          34.975401
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "候车亭破损",
+        "description": "爪营村产业片区候车亭顶棚破损，雨天无法正常使用。",
+        "contact": "程敏",
+        "phone": "13810001072",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105002",
+        "village": "爪营村",
+        "address": "爪营村产业片区",
+        "time": "2026-08-02T07:28:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-030"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-031",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.086366,
+          34.906185
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "供水压力不足",
+        "description": "小宋村便民路用水高峰时段末端管网水压偏低。",
+        "contact": "梁洁",
+        "phone": "13810001079",
+        "townCode": "410225107",
+        "town": "小宋镇",
+        "villageCode": "410225107001",
+        "village": "小宋村",
+        "address": "小宋村便民路",
+        "time": "2026-08-02T07:17:00+08:00",
+        "urgency": "高",
+        "status": "待审核",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-031"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-032",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.077276,
+          34.836475
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "葡萄架村排水沟散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "黄琳",
+        "phone": "13810001109",
+        "townCode": "410225208",
+        "town": "葡萄架乡",
+        "villageCode": "410225208001",
+        "village": "葡萄架村",
+        "address": "葡萄架村排水沟",
+        "time": "2026-08-01T11:00:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-032"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-033",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.00896,
+          34.898732
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "大棚排水不畅",
+        "description": "闫楼村村口设施农业排水沟淤堵，影响雨后生产。",
+        "contact": "张迪",
+        "phone": "13810001110",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209001",
+        "village": "闫楼村",
+        "address": "闫楼村村口",
+        "time": "2026-08-01T03:45:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-033"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-034",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.804463,
+          34.945039
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "消防通道堵塞",
+        "description": "张庄村居民点堆物占道，消防车辆无法正常通行。",
+        "contact": "邓超",
+        "phone": "13810001078",
+        "townCode": "410225106",
+        "town": "东坝头镇",
+        "villageCode": "410225106001",
+        "village": "张庄村",
+        "address": "张庄村居民点",
+        "time": "2026-07-31T11:35:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-034"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-035",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.828144,
+          34.848256
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "园区占道堆料",
+        "description": "王庄社区居民点存在临时堆料，占用生产车辆通道。",
+        "contact": "余洋",
+        "phone": "13810001024",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002003",
+        "village": "王庄社区",
+        "address": "王庄社区居民点",
+        "time": "2026-07-31T07:42:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-035"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-036",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.209546,
+          34.870476
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "消防通道堵塞",
+        "description": "许河村文化广场堆物占道，消防车辆无法正常通行。",
+        "contact": "刘宁",
+        "phone": "13810001094",
+        "townCode": "410225109",
+        "town": "许河镇",
+        "villageCode": "410225109001",
+        "village": "许河村",
+        "address": "许河村文化广场",
+        "time": "2026-07-31T03:21:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-036"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-037",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.850565,
+          34.811186
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "危房隐患",
+        "description": "西岗头社区生产路老旧房屋墙体开裂，雨天渗漏严重。",
+        "contact": "胡刚",
+        "phone": "13810001012",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001003",
+        "village": "西岗头社区",
+        "address": "西岗头社区生产路",
+        "time": "2026-07-30T18:39:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-037"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-038",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.948379,
+          34.971312
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "冷库噪声",
+        "description": "梁寨村排水沟冷链设备夜间运行噪声影响周边居民。",
+        "contact": "苏冰",
+        "phone": "13810001045",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101002",
+        "village": "梁寨村",
+        "address": "梁寨村排水沟",
+        "time": "2026-07-30T16:09:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-038"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-039",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.09654,
+          34.906624
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "园区占道堆料",
+        "description": "袁寨村村口存在临时堆料，占用生产车辆通道。",
+        "contact": "周晨",
+        "phone": "13810001083",
+        "townCode": "410225107",
+        "town": "小宋镇",
+        "villageCode": "410225107004",
+        "village": "袁寨村",
+        "address": "袁寨村村口",
+        "time": "2026-07-30T06:31:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-039"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-040",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.059296,
+          34.977986
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "孟寨村居民点灌溉机井控制柜无法正常启动。",
+        "contact": "丁晨",
+        "phone": "13810001102",
+        "townCode": "410225206",
+        "town": "孟寨乡",
+        "villageCode": "410225206001",
+        "village": "孟寨村",
+        "address": "孟寨村居民点",
+        "time": "2026-07-30T06:13:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-040"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-041",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.057812,
+          34.974835
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "冷库噪声",
+        "description": "孟寨村主干道冷链设备夜间运行噪声影响周边居民。",
+        "contact": "吴敏",
+        "phone": "13810001104",
+        "townCode": "410225206",
+        "town": "孟寨乡",
+        "villageCode": "410225206001",
+        "village": "孟寨村",
+        "address": "孟寨村主干道",
+        "time": "2026-07-29T18:05:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-041"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-042",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.801179,
+          34.772542
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "韩村社区便民路灌溉机井控制柜无法正常启动。",
+        "contact": "萧刚",
+        "phone": "13810001036",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003003",
+        "village": "韩村社区",
+        "address": "韩村社区便民路",
+        "time": "2026-07-29T18:00:00+08:00",
+        "urgency": "低",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-042"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-043",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.931971,
+          34.861321
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "双杨树村生产路排水井堵塞，污水外溢至道路边缘。",
+        "contact": "叶芳",
+        "phone": "13810001065",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104001",
+        "village": "双杨树村",
+        "address": "双杨树村生产路",
+        "time": "2026-07-29T14:29:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-043"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-044",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.830368,
+          34.826463
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "疑似违建",
+        "description": "南街社区文化广场发现新增硬化斑块，需核查审批手续。",
+        "contact": "冯刚",
+        "phone": "13810001008",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区文化广场",
+        "time": "2026-07-29T14:01:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-044"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-045",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.791305,
+          34.836695
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "王庄社区便民路散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "何悦",
+        "phone": "13810001020",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002003",
+        "village": "王庄社区",
+        "address": "王庄社区便民路",
+        "time": "2026-07-29T12:30:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-045"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-046",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.940669,
+          34.979459
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "河道漂浮物",
+        "description": "梁寨村便民路水面出现成片漂浮物，需要及时清理。",
+        "contact": "蒋芳",
+        "phone": "13810001046",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101002",
+        "village": "梁寨村",
+        "address": "梁寨村便民路",
+        "time": "2026-07-29T03:28:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-046"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-047",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.961756,
+          34.773121
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "危房隐患",
+        "description": "代庄村主干道老旧房屋墙体开裂，雨天渗漏严重。",
+        "contact": "曾芳",
+        "phone": "13810001090",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108002",
+        "village": "代庄村",
+        "address": "代庄村主干道",
+        "time": "2026-07-28T19:07:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-047"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-048",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.157001,
+          34.823825
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "南王庄村主干道灌溉机井控制柜无法正常启动。",
+        "contact": "吴海",
+        "phone": "13810001058",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103004",
+        "village": "南王庄村",
+        "address": "南王庄村主干道",
+        "time": "2026-07-28T18:32:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-048"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-049",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.034253,
+          34.902303
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "郭庄村居民点灌溉机井控制柜无法正常启动。",
+        "contact": "程刚",
+        "phone": "13810001111",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209002",
+        "village": "郭庄村",
+        "address": "郭庄村居民点",
+        "time": "2026-07-28T14:27:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-049"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-050",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.139636,
+          34.824231
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "城南村产业片区散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "李琳",
+        "phone": "13810001057",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103001",
+        "village": "城南村",
+        "address": "城南村产业片区",
+        "time": "2026-07-28T09:21:00+08:00",
+        "urgency": "低",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-050"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-051",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.80471,
+          34.77757
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "何寨社区生产路连续多盏路灯无法正常照明。",
+        "contact": "梁浩",
+        "phone": "13810001035",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区生产路",
+        "time": "2026-07-28T03:25:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-051"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-052",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.196138,
+          34.865285
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "露天焚烧",
+        "description": "董堂村主干道发现秸秆焚烧痕迹，需巡查复核。",
+        "contact": "吕悦",
+        "phone": "13810001091",
+        "townCode": "410225109",
+        "town": "许河镇",
+        "villageCode": "410225109002",
+        "village": "董堂村",
+        "address": "董堂村主干道",
+        "time": "2026-07-28T03:23:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-052"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-053",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.80696,
+          34.818369
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "城中社区排水沟公厕保洁不及时，配套设施存在异味。",
+        "contact": "胡芳",
+        "phone": "13810001000",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001002",
+        "village": "城中社区",
+        "address": "城中社区排水沟",
+        "time": "2026-07-28T03:17:00+08:00",
+        "urgency": "低",
+        "status": "待审核",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-053"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-054",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.822118,
+          34.780256
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在何寨社区排水沟集中堆放，未及时清运。",
+        "contact": "冯超",
+        "phone": "13810001038",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区排水沟",
+        "time": "2026-07-27T21:07:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-054"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-055",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.746857,
+          34.834922
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "露天焚烧",
+        "description": "三义寨村产业片区发现秸秆焚烧痕迹，需巡查复核。",
+        "contact": "苏洁",
+        "phone": "13810001095",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201001",
+        "village": "三义寨村",
+        "address": "三义寨村产业片区",
+        "time": "2026-07-27T08:21:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-055"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-056",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.892523,
+          34.924528
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "畜禽粪污",
+        "description": "爪营村排水沟养殖点粪污收集不规范，存在外溢。",
+        "contact": "苏迪",
+        "phone": "13810001068",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105002",
+        "village": "爪营村",
+        "address": "爪营村排水沟",
+        "time": "2026-07-25T18:23:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-056"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-057",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.858122,
+          34.807499
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "陈斗寨社区产业片区排水井堵塞，污水外溢至道路边缘。",
+        "contact": "薛勇",
+        "phone": "13810001031",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003002",
+        "village": "陈斗寨社区",
+        "address": "陈斗寨社区产业片区",
+        "time": "2026-07-25T16:54:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-057"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-058",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.134715,
+          34.949944
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "畜禽粪污",
+        "description": "李家滩村主干道养殖点粪污收集不规范，存在外溢。",
+        "contact": "蒋琳",
+        "phone": "13810001050",
+        "townCode": "410225102",
+        "town": "南彰镇",
+        "villageCode": "410225102002",
+        "village": "李家滩村",
+        "address": "李家滩村主干道",
+        "time": "2026-07-25T16:46:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-058"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-059",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.150984,
+          34.832041
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "城南村文化广场灌溉机井控制柜无法正常启动。",
+        "contact": "薛冰",
+        "phone": "13810001059",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103001",
+        "village": "城南村",
+        "address": "城南村文化广场",
+        "time": "2026-07-25T14:29:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-059"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-060",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.804812,
+          34.816111
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在城中社区排水沟集中堆放，未及时清运。",
+        "contact": "马峰",
+        "phone": "13810001014",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001002",
+        "village": "城中社区",
+        "address": "城中社区排水沟",
+        "time": "2026-07-25T12:23:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-060"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-061",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.011608,
+          34.905365
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "危房隐患",
+        "description": "闫楼村产业片区老旧房屋墙体开裂，雨天渗漏严重。",
+        "contact": "薛洁",
+        "phone": "13810001112",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209001",
+        "village": "闫楼村",
+        "address": "闫楼村产业片区",
+        "time": "2026-07-25T09:46:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-061"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-062",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.830318,
+          35.001294
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "谷东村主干道上方线缆低垂，车辆通行存在风险。",
+        "contact": "黄超",
+        "phone": "13810001070",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105001",
+        "village": "谷东村",
+        "address": "谷东村主干道",
+        "time": "2026-07-24T14:37:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-062"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-063",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.897867,
+          34.937855
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "河道漂浮物",
+        "description": "爪营村产业片区水面出现成片漂浮物，需要及时清理。",
+        "contact": "黄磊",
+        "phone": "13810001073",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105002",
+        "village": "爪营村",
+        "address": "爪营村产业片区",
+        "time": "2026-07-24T13:32:00+08:00",
+        "urgency": "低",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-063"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-064",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.851138,
+          34.801567
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "广播设备故障",
+        "description": "韩村社区文化广场应急广播终端无声音，需检修线路。",
+        "contact": "邓浩",
+        "phone": "13810001032",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003003",
+        "village": "韩村社区",
+        "address": "韩村社区文化广场",
+        "time": "2026-07-24T06:55:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-064"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-065",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.033252,
+          34.830416
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "疑似违建",
+        "description": "葡萄架村主干道发现新增硬化斑块，需核查审批手续。",
+        "contact": "韩磊",
+        "phone": "13810001106",
+        "townCode": "410225208",
+        "town": "葡萄架乡",
+        "villageCode": "410225208001",
+        "village": "葡萄架村",
+        "address": "葡萄架村主干道",
+        "time": "2026-07-23T14:40:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-065"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-066",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.774989,
+          34.842802
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "王庄社区便民路排水井堵塞，污水外溢至道路边缘。",
+        "contact": "梁迪",
+        "phone": "13810001021",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002003",
+        "village": "王庄社区",
+        "address": "王庄社区便民路",
+        "time": "2026-07-23T11:36:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-066"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-067",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.80165,
+          34.846886
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "露天焚烧",
+        "description": "盆窑社区产业片区发现秸秆焚烧痕迹，需巡查复核。",
+        "contact": "冯妍",
+        "phone": "13810001016",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002001",
+        "village": "盆窑社区",
+        "address": "盆窑社区产业片区",
+        "time": "2026-07-22T19:01:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-067"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-068",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.978349,
+          34.954525
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "危房隐患",
+        "description": "范场村产业片区老旧房屋墙体开裂，雨天渗漏严重。",
+        "contact": "曾洁",
+        "phone": "13810001042",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101001",
+        "village": "范场村",
+        "address": "范场村产业片区",
+        "time": "2026-07-22T08:08:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-068"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-069",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.827397,
+          34.84115
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在西岗头社区便民路集中堆放，未及时清运。",
+        "contact": "蒋悦",
+        "phone": "13810001006",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001003",
+        "village": "西岗头社区",
+        "address": "西岗头社区便民路",
+        "time": "2026-07-22T07:06:00+08:00",
+        "urgency": "中",
+        "status": "待审核",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-069"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-070",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.947267,
+          34.86656
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "供水压力不足",
+        "description": "王庄村文化广场用水高峰时段末端管网水压偏低。",
+        "contact": "魏妍",
+        "phone": "13810001061",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104004",
+        "village": "王庄村",
+        "address": "王庄村文化广场",
+        "time": "2026-07-22T06:46:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-070"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-071",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.802999,
+          34.927406
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "候车亭破损",
+        "description": "张庄村便民路候车亭顶棚破损，雨天无法正常使用。",
+        "contact": "杨静",
+        "phone": "13810001077",
+        "townCode": "410225106",
+        "town": "东坝头镇",
+        "villageCode": "410225106001",
+        "village": "张庄村",
+        "address": "张庄村便民路",
+        "time": "2026-07-22T06:36:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-071"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-072",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.754786,
+          34.843555
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "健身器材损坏",
+        "description": "白云山村便民路健身器材连接件松动，存在使用风险。",
+        "contact": "陈冰",
+        "phone": "13810001098",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201003",
+        "village": "白云山村",
+        "address": "白云山村便民路",
+        "time": "2026-07-22T04:46:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-072"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-073",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.824508,
+          34.80744
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "宅基地越界",
+        "description": "何寨社区生产路新建院墙疑似超出宅基地批准范围。",
+        "contact": "阎静",
+        "phone": "13810001037",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区生产路",
+        "time": "2026-07-22T03:58:00+08:00",
+        "urgency": "高",
+        "status": "待审核",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-073"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-074",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.969264,
+          34.768177
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "代庄村村口上方线缆低垂，车辆通行存在风险。",
+        "contact": "薛洁",
+        "phone": "13810001089",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108002",
+        "village": "代庄村",
+        "address": "代庄村村口",
+        "time": "2026-07-21T19:47:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-074"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-075",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.060216,
+          34.819209
+        ]
+      },
+      "properties": {
+        "type": "产业发展类",
+        "subtype": "冷库噪声",
+        "description": "赵垛楼村便民路冷链设备夜间运行噪声影响周边居民。",
+        "contact": "唐宁",
+        "phone": "13810001107",
+        "townCode": "410225208",
+        "town": "葡萄架乡",
+        "villageCode": "410225208002",
+        "village": "赵垛楼村",
+        "address": "赵垛楼村便民路",
+        "time": "2026-07-21T14:25:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-075"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-076",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.151053,
+          34.816335
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "垃圾堆放",
+        "description": "发现生活垃圾在城南村居民点集中堆放，未及时清运。",
+        "contact": "薛浩",
+        "phone": "13810001054",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103001",
+        "village": "城南村",
+        "address": "城南村居民点",
+        "time": "2026-07-21T06:36:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-076"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-077",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.078806,
+          34.898495
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "孔庄村生产路连续多盏路灯无法正常照明。",
+        "contact": "唐迪",
+        "phone": "13810001082",
+        "townCode": "410225107",
+        "town": "小宋镇",
+        "villageCode": "410225107002",
+        "village": "孔庄村",
+        "address": "孔庄村生产路",
+        "time": "2026-07-20T18:12:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-077"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-078",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.850494,
+          34.957991
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "灌渠渗漏",
+        "description": "谷东村便民路灌渠侧壁破损，输水过程中渗漏明显。",
+        "contact": "林刚",
+        "phone": "13810001071",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105001",
+        "village": "谷东村",
+        "address": "谷东村便民路",
+        "time": "2026-07-19T16:46:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-078"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-079",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.823265,
+          34.776877
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "健身器材损坏",
+        "description": "何寨社区主干道健身器材连接件松动，存在使用风险。",
+        "contact": "袁宁",
+        "phone": "13810001029",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003001",
+        "village": "何寨社区",
+        "address": "何寨社区主干道",
+        "time": "2026-07-19T13:53:00+08:00",
+        "urgency": "低",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-079"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-080",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.809407,
+          34.891782
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "消防通道堵塞",
+        "description": "张庄村村口堆物占道，消防车辆无法正常通行。",
+        "contact": "程勇",
+        "phone": "13810001074",
+        "townCode": "410225106",
+        "town": "东坝头镇",
+        "villageCode": "410225106001",
+        "village": "张庄村",
+        "address": "张庄村村口",
+        "time": "2026-07-19T04:48:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-080"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-081",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.223128,
+          34.910374
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "许河村便民路连续多盏路灯无法正常照明。",
+        "contact": "余芳",
+        "phone": "13810001092",
+        "townCode": "410225109",
+        "town": "许河镇",
+        "villageCode": "410225109001",
+        "village": "许河村",
+        "address": "许河村便民路",
+        "time": "2026-07-19T03:54:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-081"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-082",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.929869,
+          34.865631
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "武营村村口灌溉机井控制柜无法正常启动。",
+        "contact": "傅冰",
+        "phone": "13810001064",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104002",
+        "village": "武营村",
+        "address": "武营村村口",
+        "time": "2026-07-18T03:06:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-082"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-083",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.083698,
+          34.904458
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "宅基地越界",
+        "description": "小宋村居民点新建院墙疑似超出宅基地批准范围。",
+        "contact": "蒋妍",
+        "phone": "13810001080",
+        "townCode": "410225107",
+        "town": "小宋镇",
+        "villageCode": "410225107001",
+        "village": "小宋村",
+        "address": "小宋村居民点",
+        "time": "2026-07-17T10:30:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-083"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-084",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.938685,
+          34.974681
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "大棚排水不畅",
+        "description": "梁寨村产业片区设施农业排水沟淤堵，影响雨后生产。",
+        "contact": "宋海",
+        "phone": "13810001044",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101002",
+        "village": "梁寨村",
+        "address": "梁寨村产业片区",
+        "time": "2026-07-17T05:42:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-084"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-085",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.9398,
+          34.802678
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "消防通道堵塞",
+        "description": "仪封村产业片区堆物占道，消防车辆无法正常通行。",
+        "contact": "王宁",
+        "phone": "13810001086",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108001",
+        "village": "仪封村",
+        "address": "仪封村产业片区",
+        "time": "2026-07-16T18:17:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-085"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-086",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.153228,
+          34.854913
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "灌渠渗漏",
+        "description": "焦李河村主干道灌渠侧壁破损，输水过程中渗漏明显。",
+        "contact": "曾迪",
+        "phone": "13810001053",
+        "townCode": "410225103",
+        "town": "考城镇",
+        "villageCode": "410225103002",
+        "village": "焦李河村",
+        "address": "焦李河村主干道",
+        "time": "2026-07-16T02:58:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-086"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-087",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.782722,
+          34.857759
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "畜禽粪污",
+        "description": "薛楼社区便民路养殖点粪污收集不规范，存在外溢。",
+        "contact": "沈峰",
+        "phone": "13810001026",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002002",
+        "village": "薛楼社区",
+        "address": "薛楼社区便民路",
+        "time": "2026-07-15T05:06:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-087"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-088",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.866377,
+          34.948945
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "金庙村文化广场灌溉机井控制柜无法正常启动。",
+        "contact": "魏芳",
+        "phone": "13810001069",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105004",
+        "village": "金庙村",
+        "address": "金庙村文化广场",
+        "time": "2026-07-13T03:41:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-088"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-089",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.932753,
+          34.970771
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "候车亭破损",
+        "description": "范场村居民点候车亭顶棚破损，雨天无法正常使用。",
+        "contact": "谢勇",
+        "phone": "13810001047",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101001",
+        "village": "范场村",
+        "address": "范场村居民点",
+        "time": "2026-07-12T20:41:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-089"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-090",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.828897,
+          34.835118
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "南街社区主干道连续多盏路灯无法正常照明。",
+        "contact": "郭峰",
+        "phone": "13810001009",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区主干道",
+        "time": "2026-07-12T07:07:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-090"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-091",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.163739,
+          34.94349
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "排水涵管堵塞",
+        "description": "南彰村村口排水涵管淤积，雨天容易形成积水。",
+        "contact": "杨悦",
+        "phone": "13810001049",
+        "townCode": "410225102",
+        "town": "南彰镇",
+        "villageCode": "410225102001",
+        "village": "南彰村",
+        "address": "南彰村村口",
+        "time": "2026-07-11T15:30:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-091"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-092",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.854694,
+          34.82399
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "广播设备故障",
+        "description": "西岗头社区主干道应急广播终端无声音，需检修线路。",
+        "contact": "曾琳",
+        "phone": "13810001004",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001003",
+        "village": "西岗头社区",
+        "address": "西岗头社区主干道",
+        "time": "2026-07-11T04:57:00+08:00",
+        "urgency": "中",
+        "status": "待审核",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-092"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-093",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.947725,
+          34.870361
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "排水涵管堵塞",
+        "description": "双杨树村居民点排水涵管淤积，雨天容易形成积水。",
+        "contact": "宋迪",
+        "phone": "13810001063",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104001",
+        "village": "双杨树村",
+        "address": "双杨树村居民点",
+        "time": "2026-07-09T20:05:00+08:00",
+        "urgency": "中",
+        "status": "待审核",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-093"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-094",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.801366,
+          34.838547
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "薛楼社区居民点公厕保洁不及时，配套设施存在异味。",
+        "contact": "程静",
+        "phone": "13810001017",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002002",
+        "village": "薛楼社区",
+        "address": "薛楼社区居民点",
+        "time": "2026-07-09T18:38:00+08:00",
+        "urgency": "低",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-094"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-095",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.782298,
+          34.956887
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "路灯损坏",
+        "description": "雷集村排水沟连续多盏路灯无法正常照明。",
+        "contact": "彭冰",
+        "phone": "13810001076",
+        "townCode": "410225106",
+        "town": "东坝头镇",
+        "villageCode": "410225106002",
+        "village": "雷集村",
+        "address": "雷集村排水沟",
+        "time": "2026-07-09T11:21:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-095"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-096",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.811623,
+          34.814478
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "城西社区村口公厕保洁不及时，配套设施存在异味。",
+        "contact": "叶浩",
+        "phone": "13810001003",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001004",
+        "village": "城西社区",
+        "address": "城西社区村口",
+        "time": "2026-07-09T07:27:00+08:00",
+        "urgency": "低",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-096"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-097",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.872815,
+          34.953273
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "排水涵管堵塞",
+        "description": "谷东村村口排水涵管淤积，雨天容易形成积水。",
+        "contact": "魏迪",
+        "phone": "13810001067",
+        "townCode": "410225105",
+        "town": "谷营镇",
+        "villageCode": "410225105001",
+        "village": "谷东村",
+        "address": "谷东村村口",
+        "time": "2026-07-08T15:17:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-097"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-098",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.223911,
+          34.859997
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "杨堂村产业片区上方线缆低垂，车辆通行存在风险。",
+        "contact": "丁洋",
+        "phone": "13810001093",
+        "townCode": "410225109",
+        "town": "许河镇",
+        "villageCode": "410225109003",
+        "village": "杨堂村",
+        "address": "杨堂村产业片区",
+        "time": "2026-07-08T11:30:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-098"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-099",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.922673,
+          34.875203
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "沟渠填埋",
+        "description": "武营村村口排水沟被土方局部填埋，影响排涝。",
+        "contact": "贾海",
+        "phone": "13810001062",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104002",
+        "village": "武营村",
+        "address": "武营村村口",
+        "time": "2026-07-08T10:32:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-099"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-100",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.059837,
+          34.823288
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "赵垛楼村主干道排水井堵塞，污水外溢至道路边缘。",
+        "contact": "赵芳",
+        "phone": "13810001108",
+        "townCode": "410225208",
+        "town": "葡萄架乡",
+        "villageCode": "410225208002",
+        "village": "赵垛楼村",
+        "address": "赵垛楼村主干道",
+        "time": "2026-07-07T16:18:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-100"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-101",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.915963,
+          34.874778
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "土岭村居民点灌溉机井控制柜无法正常启动。",
+        "contact": "林涛",
+        "phone": "13810001060",
+        "townCode": "410225104",
+        "town": "红庙镇",
+        "villageCode": "410225104003",
+        "village": "土岭村",
+        "address": "土岭村居民点",
+        "time": "2026-07-06T06:00:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-101"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-102",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.848426,
+          34.861187
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "盆窑社区村口排水井堵塞，污水外溢至道路边缘。",
+        "contact": "曾琳",
+        "phone": "13810001018",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002001",
+        "village": "盆窑社区",
+        "address": "盆窑社区村口",
+        "time": "2026-07-04T11:42:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-102"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-103",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.762475,
+          34.848712
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "河道漂浮物",
+        "description": "夹河滩村文化广场水面出现成片漂浮物，需要及时清理。",
+        "contact": "贾浩",
+        "phone": "13810001097",
+        "townCode": "410225201",
+        "town": "三义寨乡",
+        "villageCode": "410225201002",
+        "village": "夹河滩村",
+        "address": "夹河滩村文化广场",
+        "time": "2026-07-04T09:39:00+08:00",
+        "urgency": "低",
+        "status": "待审核",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-103"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-104",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.134723,
+          34.884624
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "公厕保洁",
+        "description": "小宋村主干道公厕保洁不及时，配套设施存在异味。",
+        "contact": "胡超",
+        "phone": "13810001081",
+        "townCode": "410225107",
+        "town": "小宋镇",
+        "villageCode": "410225107001",
+        "village": "小宋村",
+        "address": "小宋村主干道",
+        "time": "2026-07-03T17:37:00+08:00",
+        "urgency": "低",
+        "status": "已办结",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-104"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-105",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.033976,
+          34.898088
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "大棚排水不畅",
+        "description": "郭庄村村口设施农业排水沟淤堵，影响雨后生产。",
+        "contact": "阎宁",
+        "phone": "13810001115",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209002",
+        "village": "郭庄村",
+        "address": "郭庄村村口",
+        "time": "2026-07-02T19:20:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "物联感知",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-105"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-106",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.950257,
+          34.801965
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "危房隐患",
+        "description": "仪封村便民路老旧房屋墙体开裂，雨天渗漏严重。",
+        "contact": "韩涛",
+        "phone": "13810001088",
+        "townCode": "410225108",
+        "town": "仪封镇",
+        "villageCode": "410225108001",
+        "village": "仪封村",
+        "address": "仪封村便民路",
+        "time": "2026-07-02T18:33:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-106"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-107",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.96941,
+          34.958847
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "范场村村口上方线缆低垂，车辆通行存在风险。",
+        "contact": "阎磊",
+        "phone": "13810001043",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101001",
+        "village": "范场村",
+        "address": "范场村村口",
+        "time": "2026-07-02T07:50:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-107"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-108",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.801343,
+          34.84325
+        ]
+      },
+      "properties": {
+        "type": "人居环境类",
+        "subtype": "污水外溢",
+        "description": "盆窑社区生产路排水井堵塞，污水外溢至道路边缘。",
+        "contact": "程敏",
+        "phone": "13810001028",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002001",
+        "village": "盆窑社区",
+        "address": "盆窑社区生产路",
+        "time": "2026-07-01T12:19:00+08:00",
+        "urgency": "高",
+        "status": "处理中",
+        "channel": "遥感巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-108"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-109",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.893076,
+          34.860631
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "沟渠填埋",
+        "description": "薛楼社区产业片区排水沟被土方局部填埋，影响排涝。",
+        "contact": "吴海",
+        "phone": "13810001023",
+        "townCode": "410225002",
+        "town": "桐乡街道",
+        "villageCode": "410225002002",
+        "village": "薛楼社区",
+        "address": "薛楼社区产业片区",
+        "time": "2026-06-24T07:48:00+08:00",
+        "urgency": "高",
+        "status": "已派单",
+        "channel": "村民随手拍",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-109"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-110",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.023668,
+          34.909266
+        ]
+      },
+      "properties": {
+        "type": "基础设施类",
+        "subtype": "排水涵管堵塞",
+        "description": "闫楼村文化广场排水涵管淤积，雨天容易形成积水。",
+        "contact": "彭海",
+        "phone": "13810001113",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209001",
+        "village": "闫楼村",
+        "address": "闫楼村文化广场",
+        "time": "2026-06-21T04:24:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-110"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-111",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.086908,
+          34.950889
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "大棚排水不畅",
+        "description": "何二庄村生产路设施农业排水沟淤堵，影响雨后生产。",
+        "contact": "郭静",
+        "phone": "13810001103",
+        "townCode": "410225206",
+        "town": "孟寨乡",
+        "villageCode": "410225206002",
+        "village": "何二庄村",
+        "address": "何二庄村生产路",
+        "time": "2026-06-18T03:25:00+08:00",
+        "urgency": "中",
+        "status": "已派单",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-111"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-112",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.855558,
+          34.828541
+        ]
+      },
+      "properties": {
+        "type": "公共服务类",
+        "subtype": "广播设备故障",
+        "description": "西岗头社区村口应急广播终端无声音，需检修线路。",
+        "contact": "于涛",
+        "phone": "13810001010",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001003",
+        "village": "西岗头社区",
+        "address": "西岗头社区村口",
+        "time": "2026-06-13T17:01:00+08:00",
+        "urgency": "中",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-112"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-113",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.849551,
+          34.802966
+        ]
+      },
+      "properties": {
+        "type": "农业生产类",
+        "subtype": "机井故障",
+        "description": "韩村社区居民点灌溉机井控制柜无法正常启动。",
+        "contact": "傅晨",
+        "phone": "13810001033",
+        "townCode": "410225003",
+        "town": "惠安街道",
+        "villageCode": "410225003003",
+        "village": "韩村社区",
+        "address": "韩村社区居民点",
+        "time": "2026-06-13T12:25:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-113"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-114",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          115.039632,
+          34.896216
+        ]
+      },
+      "properties": {
+        "type": "空间管控类",
+        "subtype": "宅基地越界",
+        "description": "郭庄村产业片区新建院墙疑似超出宅基地批准范围。",
+        "contact": "朱峰",
+        "phone": "13810001114",
+        "townCode": "410225209",
+        "town": "闫楼乡",
+        "villageCode": "410225209002",
+        "village": "郭庄村",
+        "address": "郭庄村产业片区",
+        "time": "2026-06-13T11:12:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "部门巡检",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-114"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-115",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.971548,
+          34.952466
+        ]
+      },
+      "properties": {
+        "type": "生态保护类",
+        "subtype": "岸线垃圾",
+        "description": "范场村村口散落塑料包装和生活垃圾，需巡查清理。",
+        "contact": "彭妍",
+        "phone": "13810001041",
+        "townCode": "410225101",
+        "town": "堌阳镇",
+        "villageCode": "410225101001",
+        "village": "范场村",
+        "address": "范场村村口",
+        "time": "2026-06-13T07:00:00+08:00",
+        "urgency": "中",
+        "status": "处理中",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-115"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "GK-2026-116",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          114.833439,
+          34.839449
+        ]
+      },
+      "properties": {
+        "type": "安全风险类",
+        "subtype": "电线低垂",
+        "description": "南街社区居民点上方线缆低垂，车辆通行存在风险。",
+        "contact": "许洋",
+        "phone": "13810001015",
+        "townCode": "410225001",
+        "town": "兰阳街道",
+        "villageCode": "410225001001",
+        "village": "南街社区",
+        "address": "南街社区居民点",
+        "time": "2026-06-13T04:43:00+08:00",
+        "urgency": "高",
+        "status": "已办结",
+        "channel": "网格巡查",
+        "dataClass": "场景模拟",
+        "id": "GK-2026-116"
+      }
+    }
+  ]
+}
