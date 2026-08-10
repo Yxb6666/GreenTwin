@@ -21,12 +21,12 @@ const isSubmitting = ref(false)
 const feedback = ref('')
 
 const title = computed(() =>
-  mode.value === 'login' ? '欢迎回来' : '创建演示账户',
+  mode.value === 'login' ? '欢迎回来' : '创建账户',
 )
 const description = computed(() =>
   mode.value === 'login'
     ? '验证账户后进入乡村数字孪生决策工作台。'
-    : '账户仅保存在当前浏览器，用于项目演示与访问隔离。',
+    : '',
 )
 
 function switchMode(nextMode: AuthMode) {
@@ -169,9 +169,9 @@ async function submit() {
 
       <div class="auth-form-panel">
         <div class="auth-form-panel__head">
-          <p>ACCOUNT ACCESS</p>
+          <p>GreenTwin 工作台</p>
           <h2 id="auth-title">{{ title }}</h2>
-          <span>{{ description }}</span>
+          <span v-if="description">{{ description }}</span>
         </div>
 
         <div class="auth-tabs" role="tablist" aria-label="账户操作">
@@ -292,7 +292,6 @@ async function submit() {
                 >记住账户名称</span
               ></label
             >
-            <small>密码不会被浏览器明文保存</small>
           </div>
           <p v-if="feedback" class="auth-feedback" role="alert">
             {{ feedback }}
@@ -312,16 +311,6 @@ async function submit() {
           </button>
         </form>
 
-        <aside class="auth-notice">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-          <p>
-            <strong>本地演示认证</strong
-            ><span>当前未连接正式用户中心，账户数据仅存于本机浏览器。</span>
-          </p>
-        </aside>
         <footer>GreenTwin Platform <span>·</span> 2026</footer>
       </div>
     </section>
@@ -585,11 +574,16 @@ async function submit() {
     linear-gradient(rgba(8, 55, 48, 0.028) 1px, transparent 1px), #f0f6f2;
   background-size: 100% 30px;
 }
+.auth-form-panel__head {
+  margin-top: auto;
+}
 .auth-form-panel__head > p {
-  margin: 0 0 18px;
-  color: #4d837b;
-  font: 10px var(--font-data);
-  letter-spacing: 0.18em;
+  margin: 0 0 16px;
+  color: #52766f;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 .auth-form-panel__head h2 {
   margin: 0;
@@ -710,7 +704,6 @@ async function submit() {
   display: flex;
   min-height: 20px;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 .auth-options label {
@@ -726,10 +719,6 @@ async function submit() {
   height: 14px;
   margin: 0;
   accent-color: #176e61;
-}
-.auth-options small {
-  color: #849691;
-  font-size: 9px;
 }
 .auth-feedback {
   margin: -4px 0 0;
@@ -783,41 +772,6 @@ async function submit() {
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.75s linear infinite;
-}
-.auth-notice {
-  display: flex;
-  margin-top: 20px;
-  padding: 11px 12px;
-  border: 1px solid rgba(32, 141, 126, 0.12);
-  border-radius: 7px;
-  align-items: flex-start;
-  gap: 10px;
-  background: rgba(32, 141, 126, 0.045);
-}
-.auth-notice svg {
-  width: 18px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: #278b7d;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
-}
-.auth-notice p,
-.auth-notice strong,
-.auth-notice span {
-  display: block;
-  margin: 0;
-}
-.auth-notice strong {
-  color: #2f6058;
-  font-size: 10px;
-}
-.auth-notice span {
-  margin-top: 3px;
-  color: #78908b;
-  font-size: 9px;
-  line-height: 1.45;
 }
 .auth-form-panel footer {
   margin-top: auto;
