@@ -83,10 +83,7 @@ async function submit() {
         <div class="auth-visual__grid" aria-hidden="true"></div>
         <header class="brand-lockup">
           <div class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 42 42">
-              <path d="M8 26 21 7l13 19-13 9z" />
-              <path d="m14 24 7-10 7 10-7 5z" />
-            </svg>
+            <img src="/branding/greentwin-logo.png" alt="" />
           </div>
           <div>
             <strong>GreenTwin</strong>
@@ -390,39 +387,41 @@ async function submit() {
 .brand-lockup {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 .brand-lockup strong,
 .brand-lockup span {
   display: block;
 }
 .brand-lockup strong {
-  font: 18px var(--font-data);
-  letter-spacing: 0.08em;
+  font: 600 19px var(--font-body);
+  letter-spacing: 0.055em;
 }
 .brand-lockup span {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--text-soft);
   font-size: 10px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 .brand-mark {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(61, 214, 196, 0.38);
-  border-radius: 11px;
-  place-items: center;
-  background: rgba(61, 214, 196, 0.08);
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid rgba(61, 214, 196, 0.34);
+  border-radius: 50%;
+  background: #0b2b28;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    0 0 0 3px rgba(61, 214, 196, 0.045);
 }
-.brand-mark svg {
-  width: 28px;
-  fill: none;
-  stroke: var(--cyan);
-  stroke-width: 1.5;
-}
-.brand-mark svg path:last-child {
-  stroke: var(--green);
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  transform: scale(1.04);
 }
 .auth-visual__copy {
   margin-top: clamp(38px, 7vh, 78px);
