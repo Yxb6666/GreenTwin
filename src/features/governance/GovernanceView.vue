@@ -48,7 +48,7 @@ let issueLayer: L.FeatureGroup | null = null
 let spatialLayer: L.FeatureGroup | null = null
 let spatialDraft: L.Rectangle | L.Circle | null = null
 let spatialStart: L.LatLng | null = null
-const issueMarkers = new Map<string, L.CircleMarker>()
+const issueMarkers = new Map<string, L.Marker>()
 
 const types = computed(() => [
   ...new Set(issues.value.map((issue) => issue.type)),
@@ -161,19 +161,16 @@ function filterByStatus(status: IssueStatus) {
   filters.status = filters.status === status ? 'all' : status
 }
 
-function markerStyle(
-  issue: GovernanceIssue,
-  active: boolean,
-): L.CircleMarkerOptions {
-  return {
-    pane: ISSUE_PANE,
-    radius: active ? 8 : 5.5,
-    color: active ? '#ffffff' : '#dffcf6',
-    weight: active ? 2.4 : 1.2,
-    fillColor: typeColors[issue.type] ?? '#3dd6c4',
-    fillOpacity: active ? 1 : 0.88,
-    opacity: 1,
-  }
+function issueMarkerIcon(issue: GovernanceIssue, active: boolean) {
+  const color = typeColors[issue.type] ?? '#3dd6c4'
+
+  return L.divIcon({
+    className: 'governance-issue-marker-shell',
+    html: `<span class="governance-issue-pin${active ? ' is-active' : ''}" style="--issue-color: ${color}" aria-hidden="true"><span class="governance-issue-pin__badge"><b>!</b></span></span>`,
+    iconSize: [24, 29],
+    iconAnchor: [12, 27],
+    tooltipAnchor: [0, -24],
+  })
 }
 
 function issueTooltip(issue: GovernanceIssue) {
@@ -204,20 +201,24 @@ function refreshIssueMarkers() {
   issues.value.forEach((issue) => {
     let marker = issueMarkers.get(issue.id)
     if (!marker) {
-      marker = L.circleMarker(
-        [issue.latitude, issue.longitude],
-        markerStyle(issue, false),
-      )
+      marker = L.marker([issue.latitude, issue.longitude], {
+        pane: ISSUE_PANE,
+        icon: issueMarkerIcon(issue, false),
+        keyboard: true,
+        riseOnHover: true,
+        riseOffset: 250,
+        title: `${issue.id} · ${issue.subtype}`,
+      })
         .bindTooltip(issueTooltip(issue), {
           className: 'governance-marker-tooltip',
           direction: 'top',
-          offset: [0, -6],
         })
         .on('click', () => selectIssue(issue))
       issueMarkers.set(issue.id, marker)
     }
-    marker.setStyle(markerStyle(issue, selected.value?.id === issue.id))
-    marker.setRadius(selected.value?.id === issue.id ? 8 : 5.5)
+    const isActive = selected.value?.id === issue.id
+    marker.setIcon(issueMarkerIcon(issue, isActive))
+    marker.setZIndexOffset(isActive ? 500 : 0)
     if (visibleIds.has(issue.id)) {
       if (!issueLayer!.hasLayer(marker)) marker.addTo(issueLayer!)
     } else if (issueLayer!.hasLayer(marker)) {
@@ -1016,6 +1017,101 @@ onBeforeUnmount(() => {
 }
 :global(.governance-marker-tooltip::before) {
   border-top-color: rgba(61, 214, 196, 0.45) !important;
+}
+
+:global(.governance-issue-marker-shell) {
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+:global(.governance-issue-pin) {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 29px;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.55));
+  transform-origin: 50% 93%;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+:global(.governance-issue-pin::before) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--issue-color);
+  border-radius: 50%;
+  content: '';
+  opacity: 0;
+}
+
+:global(.governance-issue-pin__badge) {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgba(242, 255, 251, 0.95);
+  border-radius: 50% 50% 50% 3px;
+  place-items: center;
+  color: #071413;
+  background: var(--issue-color);
+  box-shadow:
+    0 0 0 1px rgba(4, 19, 18, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: rotate(45deg);
+}
+
+:global(.governance-issue-pin__badge b) {
+  font: 800 11px/1 var(--font-data);
+  transform: rotate(-45deg);
+}
+
+:global(.governance-issue-marker-shell:hover .governance-issue-pin) {
+  filter:
+    drop-shadow(0 3px 4px rgba(0, 0, 0, 0.62))
+    drop-shadow(0 0 4px var(--issue-color));
+  transform: scale(1.12);
+}
+
+:global(.governance-issue-pin.is-active) {
+  z-index: 1;
+  filter:
+    drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
+    drop-shadow(0 0 5px var(--issue-color));
+  transform: scale(1.28);
+}
+
+:global(.governance-issue-pin.is-active::before) {
+  animation: governance-issue-pulse 1.7s ease-out infinite;
+}
+
+@keyframes governance-issue-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.68);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.governance-issue-pin),
+  :global(.governance-issue-pin.is-active::before) {
+    animation: none;
+    transition: none;
+  }
+
+  :global(.governance-issue-pin.is-active::before) {
+    opacity: 0.55;
+    transform: scale(1.08);
+  }
 }
 
 .status-actions {
