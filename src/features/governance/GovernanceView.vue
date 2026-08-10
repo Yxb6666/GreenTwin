@@ -684,6 +684,16 @@ onBeforeUnmount(() => {
         </PanelCard>
 
         <PanelCard title="当前问题详情" :meta="selected?.id ?? '未选择'">
+          <template #action>
+            <button
+              class="issue-detail__entry"
+              type="button"
+              :disabled="!selected"
+              @click="openIssueDetail"
+            >
+              处置详情 <span aria-hidden="true">→</span>
+            </button>
+          </template>
           <div v-if="selected" class="issue-detail">
             <h3>{{ selected.subtype }}</h3>
             <p>{{ selected.description }}</p>
@@ -720,13 +730,6 @@ onBeforeUnmount(() => {
                 </dd>
               </div>
             </dl>
-            <button
-              class="issue-detail__more"
-              type="button"
-              @click="openIssueDetail"
-            >
-              查看完整处置详情 <span aria-hidden="true">→</span>
-            </button>
           </div>
           <p v-else class="empty-state">请选择一个问题</p>
         </PanelCard>
@@ -1145,38 +1148,47 @@ onBeforeUnmount(() => {
   font-size: 9px;
 }
 
-.issue-detail__more {
-  display: flex;
+.issue-detail__entry {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 30px;
-  margin-top: 9px;
-  gap: 8px;
+  min-width: 68px;
+  height: 25px;
+  margin-left: 9px;
+  padding: 0 8px;
+  gap: 5px;
   color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.32);
-  border-radius: 5px;
-  background: linear-gradient(90deg, rgba(61, 214, 196, 0.08), rgba(61, 214, 196, 0.03));
+  border: 1px solid rgba(61, 214, 196, 0.42);
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(61, 214, 196, 0.14), rgba(61, 214, 196, 0.05));
   font-size: 9px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.issue-detail__more span {
-  font-size: 13px;
+.issue-detail__entry span {
+  margin-left: 0;
+  color: currentcolor;
+  font-size: 11px;
   transition: transform 160ms ease;
 }
 
-.issue-detail__more:hover,
-.issue-detail__more:focus-visible {
+.issue-detail__entry:hover,
+.issue-detail__entry:focus-visible {
   color: #eafffb;
   border-color: var(--line-bright);
   outline: none;
   background: rgba(61, 214, 196, 0.13);
 }
 
-.issue-detail__more:hover span,
-.issue-detail__more:focus-visible span {
+.issue-detail__entry:hover span,
+.issue-detail__entry:focus-visible span {
   transform: translateX(3px);
+}
+
+.issue-detail__entry:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 :global(.map-is-spatial-querying),
@@ -1364,7 +1376,7 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .issue-detail__more span,
+  .issue-detail__entry span,
   .detail-page-enter-active,
   .detail-page-leave-active,
   .detail-page-enter-active :deep(.issue-detail-page__canvas),
