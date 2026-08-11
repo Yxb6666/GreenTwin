@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import L from 'leaflet'
 import { BASE_MAP_OPTIONS, requiresArcGisAccessToken, type BaseMapMode } from '@/gis/leaflet/baseMaps'
-import { focusMapOnLayer } from '@/gis/leaflet/mapFocus'
+import { focusMapOnLayer, TOWNSHIP_FOCUS_START_EVENT } from '@/gis/leaflet/mapFocus'
 import { calculateGeodesicArea, formatArea, formatDistance } from '@/gis/leaflet/measurement'
 import type { GeographicBounds } from '@/gis/leaflet/serviceBounds'
 
@@ -71,12 +71,12 @@ function redrawCurrentPath(cursor?: L.LatLng) {
   if (currentPath) layer.removeLayer(currentPath)
 
   const pathOptions: L.PathOptions = {
-    color: '#54e1ce',
-    weight: 2,
-    opacity: 0.95,
+    color: activeMeasurement.value === 'area' ? '#42d7c1' : '#54e1ce',
+    weight: activeMeasurement.value === 'area' ? 1.5 : 2,
+    opacity: activeMeasurement.value === 'area' ? 0.9 : 0.95,
     fillColor: '#3dd6c4',
-    fillOpacity: 0.15,
-    dashArray: activeMeasurement.value === 'distance' ? '7 6' : undefined,
+    fillOpacity: activeMeasurement.value === 'area' ? 0.06 : 0.15,
+    dashArray: activeMeasurement.value === 'distance' ? '7 6' : '6 4',
   }
   currentPath = activeMeasurement.value === 'distance' ? L.polyline(points, pathOptions).addTo(layer) : L.polygon(points, pathOptions).addTo(layer)
 
@@ -159,9 +159,13 @@ function startMeasurement(type: MeasurementType) {
 }
 
 function clearDrawings() {
+  clearTransientDrawings()
+  notify('临时标绘与测量结果已清除')
+}
+
+function clearTransientDrawings() {
   stopMeasurement()
   drawingLayer?.clearLayers()
-  notify('临时标绘与测量结果已清除')
 }
 
 function toggleMeasurementMenu() {
@@ -210,6 +214,7 @@ function setBaseMap(mode: BaseMapMode) {
 
 function resetView() {
   if (!props.map) return
+  clearTransientDrawings()
   props.resetSelection?.()
   focusMapOnLayer(props.map, props.focusBounds, props.initialCenter, props.initialZoom)
   notify(props.focusBounds ? '已居中显示行政区划图层' : '图层范围不可用，已回到默认视图')
@@ -314,8 +319,14 @@ function onKeyDown(event: KeyboardEvent) {
 watch(
   () => props.map,
   (map, previousMap) => {
-    if (previousMap && previousMap !== map) stopMeasurement()
-    if (map) applyBaseMapFilter(props.activeBaseMap)
+    if (previousMap && previousMap !== map) {
+      previousMap.off(TOWNSHIP_FOCUS_START_EVENT, clearTransientDrawings)
+      stopMeasurement()
+    }
+    if (map) {
+      map.on(TOWNSHIP_FOCUS_START_EVENT, clearTransientDrawings)
+      applyBaseMapFilter(props.activeBaseMap)
+    }
   },
   { immediate: true },
 )
@@ -330,6 +341,7 @@ window.addEventListener('keydown', onKeyDown)
 onBeforeUnmount(() => {
   window.clearTimeout(feedbackTimer)
   window.removeEventListener('keydown', onKeyDown)
+  props.map?.off(TOWNSHIP_FOCUS_START_EVENT, clearTransientDrawings)
   stopMeasurement()
 })
 </script>

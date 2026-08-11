@@ -407,13 +407,13 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: #f1ffe0;
+  color: #f0f5e8;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0.04em;
   pointer-events: none;
-  text-shadow: 0 1px 2px #04110f, 0 0 4px #04110f;
+  text-shadow: -1px 0 2px #04110f, 1px 0 2px #04110f, 0 -1px 2px #04110f, 0 1px 2px #04110f;
   white-space: nowrap;
   transition:
     color 160ms ease,
@@ -434,7 +434,7 @@ button {
   color: #f5f8e8;
   font-size: 14px;
   font-weight: 700;
-  text-shadow: 0 1px 4px rgba(3, 20, 17, 0.9);
+  text-shadow: -1px 0 3px #031411, 1px 0 3px #031411, 0 -1px 3px #031411, 0 1px 3px #031411;
 }
 
 .leaflet-tooltip.township-map-label--dimmed {
@@ -449,6 +449,10 @@ button {
     stroke 160ms ease,
     stroke-width 160ms ease,
     opacity 160ms ease;
+}
+
+.map--township-focus .leaflet-baseMap-pane.map-base--natural {
+  filter: brightness(0.9) saturate(0.86) contrast(1.03);
 }
 
 .map-shell::after {

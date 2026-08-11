@@ -4,34 +4,34 @@ export type TownshipVisualState = 'normal' | 'hover' | 'selected' | 'dimmed'
 
 export const TOWNSHIP_NORMAL_STYLE: L.PathOptions = {
   pane: 'townshipOverlayPane',
-  fillColor: '#3ead82',
-  fillOpacity: 0.1,
-  color: '#c7df78',
+  fillColor: '#2ba57d',
+  fillOpacity: 0.05,
+  color: '#c4d978',
   weight: 1.3,
-  opacity: 0.75,
+  opacity: 0.78,
 }
 
 const TOWNSHIP_HOVER_STYLE: L.PathOptions = {
-  fillColor: '#36d6b0',
-  fillOpacity: 0.22,
-  color: '#e5f59a',
-  weight: 2.5,
+  fillColor: '#3dd6b4',
+  fillOpacity: 0.15,
+  color: '#e1f29b',
+  weight: 2.4,
   opacity: 1,
 }
 
 const TOWNSHIP_SELECTED_STYLE: L.PathOptions = {
-  fillOpacity: 0.12,
+  fillOpacity: 0.08,
   color: '#edf6cb',
-  weight: 3.5,
+  weight: 3.2,
   opacity: 1,
 }
 
 const TOWNSHIP_DIMMED_STYLE: L.PathOptions = {
-  fillColor: '#031b18',
-  fillOpacity: 0.48,
-  color: '#71877a',
+  fillColor: '#041b18',
+  fillOpacity: 0.24,
+  color: '#758e80',
   weight: 1,
-  opacity: 0.3,
+  opacity: 0.35,
 }
 
 export function resolveTownshipVisualState(
@@ -59,5 +59,5 @@ export function getTownshipPathStyle(
 }
 
 export function getTownshipLabelOpacity(state: TownshipVisualState) {
-  return state === 'dimmed' ? 0.3 : 1
+  return state === 'dimmed' ? 0.42 : 1
 }

@@ -22,22 +22,22 @@ describe('行政区聚光灯视觉状态', () => {
 
     expect(style).toMatchObject({
       fillColor: '#987654',
-      fillOpacity: 0.12,
+      fillOpacity: 0.08,
       color: '#edf6cb',
-      weight: 3.5,
+      weight: 3.2,
       opacity: 1,
     })
   })
 
-  it('dimmed 使用深绿蒙版且标签保留三成可见度', () => {
+  it('dimmed 使用深绿蒙版且标签保留四成可见度', () => {
     expect(getTownshipPathStyle('dimmed')).toMatchObject({
-      fillColor: '#031b18',
-      fillOpacity: 0.48,
-      color: '#71877a',
+      fillColor: '#041b18',
+      fillOpacity: 0.24,
+      color: '#758e80',
       weight: 1,
-      opacity: 0.3,
+      opacity: 0.35,
     })
-    expect(getTownshipLabelOpacity('dimmed')).toBe(0.3)
+    expect(getTownshipLabelOpacity('dimmed')).toBe(0.42)
     expect(getTownshipLabelOpacity('selected')).toBe(1)
   })
 })

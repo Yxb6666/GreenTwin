@@ -5,7 +5,15 @@ type MapFocusController = Pick<L.Map, 'flyTo' | 'flyToBounds'>
 type TownshipFocusController = Pick<L.Map, 'flyToBounds' | 'getContainer'>
 type TownshipLayer = Pick<L.Polygon, 'getBounds'>
 
-const MAP_TOOL_ACTIVE_CLASSES = ['map-is-measuring', 'map-is-drawing', 'map-is-selecting', 'leaflet-draw-drawing']
+const MAP_TOOL_ACTIVE_CLASSES = [
+  'map-is-measuring',
+  'map-is-drawing',
+  'map-is-selecting',
+  'map-is-spatial-querying',
+  'leaflet-draw-drawing',
+]
+
+export const TOWNSHIP_FOCUS_START_EVENT = 'townshipfocusstart'
 
 export const TOWNSHIP_FOCUS_OPTIONS: L.FitBoundsOptions = {
   duration: 0.7,

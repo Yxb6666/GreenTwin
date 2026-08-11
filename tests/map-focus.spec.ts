@@ -67,7 +67,7 @@ describe('乡镇行政区点击聚焦', () => {
     expect(TOWNSHIP_FOCUS_OPTIONS).toEqual({ duration: 0.7, padding: [60, 60], maxZoom: 13 })
   })
 
-  it.each(['map-is-measuring', 'map-is-drawing', 'map-is-selecting'])('%s 工具状态中不触发行政区聚焦', (activeToolClass) => {
+  it.each(['map-is-measuring', 'map-is-drawing', 'map-is-selecting', 'map-is-spatial-querying'])('%s 工具状态中不触发行政区聚焦', (activeToolClass) => {
     const map = townshipFocusController(activeToolClass)
     const { layer } = townshipLayer()
     const beforeFocus = vi.fn()
