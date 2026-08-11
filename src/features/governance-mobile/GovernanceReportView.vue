@@ -7,7 +7,9 @@ import {
   type CreateGovernanceIssueRequest,
 } from '@/api/governance'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
+import { useAuthStore } from '@/features/auth/auth'
 import LocationMapPreview from './LocationMapPreview.vue'
+import MobileTabBar from './MobileTabBar.vue'
 import {
   defaultGovernanceCategory,
   defaultGovernanceSubtype,
@@ -33,6 +35,7 @@ interface SelectedPhoto {
 
 const router = useRouter()
 const config = useRuntimeConfig()
+const auth = useAuthStore()
 const categoryOptions = Object.keys(governanceCategories) as GovernanceCategory[]
 const form = reactive({
   type: defaultGovernanceCategory as GovernanceCategory,
@@ -172,6 +175,7 @@ function clearErrors() {
 
 function requestWithoutTime(): Omit<CreateGovernanceIssueRequest, 'time'> {
   return {
+    userId: auth.username,
     type: form.type,
     subtype: form.subtype,
     description: form.description,
@@ -241,11 +245,8 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="gm-page gm-report-page">
-    <div class="gm-phone-canvas">
+    <div class="gm-phone-canvas gm-app-canvas">
       <header class="gm-hero gm-report-hero">
-        <button class="gm-back" type="button" aria-label="返回登录页" @click="router.push('/governance/report')">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-        </button>
         <p class="gm-eyebrow">GREENTWIN · 乡村治理</p>
         <h1>问题上报</h1>
         <p>人人参与，共建美好家园</p>
@@ -392,6 +393,7 @@ onBeforeUnmount(() => {
         </button>
         <p class="gm-privacy-note">您的信息仅用于本次问题核实与处置</p>
       </form>
+      <MobileTabBar active="report" />
     </div>
   </main>
 </template>

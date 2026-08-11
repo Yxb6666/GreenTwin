@@ -11,6 +11,7 @@ import {
   governanceCategories,
   validateGovernanceRequest,
 } from '@/features/governance-mobile/model'
+import { maskPhone } from '@/features/governance-mobile/userIssues'
 
 const collection = JSON.parse(
   readFileSync(
@@ -23,6 +24,10 @@ const collection = JSON.parse(
 ) as GovernanceFeatureCollection
 
 describe('移动端治理问题表单模型', () => {
+  it('按个人资料规则脱敏手机号', () => {
+    expect(maskPhone('13810001096')).toBe('138****1096')
+    expect(maskPhone('invalid')).toBe('暂无上报信息')
+  })
   it('提供 8 个一级分类、25 个子类型及指定默认值', () => {
     expect(Object.keys(governanceCategories)).toHaveLength(8)
     expect(
@@ -50,6 +55,7 @@ describe('移动端治理问题表单模型', () => {
 
   it('校验必填项、坐标、手机号及照片数量', () => {
     const invalid = validateGovernanceRequest({
+      userId: 'Easy',
       type: '生态保护类',
       subtype: '岸线垃圾',
       description: '',
@@ -73,6 +79,7 @@ describe('移动端治理问题表单模型', () => {
 
     expect(
       validateGovernanceRequest({
+        userId: 'Easy',
         type: '生态保护类',
         subtype: '岸线垃圾',
         description: '河道附近存在垃圾，需要及时处理。',

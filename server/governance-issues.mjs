@@ -42,6 +42,9 @@ function requireCoordinate(value, label, minimum, maximum) {
 
 export function validateGovernanceIssueRequest(value) {
   const input = requireObject(value, '请求参数')
+  const userId = requireText(input.userId, '用户编号', 24)
+  if (!/^[\p{L}\p{N}_-]+$/u.test(userId))
+    throw new GovernanceMockError('用户编号格式不正确')
   const type = requireText(input.type, '问题类型', 30)
   const subtype = requireText(input.subtype, '问题子类型', 30)
   if (!CATEGORY_SUBTYPES[type]?.includes(subtype))
@@ -58,6 +61,7 @@ export function validateGovernanceIssueRequest(value) {
   if (!/^1[3-9]\d{9}$/.test(phone)) throw new GovernanceMockError('联系电话格式不正确')
 
   return {
+    userId,
     type,
     subtype,
     description: requireText(input.description, '问题描述', 200),
@@ -76,6 +80,7 @@ function featureToIssue(feature) {
   const properties = feature.properties ?? {}
   const coordinates = feature.geometry?.coordinates ?? []
   return {
+    userId: String(properties.userId ?? ''),
     id: String(properties.id ?? feature.id ?? ''),
     type: String(properties.type ?? ''),
     subtype: String(properties.subtype ?? ''),
@@ -102,6 +107,7 @@ function issueToFeature(issue) {
     },
     properties: {
       id: issue.id,
+      userId: issue.userId,
       type: issue.type,
       subtype: issue.subtype,
       description: issue.description,
@@ -186,7 +192,28 @@ export function createGovernanceIssuesService({ dataPath, collection } = {}) {
     }
   }
 
-  return { create, get, list }
+  function listByUser(userIdValue) {
+    const userId = requireText(userIdValue, '用户编号', 24)
+    if (!/^[\p{L}\p{N}_-]+$/u.test(userId))
+      throw new GovernanceMockError('用户编号格式不正确')
+    const issues = [...runtimeIssues.values()]
+      .filter((issue) => issue.userId === userId)
+      .sort((left, right) => Date.parse(right.time) - Date.parse(left.time))
+      .map((issue) => structuredClone(issue))
+    const completed = issues.filter((issue) => issue.status === '已办结').length
+    return {
+      success: true,
+      userId,
+      summary: {
+        total: issues.length,
+        processing: issues.length - completed,
+        completed,
+      },
+      issues,
+    }
+  }
+
+  return { create, get, list, listByUser }
 }
 
 async function readJsonBody(request) {
@@ -223,6 +250,13 @@ export function createGovernanceIssuesMiddleware(options) {
 
     const suffix = pathname.slice(API_PREFIX.length).replace(/^\/+|\/+$/g, '')
     try {
+      if (request.method === 'GET' && suffix.startsWith('user/')) {
+        const userId = suffix.slice('user/'.length)
+        if (!userId || userId.includes('/'))
+          throw new GovernanceMockError('用户编号格式不正确')
+        sendJson(response, 200, service.listByUser(decodeURIComponent(userId)))
+        return
+      }
       if (request.method === 'GET' && !suffix) {
         sendJson(response, 200, service.list())
         return

@@ -3,6 +3,7 @@ import {
   createGovernanceIssue,
   getGovernanceIssue,
   listGovernanceIssues,
+  listGovernanceIssuesByUser,
 } from '@/api/governance'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -32,6 +33,7 @@ describe('治理问题 API 客户端', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
     const payload = {
+      userId: 'Easy',
       type: '生态保护类',
       subtype: '岸线垃圾',
       description: '河岸存在生活垃圾。',
@@ -51,6 +53,26 @@ describe('治理问题 API 客户端', () => {
     const init = fetchMock.mock.calls[0]?.[1]
     expect(init?.method).toBe('POST')
     expect(JSON.parse(String(init?.body))).toEqual(payload)
+  })
+
+  it('读取用户问题列表与统计摘要', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          userId: 'Easy',
+          summary: { total: 0, processing: 0, completed: 0 },
+          issues: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(listGovernanceIssuesByUser('/api', 1000, 'Easy')).resolves.toMatchObject({
+      userId: 'Easy',
+      summary: { total: 0 },
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/governance/issues/user/Easy')
   })
 
   it('查询单条问题并传递服务端错误信息', async () => {

@@ -21,7 +21,7 @@ const submitting = ref(false)
 const feedback = ref('')
 
 const submitLabel = computed(() =>
-  mode.value === 'login' ? '登录并进入问题上报' : '创建账号并进入上报',
+  mode.value === 'login' ? '登录进入治理服务' : '创建账号并进入治理服务',
 )
 
 function switchMode(nextMode: AuthMode) {
@@ -36,10 +36,10 @@ function switchMode(nextMode: AuthMode) {
 function destinationAfterAuth() {
   const redirect = route.query.redirect
   return typeof redirect === 'string' &&
-    redirect.startsWith('/governance/report/') &&
+    redirect.startsWith('/governance/mobile/') &&
     !redirect.startsWith('//')
     ? redirect
-    : '/governance/report/form'
+    : '/governance/mobile/home'
 }
 
 async function submit() {

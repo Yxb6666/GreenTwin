@@ -37,25 +37,49 @@ const router = createRouter({
       meta: { label: '乡村治理', requiresAuth: true },
     },
     {
-      path: '/governance/report',
+      path: '/governance/mobile/login',
       name: 'governance-mobile-login',
       component: () =>
         import('@/features/governance-mobile/GovernanceMobileLoginView.vue'),
       meta: { label: '移动端登录', standalone: true },
     },
     {
-      path: '/governance/report/form',
+      path: '/governance/mobile/home',
+      name: 'governance-mobile-home',
+      component: () => import('@/features/governance-mobile/HomeView.vue'),
+      meta: { label: '治理工作台', standalone: true, requiresMobileAuth: true },
+    },
+    {
+      path: '/governance/mobile/report',
       name: 'governance-mobile-report',
       component: () =>
         import('@/features/governance-mobile/GovernanceReportView.vue'),
       meta: { label: '问题上报', standalone: true, requiresMobileAuth: true },
     },
     {
-      path: '/governance/report/success/:id',
+      path: '/governance/mobile/profile',
+      name: 'governance-mobile-profile',
+      component: () => import('@/features/governance-mobile/ProfileView.vue'),
+      meta: { label: '个人中心', standalone: true, requiresMobileAuth: true },
+    },
+    {
+      path: '/governance/mobile/issues/:id',
+      name: 'governance-mobile-issue-detail',
+      component: () => import('@/features/governance-mobile/GovernanceIssueView.vue'),
+      meta: { label: '问题详情', standalone: true, requiresMobileAuth: true },
+    },
+    {
+      path: '/governance/mobile/report/success/:id',
       name: 'governance-mobile-success',
       component: () =>
         import('@/features/governance-mobile/GovernanceReportSuccessView.vue'),
       meta: { label: '上报成功', standalone: true, requiresMobileAuth: true },
+    },
+    { path: '/governance/report', redirect: '/governance/mobile/login' },
+    { path: '/governance/report/form', redirect: '/governance/mobile/report' },
+    {
+      path: '/governance/report/success/:id',
+      redirect: (to) => `/governance/mobile/report/success/${String(to.params.id)}`,
     },
     {
       path: '/:pathMatch(.*)*',
@@ -77,6 +101,10 @@ router.beforeEach((to) => {
       name: 'governance-mobile-login',
       query: { redirect: to.fullPath },
     }
+  }
+
+  if (to.name === 'governance-mobile-login' && auth.isAuthenticated) {
+    return { name: 'governance-mobile-home' }
   }
 
   if (to.meta.publicOnly && auth.isAuthenticated) return { name: 'master' }

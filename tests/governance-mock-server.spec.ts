@@ -14,6 +14,7 @@ const dataPath = resolve(
 
 function createPayload() {
   return {
+    userId: 'Easy',
     type: '生态保护类',
     subtype: '岸线垃圾',
     description: '葡萄架村河岸存在生活垃圾，需要巡查清理。',
@@ -78,6 +79,7 @@ describe('治理问题开发期 Mock 服务', () => {
       id: 'GK-2026-118',
       geometry: { coordinates: [114.749274, 34.856417] },
       properties: {
+        userId: 'Easy',
         status: '待审核',
         urgency: '中',
         channel: '移动端上报',
@@ -86,6 +88,28 @@ describe('治理问题开发期 Mock 服务', () => {
     })
     expect(collection.features[0]?.properties).not.toHaveProperty('images')
     expect(readFileSync(dataPath, 'utf8')).toBe(original)
+  })
+
+  it('按用户隔离运行期记录并同步统计', () => {
+    const service = createGovernanceIssuesService({ dataPath })
+    expect(service.listByUser('Easy')).toMatchObject({
+      success: true,
+      userId: 'Easy',
+      summary: { total: 0, processing: 0, completed: 0 },
+      issues: [],
+    })
+    service.create(createPayload())
+    service.create({ ...createPayload(), userId: 'VillageUser' })
+    expect(service.listByUser('Easy')).toMatchObject({
+      summary: { total: 1, processing: 1, completed: 0 },
+      issues: [{ userId: 'Easy', id: 'GK-2026-117' }],
+    })
+    expect(service.listByUser('VillageUser')).toMatchObject({
+      summary: { total: 1 },
+      issues: [{ userId: 'VillageUser', id: 'GK-2026-118' }],
+    })
+    expect(service.listByUser('Unknown').summary).toMatchObject({ total: 0 })
+    expect(() => service.listByUser('bad/user')).toThrow('用户编号格式不正确')
   })
 
   it('拒绝分类不匹配、无照片及非法坐标', () => {

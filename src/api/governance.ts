@@ -5,6 +5,7 @@ export interface GovernanceIssueImage {
 export type GovernanceIssueStatus = '待审核' | '已派单' | '处理中' | '已办结'
 
 export interface CreateGovernanceIssueRequest {
+  userId: string
   type: string
   subtype: string
   description: string
@@ -51,6 +52,19 @@ interface GetGovernanceIssueResponse {
   issue: GovernanceIssue
 }
 
+export interface GovernanceIssueSummary {
+  total: number
+  processing: number
+  completed: number
+}
+
+export interface GovernanceUserIssuesResponse {
+  success: true
+  userId: string
+  summary: GovernanceIssueSummary
+  issues: GovernanceIssue[]
+}
+
 function endpoint(apiBaseUrl: string, suffix = '') {
   return `${apiBaseUrl.replace(/\/$/, '')}/governance/issues${suffix}`
 }
@@ -73,6 +87,22 @@ function isIssue(value: unknown): value is GovernanceIssue {
       typeof issue.longitude === 'number' &&
       typeof issue.latitude === 'number' &&
       issue.status,
+  )
+}
+
+function isUserIssuesResponse(value: unknown): value is GovernanceUserIssuesResponse {
+  if (!value || typeof value !== 'object') return false
+  const response = value as Partial<GovernanceUserIssuesResponse>
+  const summary = response.summary as Partial<GovernanceIssueSummary> | undefined
+  return Boolean(
+    response.success === true &&
+      typeof response.userId === 'string' &&
+      summary &&
+      typeof summary.total === 'number' &&
+      typeof summary.processing === 'number' &&
+      typeof summary.completed === 'number' &&
+      Array.isArray(response.issues) &&
+      response.issues.every(isIssue),
   )
 }
 
@@ -157,4 +187,17 @@ export async function getGovernanceIssue(
   )
     throw new Error('问题详情数据格式不正确')
   return (result as GetGovernanceIssueResponse).issue
+}
+
+export async function listGovernanceIssuesByUser(
+  apiBaseUrl: string,
+  timeoutMs: number,
+  userId: string,
+) {
+  const result = await requestJson(
+    endpoint(apiBaseUrl, `/user/${encodeURIComponent(userId)}`),
+    timeoutMs,
+  )
+  if (!isUserIssuesResponse(result)) throw new Error('用户问题列表数据格式不正确')
+  return result
 }

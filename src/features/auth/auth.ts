@@ -1,14 +1,26 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-const ACCOUNTS_KEY = 'greentwin.accounts.v1'
-const SESSION_KEY = 'greentwin.session.v1'
-const REMEMBERED_ACCOUNT_KEY = 'greentwin.remembered-account.v1'
+const ACCOUNTS_KEY = 'greentwin.accounts.v2'
+const SESSION_KEY = 'greentwin.session.v2'
+const REMEMBERED_ACCOUNT_KEY = 'greentwin.remembered-account.v2'
+const PASSWORD_KEY = 'greentwin.password-key.v2'
+const LEGACY_KEYS = [
+  'greentwin.accounts.v1',
+  'greentwin.session.v1',
+  'greentwin.remembered-account.v1',
+]
+
+interface EncryptedPassword {
+  ciphertext: string
+  iv: string
+}
 
 interface StoredAccount {
   username: string
   salt: string
   passwordHash: string
+  encryptedPassword: EncryptedPassword
   createdAt: string
 }
 
@@ -40,6 +52,61 @@ function readJson<T>(key: string, fallback: T): T {
 
 function writeJson(key: string, value: unknown) {
   getStorage()?.setItem(key, JSON.stringify(value))
+}
+
+function bytesToBase64(value: Uint8Array) {
+  return btoa(String.fromCharCode(...value))
+}
+
+function base64ToBytes(value: string) {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+}
+
+function clearLegacyAccounts() {
+  const storage = getStorage()
+  LEGACY_KEYS.forEach((key) => storage?.removeItem(key))
+}
+
+async function getPasswordKey() {
+  const storage = getStorage()
+  if (!storage) throw new Error('浏览器本地存储不可用')
+  let encodedKey = storage.getItem(PASSWORD_KEY)
+  if (!encodedKey) {
+    const keyBytes = new Uint8Array(32)
+    globalThis.crypto.getRandomValues(keyBytes)
+    encodedKey = bytesToBase64(keyBytes)
+    storage.setItem(PASSWORD_KEY, encodedKey)
+  }
+  return globalThis.crypto.subtle.importKey(
+    'raw',
+    base64ToBytes(encodedKey),
+    'AES-GCM',
+    false,
+    ['encrypt', 'decrypt'],
+  )
+}
+
+async function encryptPassword(password: string): Promise<EncryptedPassword> {
+  const iv = new Uint8Array(12)
+  globalThis.crypto.getRandomValues(iv)
+  const ciphertext = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    await getPasswordKey(),
+    new TextEncoder().encode(password),
+  )
+  return {
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
+    iv: bytesToBase64(iv),
+  }
+}
+
+async function decryptPassword(value: EncryptedPassword) {
+  const plaintext = await globalThis.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(value.iv) },
+    await getPasswordKey(),
+    base64ToBytes(value.ciphertext),
+  )
+  return new TextDecoder().decode(plaintext)
 }
 
 function readAccounts(): Record<string, StoredAccount> {
@@ -91,6 +158,7 @@ function validateCredentials(
 }
 
 export const useAuthStore = defineStore('auth', () => {
+  clearLegacyAccounts()
   const username = ref('')
   const isAuthenticated = computed(() => username.value.length > 0)
 
@@ -130,6 +198,7 @@ export const useAuthStore = defineStore('auth', () => {
       username: accountName,
       salt,
       passwordHash: await hashPassword(password, salt),
+      encryptedPassword: await encryptPassword(password),
       createdAt: new Date().toISOString(),
     }
     writeJson(ACCOUNTS_KEY, accounts)
@@ -162,6 +231,12 @@ export const useAuthStore = defineStore('auth', () => {
     getStorage()?.removeItem(SESSION_KEY)
   }
 
+  async function getCurrentPassword() {
+    const account = readAccounts()[username.value]
+    if (!account?.encryptedPassword) throw new Error('当前账号密码不可用')
+    return decryptPassword(account.encryptedPassword)
+  }
+
   function getRememberedUsername() {
     return getStorage()?.getItem(REMEMBERED_ACCOUNT_KEY) ?? ''
   }
@@ -180,6 +255,7 @@ export const useAuthStore = defineStore('auth', () => {
     username,
     isAuthenticated,
     getRememberedUsername,
+    getCurrentPassword,
     login,
     logout,
     register,

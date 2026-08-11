@@ -4,6 +4,7 @@ export interface GovernanceIssuesService {
   create(value: unknown): Record<string, unknown>
   get(id: string): Record<string, unknown>
   list(): Record<string, unknown>
+  listByUser(userId: string): Record<string, unknown>
 }
 
 export interface GovernanceIssuesOptions {
