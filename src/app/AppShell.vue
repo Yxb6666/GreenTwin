@@ -4,10 +4,9 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/features/auth/auth'
 
 const modules = [
-  { to: '/master', code: '01', label: '主控大屏' },
-  { to: '/sansheng', code: '02', label: '三生空间' },
-  { to: '/twin', code: '03', label: '数字孪生' },
-  { to: '/governance', code: '04', label: '乡村治理' },
+  { to: '/twin', code: '01', label: '数字孪生' },
+  { to: '/governance', code: '02', label: '乡村治理' },
+  { to: '/sansheng', code: '03', label: '三生空间' },
 ]
 
 const route = useRoute()
