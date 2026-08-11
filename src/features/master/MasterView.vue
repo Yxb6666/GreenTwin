@@ -9,7 +9,7 @@ import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
-import { gdpTrend, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
+import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
 import { resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
 
 const config = useRuntimeConfig()
@@ -18,6 +18,42 @@ const { map, focusBounds, selectedTownship, activeBaseMap, arcgisAvailable, erro
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
+const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
+const populationChangeRate = computed(() => calculatePopulationChangeRate(populationTrend))
+const populationTrendLabel = computed(() => getPopulationTrendLabel(populationChangeRate.value))
+const populationTrendChart = computed(() => {
+  const width = 248
+  const height = 92
+  const left = 22
+  const right = 8
+  const top = 12
+  const bottom = 20
+  const values = populationTrend.map((item) => item.populationWan)
+  const minimum = Math.floor(Math.min(...values) - 1)
+  const maximum = Math.ceil(Math.max(...values) + 1)
+  const plotWidth = width - left - right
+  const plotHeight = height - top - bottom
+  const valueRange = maximum - minimum || 1
+  const points = populationTrend.map((item, index) => ({
+    ...item,
+    x: left + (plotWidth * index) / Math.max(1, populationTrend.length - 1),
+    y: top + ((maximum - item.populationWan) / valueRange) * plotHeight,
+  }))
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ')
+  const areaPath = points.length
+    ? `M ${points[0]!.x} ${height - bottom} L ${linePoints} L ${points.at(-1)!.x} ${height - bottom} Z`
+    : ''
+  const gridLines = [minimum, (minimum + maximum) / 2, maximum].map((value) => ({
+    value,
+    y: top + ((maximum - value) / valueRange) * plotHeight,
+  }))
+
+  return { width, height, left, right, top, bottom, points, linePoints, areaPath, gridLines }
+})
+const activePopulationChartPoint = computed(() => {
+  if (!activePopulationPoint.value) return null
+  return populationTrendChart.value.points.find((point) => point.year === activePopulationPoint.value?.year) ?? null
+})
 const sanshengEvaluation = computed(() => resolveMasterSanshengEvaluation(selectedTownship.value))
 const sanshengRadarValues = computed(() => {
   const scores = sanshengEvaluation.value.scores
@@ -161,11 +197,51 @@ onMounted(async () => {
                 <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
               </article>
             </div>
-            <div class="data-bars master-bars scroll-region">
-              <div v-for="item in populationTrend" :key="item.year" class="data-bar">
-                <span>{{ item.year }}年</span>
-                <i :style="{ '--value': `${item.barPercent}%` }" />
-                <b>{{ item.populationWan.toFixed(1) }}</b>
+            <div class="population-trend" aria-label="2020 至 2025 年兰考县人口变化趋势">
+              <div class="population-trend__plot">
+                <svg :viewBox="`0 0 ${populationTrendChart.width} ${populationTrendChart.height}`" role="img" aria-label="人口变化趋势折线面积图">
+                  <defs>
+                    <linearGradient id="population-area-gradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#42e8d8" stop-opacity="0.32" />
+                      <stop offset="100%" stop-color="#42e8d8" stop-opacity="0.02" />
+                    </linearGradient>
+                  </defs>
+                  <g v-for="grid in populationTrendChart.gridLines" :key="grid.value">
+                    <line class="population-grid-line" :x1="populationTrendChart.left" :x2="populationTrendChart.width - populationTrendChart.right" :y1="grid.y" :y2="grid.y" />
+                    <text class="population-axis-label" :x="populationTrendChart.left - 5" :y="grid.y">{{ grid.value }}</text>
+                  </g>
+                  <path class="population-area" :d="populationTrendChart.areaPath" />
+                  <polyline class="population-line" :points="populationTrendChart.linePoints" />
+                  <g
+                    v-for="point in populationTrendChart.points"
+                    :key="point.year"
+                    class="population-point"
+                    tabindex="0"
+                    :aria-label="`${point.year}年人口 ${point.populationWan.toFixed(1)}万人`"
+                    @pointerenter="activePopulationPoint = point"
+                    @pointerleave="activePopulationPoint = null"
+                    @focus="activePopulationPoint = point"
+                    @blur="activePopulationPoint = null"
+                  >
+                    <circle class="population-point__hit" :cx="point.x" :cy="point.y" r="8" />
+                    <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3" />
+                    <text class="population-value-label" :x="point.x" :y="point.y - 7">{{ point.populationWan.toFixed(1) }}</text>
+                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 5">{{ point.year }}</text>
+                  </g>
+                  <g
+                    v-if="activePopulationPoint && activePopulationChartPoint"
+                    class="population-tooltip"
+                    :transform="`translate(${Math.min(populationTrendChart.width - 42, Math.max(42, activePopulationChartPoint.x))}, ${Math.max(34, activePopulationChartPoint.y - 4)})`"
+                    aria-hidden="true"
+                  >
+                    <rect x="-40" y="-30" width="80" height="22" rx="4" />
+                    <text x="0" y="-17">{{ activePopulationPoint.year }}年 · {{ activePopulationPoint.populationWan.toFixed(1) }}万人</text>
+                  </g>
+                </svg>
+              </div>
+              <div class="population-trend__summary">
+                <span>2020—2025变化 <strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate > 0 ? '+' : '' }}{{ populationChangeRate.toFixed(1) }}%</strong></span>
+                <span>人口趋势 <strong>{{ populationTrendLabel }}</strong></span>
               </div>
             </div>
           </div>
@@ -370,19 +446,141 @@ onMounted(async () => {
   display: grid;
   height: 100%;
   min-height: 0;
-  gap: 10px;
+  gap: 7px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.master-bars {
-  padding-right: 4px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  align-content: start;
+.population-content .metric-card {
+  padding: 7px 8px;
 }
 
-.master-bars .data-bar {
-  grid-template-columns: 48px minmax(0, 1fr) 30px;
+.population-content .metric-card strong {
+  margin: 3px 0 1px;
+}
+
+.population-trend {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  gap: 3px;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.population-trend__plot {
+  min-height: 0;
+  overflow: visible;
+}
+
+.population-trend__plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  overflow: visible;
+}
+
+.population-grid-line {
+  stroke: rgba(126, 183, 174, 0.15);
+  stroke-dasharray: 2 3;
+  stroke-width: 0.8;
+}
+
+.population-axis-label,
+.population-year-label,
+.population-value-label {
+  fill: var(--text-soft);
+  font-family: var(--font-data);
+  text-anchor: middle;
+}
+
+.population-axis-label {
+  font-size: 6px;
+  dominant-baseline: middle;
+  text-anchor: end;
+}
+
+.population-year-label {
+  font-size: 6.5px;
+}
+
+.population-value-label {
+  fill: #d9fffa;
+  font-size: 6.5px;
+}
+
+.population-area {
+  fill: url('#population-area-gradient');
+}
+
+.population-line {
+  fill: none;
+  stroke: #42e8d8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 3px rgba(66, 232, 216, 0.35));
+}
+
+.population-point {
+  outline: none;
+}
+
+.population-point__hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.population-point__dot {
+  fill: #e8fffc;
+  stroke: #42e8d8;
+  stroke-width: 1.5;
+  transition: 120ms ease;
+}
+
+.population-point:hover .population-point__dot,
+.population-point:focus-visible .population-point__dot {
+  fill: #42e8d8;
+  r: 4px;
+}
+
+.population-tooltip {
+  pointer-events: none;
+}
+
+.population-tooltip rect {
+  fill: rgba(5, 27, 25, 0.96);
+  stroke: rgba(66, 232, 216, 0.5);
+  stroke-width: 0.7;
+}
+
+.population-tooltip text {
+  fill: #edfffc;
+  font: 7px var(--font-data);
+  text-anchor: middle;
+}
+
+.population-trend__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  color: var(--text-soft);
+  border: 1px solid rgba(61, 214, 196, 0.1);
+  border-radius: 4px;
+  background: rgba(61, 214, 196, 0.025);
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.population-trend__summary strong {
+  margin-left: 3px;
+  color: var(--cyan);
+  font: 8px var(--font-data);
+}
+
+.population-trend__summary strong.is-negative {
+  color: #8dd9c6;
 }
 
 .gdp-chart {
