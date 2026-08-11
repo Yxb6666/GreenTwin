@@ -8,19 +8,8 @@ import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import GovernanceAssistant from './GovernanceAssistant.vue'
 import GovernanceIssueDetail from './GovernanceIssueDetail.vue'
-import type {
-  GovernanceAssistantAction,
-  GovernanceAssistantContext,
-} from './assistant'
-import {
-  issueStatuses,
-  loadGovernanceIssues,
-  queryIssuesByBounds,
-  queryIssuesByRadius,
-  type GovernanceIssue,
-  type IssueStatus,
-  type QueryBounds,
-} from './data'
+import type { GovernanceAssistantAction, GovernanceAssistantContext } from './assistant'
+import { issueStatuses, loadGovernanceIssues, queryIssuesByBounds, queryIssuesByRadius, type GovernanceIssue, type IssueStatus, type QueryBounds } from './data'
 
 type SpatialQueryMode = 'rectangle' | 'circle'
 
@@ -48,12 +37,7 @@ const filters = reactive({
 })
 const mapBounds = ref<QueryBounds | null>(null)
 const mapZoom = ref(config.map.zoom)
-const {
-  map,
-  focusBounds,
-  error: mapError,
-  initialize,
-} = useLeafletMap(mapContainer)
+const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap } = useLeafletMap(mapContainer)
 let toastTimer: number | undefined
 let issueLayer: L.FeatureGroup | null = null
 let spatialLayer: L.FeatureGroup | null = null
@@ -61,50 +45,28 @@ let spatialDraft: L.Rectangle | L.Circle | null = null
 let spatialStart: L.LatLng | null = null
 const issueMarkers = new Map<string, L.Marker>()
 
-const types = computed(() => [
-  ...new Set(issues.value.map((issue) => issue.type)),
-])
-const towns = computed(() => [
-  ...new Set(issues.value.map((issue) => issue.town)),
-])
+const types = computed(() => [...new Set(issues.value.map((issue) => issue.type))])
+const towns = computed(() => [...new Set(issues.value.map((issue) => issue.town))])
 const attributeFiltered = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
   return issues.value.filter((issue) => {
-    if (
-      keyword &&
-      !`${issue.id}${issue.description}${issue.subtype}${issue.address}${issue.contact}${issue.channel}`
-        .toLowerCase()
-        .includes(keyword)
-    )
-      return false
+    if (keyword && !`${issue.id}${issue.description}${issue.subtype}${issue.address}${issue.contact}${issue.channel}`.toLowerCase().includes(keyword)) return false
     if (filters.type !== 'all' && issue.type !== filters.type) return false
     if (filters.town !== 'all' && issue.town !== filters.town) return false
-    if (filters.urgency !== 'all' && issue.urgency !== filters.urgency)
-      return false
-    if (filters.status !== 'all' && issue.status !== filters.status)
-      return false
+    if (filters.urgency !== 'all' && issue.urgency !== filters.urgency) return false
+    if (filters.status !== 'all' && issue.status !== filters.status) return false
     return true
   })
 })
-const filtered = computed(() =>
-  spatialIds.value
-    ? attributeFiltered.value.filter((issue) => spatialIds.value!.has(issue.id))
-    : attributeFiltered.value,
-)
-const selected = computed(
-  () =>
-    filtered.value.find((issue) => issue.id === selectedId.value) ??
-    filtered.value[0],
-)
+const filtered = computed(() => (spatialIds.value ? attributeFiltered.value.filter((issue) => spatialIds.value!.has(issue.id)) : attributeFiltered.value))
+const selected = computed(() => filtered.value.find((issue) => issue.id === selectedId.value) ?? filtered.value[0])
 const summary = computed(() => {
   const rows = filtered.value
   const closed = rows.filter((issue) => issue.status === '已办结').length
   return {
     total: rows.length,
     pending: rows.filter((issue) => issue.status === '待审核').length,
-    processing: rows.filter(
-      (issue) => issue.status === '处理中' || issue.status === '已派单',
-    ).length,
+    processing: rows.filter((issue) => issue.status === '处理中' || issue.status === '已派单').length,
     closed,
     urgent: rows.filter((issue) => issue.urgency === '高').length,
     rate: rows.length ? Math.round((closed / rows.length) * 100) : 0,
@@ -118,21 +80,12 @@ const townCounts = computed(() =>
     }))
     .sort((a, b) => b.count - a.count),
 )
-const maxTownCount = computed(() =>
-  Math.max(1, ...townCounts.value.map((row) => row.count)),
-)
-const dataUpdatedAt = computed(() =>
-  issues.value.reduce(
-    (latest, issue) => (issue.time > latest ? issue.time : latest),
-    '',
-  ),
-)
+const maxTownCount = computed(() => Math.max(1, ...townCounts.value.map((row) => row.count)))
+const dataUpdatedAt = computed(() => issues.value.reduce((latest, issue) => (issue.time > latest ? issue.time : latest), ''))
 const viewportIssueIds = computed(() => {
   const bounds = mapBounds.value
   if (!bounds) return attributeFiltered.value.map((issue) => issue.id)
-  return queryIssuesByBounds(attributeFiltered.value, bounds).map(
-    (issue) => issue.id,
-  )
+  return queryIssuesByBounds(attributeFiltered.value, bounds).map((issue) => issue.id)
 })
 const assistantContext = computed<GovernanceAssistantContext>(() => ({
   module: '乡村治理',
@@ -174,17 +127,13 @@ const statusColors: Record<IssueStatus, string> = {
 
 const statusStats = computed(() =>
   issueStatuses.map((status) => {
-    const count = filtered.value.filter(
-      (issue) => issue.status === status,
-    ).length
+    const count = filtered.value.filter((issue) => issue.status === status).length
 
     return {
       status,
       count,
       color: statusColors[status],
-      share: summary.value.total
-        ? Math.round((count / summary.value.total) * 100)
-        : 0,
+      share: summary.value.total ? Math.round((count / summary.value.total) * 100) : 0,
     }
   }),
 )
@@ -221,11 +170,7 @@ function filterByStatus(status: IssueStatus) {
   filters.status = filters.status === status ? 'all' : status
 }
 
-function issueMarkerIcon(
-  issue: GovernanceIssue,
-  active: boolean,
-  highlighted = false,
-) {
+function issueMarkerIcon(issue: GovernanceIssue, active: boolean, highlighted = false) {
   const color = typeColors[issue.type] ?? '#3dd6c4'
 
   return L.divIcon({
@@ -245,12 +190,7 @@ function selectIssue(issue: GovernanceIssue, focus = false) {
   selectedId.value = issue.id
   const marker = issueMarkers.get(issue.id)
   marker?.openTooltip()
-  if (focus && map.value)
-    map.value.flyTo(
-      [issue.latitude, issue.longitude],
-      Math.max(map.value.getZoom(), 12.5),
-      { duration: 0.7 },
-    )
+  if (focus && map.value) map.value.flyTo([issue.latitude, issue.longitude], Math.max(map.value.getZoom(), 12.5), { duration: 0.7 })
 }
 
 function openIssueDetail() {
@@ -266,8 +206,7 @@ function locateDetailIssue() {
 function refreshIssueMarkers() {
   const mapInstance = map.value
   if (!mapInstance) return
-  const issuePane =
-    mapInstance.getPane(ISSUE_PANE) ?? mapInstance.createPane(ISSUE_PANE)
+  const issuePane = mapInstance.getPane(ISSUE_PANE) ?? mapInstance.createPane(ISSUE_PANE)
   issuePane.style.zIndex = '440'
   if (!issueLayer) issueLayer = L.featureGroup().addTo(mapInstance)
   const visibleIds = new Set(filtered.value.map((issue) => issue.id))
@@ -304,9 +243,7 @@ function refreshIssueMarkers() {
 
 function getSpatialLayer() {
   if (!map.value) return null
-  const queryPane =
-    map.value.getPane(SPATIAL_QUERY_PANE) ??
-    map.value.createPane(SPATIAL_QUERY_PANE)
+  const queryPane = map.value.getPane(SPATIAL_QUERY_PANE) ?? map.value.createPane(SPATIAL_QUERY_PANE)
   queryPane.style.zIndex = '450'
   if (!spatialLayer) spatialLayer = L.featureGroup().addTo(map.value)
   return spatialLayer
@@ -352,8 +289,7 @@ function onSpatialStart(event: L.LeafletMouseEvent) {
 
 function onSpatialMove(event: L.LeafletMouseEvent) {
   if (!spatialStart || !spatialDraft || !map.value) return
-  if (spatialDraft instanceof L.Circle)
-    spatialDraft.setRadius(map.value.distance(spatialStart, event.latlng))
+  if (spatialDraft instanceof L.Circle) spatialDraft.setRadius(map.value.distance(spatialStart, event.latlng))
   else spatialDraft.setBounds(L.latLngBounds(spatialStart, event.latlng))
 }
 
@@ -362,11 +298,7 @@ function finishSpatialQuery(event: L.LeafletMouseEvent) {
   let matches: GovernanceIssue[]
   if (spatialDraft instanceof L.Circle) {
     const radius = spatialDraft.getRadius()
-    matches = queryIssuesByRadius(
-      issues.value,
-      [spatialStart.lat, spatialStart.lng],
-      radius,
-    )
+    matches = queryIssuesByRadius(issues.value, [spatialStart.lat, spatialStart.lng], radius)
     spatialQueryLabel.value = `圆形范围 ${radius >= 1000 ? `${(radius / 1000).toFixed(1)} km` : `${Math.round(radius)} m`}`
   } else {
     const bounds = L.latLngBounds(spatialStart, event.latlng)
@@ -433,47 +365,9 @@ function onSpatialControlChange(event: Event) {
 }
 
 function exportIssues() {
-  const header = [
-    '编号',
-    '类型',
-    '子类型',
-    '描述',
-    '乡镇代码',
-    '乡镇',
-    '村级代码',
-    '村庄',
-    '详细位置',
-    '经度',
-    '纬度',
-    '紧急程度',
-    '状态',
-    '上报渠道',
-    '数据类别',
-    '上报时间',
-  ]
-  const rows = filtered.value.map((issue) => [
-    issue.id,
-    issue.type,
-    issue.subtype,
-    issue.description,
-    issue.townCode,
-    issue.town,
-    issue.villageCode,
-    issue.village,
-    issue.address,
-    issue.longitude,
-    issue.latitude,
-    issue.urgency,
-    issue.status,
-    issue.channel,
-    issue.dataClass,
-    issue.time,
-  ])
-  const csv = [header, ...rows]
-    .map((row) =>
-      row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','),
-    )
-    .join('\n')
+  const header = ['编号', '类型', '子类型', '描述', '乡镇代码', '乡镇', '村级代码', '村庄', '详细位置', '经度', '纬度', '紧急程度', '状态', '上报渠道', '数据类别', '上报时间']
+  const rows = filtered.value.map((issue) => [issue.id, issue.type, issue.subtype, issue.description, issue.townCode, issue.town, issue.villageCode, issue.village, issue.address, issue.longitude, issue.latitude, issue.urgency, issue.status, issue.channel, issue.dataClass, issue.time])
+  const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -498,21 +392,15 @@ function syncMapContext() {
 
 function handleAssistantAction(action: GovernanceAssistantAction) {
   if (action.type === 'HIGHLIGHT_ISSUES') {
-    const knownIds = action.issueIds.filter((id) =>
-      issues.value.some((issue) => issue.id === id),
-    )
+    const knownIds = action.issueIds.filter((id) => issues.value.some((issue) => issue.id === id))
     aiHighlightedIds.value = new Set(knownIds)
     refreshIssueMarkers()
-    const highlighted = issues.value.filter((issue) =>
-      aiHighlightedIds.value.has(issue.id),
-    )
+    const highlighted = issues.value.filter((issue) => aiHighlightedIds.value.has(issue.id))
     if (map.value && highlighted.length) {
-      map.value.fitBounds(
-        L.latLngBounds(
-          highlighted.map((issue) => [issue.latitude, issue.longitude]),
-        ),
-        { padding: [46, 46], maxZoom: 13 },
-      )
+      map.value.fitBounds(L.latLngBounds(highlighted.map((issue) => [issue.latitude, issue.longitude])), {
+        padding: [46, 46],
+        maxZoom: 13,
+      })
     }
     notify(`AI 已在地图中高亮 ${knownIds.length} 个问题`)
     return
@@ -526,37 +414,24 @@ function handleAssistantAction(action: GovernanceAssistantAction) {
     return
   }
 
-  notify(
-    `${action.chart === 'type' ? '问题类型' : action.chart === 'status' ? '处置状态' : '乡镇分布'}图表已在页面中展示`,
-  )
+  notify(`${action.chart === 'type' ? '问题类型' : action.chart === 'status' ? '处置状态' : '乡镇分布'}图表已在页面中展示`)
 }
 
 onMounted(async () => {
-  const issuesPromise = loadGovernanceIssues(
-    `${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`,
-  )
-  await initialize(
-    config.supermap.leafletSdkUrl,
-    config.supermap.mapServices.base,
-    config.map.center,
-    config.map.zoom,
-    config.map.crs,
-    [config.supermap.mapServices.township],
-  )
+  const issuesPromise = loadGovernanceIssues(`${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`)
+  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs, [config.supermap.mapServices.township], config.arcgis.accessToken)
   syncMapContext()
   map.value?.on('moveend zoomend', syncMapContext)
   try {
     issues.value = await issuesPromise
     selectedId.value = issues.value[0]?.id ?? ''
   } catch (cause) {
-    dataError.value =
-      cause instanceof Error ? cause.message : '治理问题要素数据加载失败'
+    dataError.value = cause instanceof Error ? cause.message : '治理问题要素数据加载失败'
   }
 })
 
 watch(filtered, () => {
-  if (!filtered.value.some((issue) => issue.id === selectedId.value))
-    selectedId.value = filtered.value[0]?.id ?? ''
+  if (!filtered.value.some((issue) => issue.id === selectedId.value)) selectedId.value = filtered.value[0]?.id ?? ''
 })
 
 watch([map, issues, filtered, selectedId, aiHighlightedIds], refreshIssueMarkers, {
@@ -573,17 +448,11 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="screen-page governance-page">
-    <ScreenHeader
-      title="乡村治理闭环处置模块"
-      subtitle="群众参与 / 空间落图 / 数据分析 / 闭环处置"
-    />
+    <ScreenHeader title="乡村治理闭环处置模块" subtitle="群众参与 / 空间落图 / 数据分析 / 闭环处置" />
 
     <div class="governance-layout">
       <aside class="governance-left">
-        <PanelCard
-          title="处置总览"
-          :meta="`${filtered.length}/${issues.length} 条联动结果`"
-        >
+        <PanelCard title="处置总览" :meta="`${filtered.length}/${issues.length} 条联动结果`">
           <div class="metric-grid overview-grid">
             <article class="metric-card">
               <span>问题总数</span><strong>{{ summary.total }}</strong>
@@ -607,23 +476,9 @@ onBeforeUnmount(() => {
         </PanelCard>
 
         <PanelCard title="筛选条件" :meta="spatialQueryLabel">
-          <template #action
-            ><button
-              class="tiny-button reset-button"
-              type="button"
-              @click="resetFilters"
-            >
-              重置
-            </button></template
-          >
+          <template #action><button class="tiny-button reset-button" type="button" @click="resetFilters">重置</button></template>
           <div class="filter-list">
-            <label
-              ><span>编号或描述</span
-              ><input
-                v-model="filters.keyword"
-                type="search"
-                placeholder="输入关键词"
-            /></label>
+            <label><span>编号或描述</span><input v-model="filters.keyword" type="search" placeholder="输入关键词" /></label>
             <label
               ><span>问题类型</span
               ><select v-model="filters.type">
@@ -640,10 +495,7 @@ onBeforeUnmount(() => {
             >
             <label
               ><span>空间范围</span
-              ><select
-                :value="spatialControlValue"
-                @change="onSpatialControlChange"
-              >
+              ><select :value="spatialControlValue" @change="onSpatialControlChange">
                 <option value="all">全县要素</option>
                 <option value="view">当前地图视野</option>
                 <option value="rectangle">矩形框选（拖动绘制）</option>
@@ -675,13 +527,7 @@ onBeforeUnmount(() => {
       <section class="governance-center">
         <section class="map-shell panel-frame governance-map">
           <div ref="mapContainer" class="map-container" />
-          <MapToolbox
-            :map="map"
-            :focus-bounds="focusBounds"
-            :initial-center="config.map.center"
-            :initial-zoom="config.map.zoom"
-            export-name="兰考县乡村治理地图"
-          />
+          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" export-name="兰考县乡村治理地图" />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
           <div v-if="dataError" class="map-error data-error">
             {{ dataError }}
@@ -694,29 +540,16 @@ onBeforeUnmount(() => {
         <div class="governance-charts">
           <PanelCard title="乡镇问题分布">
             <div class="data-bars scroll-region">
-              <button
-                v-for="row in townCounts"
-                :key="row.town"
-                class="data-bar"
-                :class="{ active: filters.town === row.town }"
-                type="button"
-                :title="`筛选${row.town}`"
-                @click="filterByTown(row.town)"
-              >
+              <button v-for="row in townCounts" :key="row.town" class="data-bar" :class="{ active: filters.town === row.town }" type="button" :title="`筛选${row.town}`" @click="filterByTown(row.town)">
                 <span>{{ row.town }}</span
-                ><i
-                  :style="{ '--value': `${(row.count / maxTownCount) * 100}%` }"
-                /><b>{{ row.count }}</b>
+                ><i :style="{ '--value': `${(row.count / maxTownCount) * 100}%` }" /><b>{{ row.count }}</b>
               </button>
             </div>
           </PanelCard>
           <PanelCard title="处置状态统计">
             <div class="status-visual">
               <div class="status-summary">
-                <div
-                  class="status-donut"
-                  :style="{ '--rate': `${summary.rate * 3.6}deg` }"
-                >
+                <div class="status-donut" :style="{ '--rate': `${summary.rate * 3.6}deg` }">
                   <strong>{{ summary.rate }}%</strong><span>闭环率</span>
                 </div>
                 <p>
@@ -759,13 +592,7 @@ onBeforeUnmount(() => {
       <aside class="governance-right">
         <PanelCard title="最新上报问题" :meta="`${filtered.length} 条`">
           <div class="issue-list scroll-region">
-            <button
-              v-for="issue in filtered"
-              :key="issue.id"
-              :class="{ active: selected?.id === issue.id }"
-              type="button"
-              @click="selectIssue(issue, true)"
-            >
+            <button v-for="issue in filtered" :key="issue.id" :class="{ active: selected?.id === issue.id }" type="button" @click="selectIssue(issue, true)">
               <i :style="{ background: typeColors[issue.type] }" />
               <span
                 ><strong>{{ issue.id }} · {{ issue.subtype }}</strong
@@ -773,22 +600,13 @@ onBeforeUnmount(() => {
               >
               <em :class="`urgency-${issue.urgency}`">{{ issue.urgency }}</em>
             </button>
-            <p v-if="!filtered.length" class="empty-state">
-              没有符合条件的问题
-            </p>
+            <p v-if="!filtered.length" class="empty-state">没有符合条件的问题</p>
           </div>
         </PanelCard>
 
         <PanelCard title="当前问题详情" :meta="selected?.id ?? '未选择'">
           <template #action>
-            <button
-              class="issue-detail__entry"
-              type="button"
-              :disabled="!selected"
-              @click="openIssueDetail"
-            >
-              处置详情 <span aria-hidden="true">→</span>
-            </button>
+            <button class="issue-detail__entry" type="button" :disabled="!selected" @click="openIssueDetail">处置详情 <span aria-hidden="true">→</span></button>
           </template>
           <div v-if="selected" class="issue-detail">
             <h3>{{ selected.subtype }}</h3>
@@ -832,49 +650,23 @@ onBeforeUnmount(() => {
 
         <PanelCard title="状态更新" meta="处置闭环">
           <div class="status-actions">
-            <button
-              v-for="status in issueStatuses"
-              :key="status"
-              :class="{ active: selected?.status === status }"
-              type="button"
-              @click="updateStatus(status)"
-            >
+            <button v-for="status in issueStatuses" :key="status" :class="{ active: selected?.status === status }" type="button" @click="updateStatus(status)">
               {{ status }}
             </button>
           </div>
-          <button
-            class="action-button export-button"
-            type="button"
-            @click="exportIssues"
-          >
-            导出当前问题清单
-          </button>
+          <button class="action-button export-button" type="button" @click="exportIssues">导出当前问题清单</button>
         </PanelCard>
       </aside>
     </div>
     <Teleport to="body">
       <Transition name="detail-page">
-        <GovernanceIssueDetail
-          v-if="detailOpen && selected"
-          :issue="selected"
-          @close="detailOpen = false"
-          @locate="locateDetailIssue"
-          @update-status="updateStatus"
-        />
+        <GovernanceIssueDetail v-if="detailOpen && selected" :issue="selected" @close="detailOpen = false" @locate="locateDetailIssue" @update-status="updateStatus" />
       </Transition>
     </Teleport>
     <Transition name="module"
       ><div v-if="toast" class="toast">{{ toast }}</div></Transition
     >
-    <GovernanceAssistant
-      :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/governance`"
-      :timeout-ms="config.reportTimeoutMs"
-      :context="assistantContext"
-      :issues="attributeFiltered"
-      :scope-issue-ids="filtered.map((issue) => issue.id)"
-      :viewport-issue-ids="viewportIssueIds"
-      @action="handleAssistantAction"
-    />
+    <GovernanceAssistant :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/governance`" :timeout-ms="config.reportTimeoutMs" :context="assistantContext" :issues="attributeFiltered" :scope-issue-ids="filtered.map((issue) => issue.id)" :viewport-issue-ids="viewportIssueIds" @action="handleAssistantAction" />
   </main>
 </template>
 
@@ -1006,10 +798,7 @@ onBeforeUnmount(() => {
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  background: conic-gradient(
-    var(--cyan) var(--rate),
-    rgba(255, 255, 255, 0.06) 0
-  );
+  background: conic-gradient(var(--cyan) var(--rate), rgba(255, 255, 255, 0.06) 0);
   box-shadow:
     inset 0 0 0 14px #10201f,
     0 0 24px rgba(61, 214, 196, 0.06);
@@ -1333,7 +1122,9 @@ onBeforeUnmount(() => {
   height: 29px;
   filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.55));
   transform-origin: 50% 93%;
-  transition: filter 160ms ease, transform 160ms ease;
+  transition:
+    filter 160ms ease,
+    transform 160ms ease;
 }
 
 :global(.governance-issue-pin::before) {
@@ -1372,26 +1163,20 @@ onBeforeUnmount(() => {
 }
 
 :global(.governance-issue-marker-shell:hover .governance-issue-pin) {
-  filter:
-    drop-shadow(0 3px 4px rgba(0, 0, 0, 0.62))
-    drop-shadow(0 0 4px var(--issue-color));
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.62)) drop-shadow(0 0 4px var(--issue-color));
   transform: scale(1.12);
 }
 
 :global(.governance-issue-pin.is-active) {
   z-index: 1;
-  filter:
-    drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
-    drop-shadow(0 0 5px var(--issue-color));
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68)) drop-shadow(0 0 5px var(--issue-color));
   transform: scale(1.28);
 }
 
 :global(.governance-issue-pin.is-ai-highlighted) {
   outline: 2px solid #f6e58d;
   outline-offset: 3px;
-  filter:
-    drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
-    drop-shadow(0 0 9px #f6e58d);
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68)) drop-shadow(0 0 9px #f6e58d);
 }
 
 :global(.governance-issue-pin.is-active::before) {

@@ -8,36 +8,18 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import {
-  DEM_RENDERING_RULE,
-  loadDemSummary,
-  type DemSummary,
-} from '@/features/master/demService'
-import {
-  gdpTrend,
-  latestDensityRecord,
-  latestPopulation,
-  latestPopulationDensity,
-  latestPopulationGrowth,
-  populationTrend,
-} from '@/features/master/data'
+import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
+import { gdpTrend, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const {
-  map,
-  focusBounds,
-  error: mapError,
-  initialize,
-} = useLeafletMap(mapContainer)
+const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap } = useLeafletMap(mapContainer)
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生空间',
-  scopeLabel: activeLandUse.value
-    ? `全县综合态势 · ${activeLandUse.value.name}`
-    : '兰考县全域综合态势',
+  scopeLabel: activeLandUse.value ? `全县综合态势 · ${activeLandUse.value.name}` : '兰考县全域综合态势',
   updatedAt: new Date().toISOString(),
   data: {
     population: {
@@ -50,29 +32,15 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
       year: gdpTrend.at(-1)!.year,
       valueYiYuan: gdpTrend.at(-1)!.gdpYiYuan,
     },
-    populationTrend: populationTrend.map(
-      (item) => `${item.year}:${item.populationWan}万人`,
-    ),
-    gdpTrend: gdpTrend.map(
-      (item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`,
-    ),
+    populationTrend: populationTrend.map((item) => `${item.year}:${item.populationWan}万人`),
+    gdpTrend: gdpTrend.map((item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`),
     landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
     selectedLandUse: activeLandUse.value?.name ?? '未选中',
     countyScores: { ecology: 88, life: 82, production: 90 },
-    dem:
-      demSummary.value === null
-        ? demLoading.value
-          ? '加载中'
-          : demError.value || '暂无数据'
-        : JSON.stringify(demSummary.value),
+    dem: demSummary.value === null ? (demLoading.value ? '加载中' : demError.value || '暂无数据') : JSON.stringify(demSummary.value),
   },
 }))
-const assistantPrompts = [
-  '概括当前全县三生空间态势',
-  '人口与 GDP 趋势反映了什么？',
-  '土地利用结构有哪些优化方向？',
-  '结合当前数据给出三项优先行动',
-]
+const assistantPrompts = ['概括当前全县三生空间态势', '人口与 GDP 趋势反映了什么？', '土地利用结构有哪些优化方向？', '结合当前数据给出三项优先行动']
 
 const landUseSource = [
   { name: '耕地与设施农业', shortLabel: '耕地', value: 42, color: '#d6b657' },
@@ -118,21 +86,12 @@ function updateLandTooltip(event: PointerEvent) {
   if (!svg) return
   const bounds = svg.getBoundingClientRect()
   landTooltipPosition.value = {
-    x: Math.min(
-      96,
-      Math.max(24, ((event.clientX - bounds.left) / bounds.width) * 120),
-    ),
-    y: Math.min(
-      108,
-      Math.max(20, ((event.clientY - bounds.top) / bounds.height) * 120),
-    ),
+    x: Math.min(96, Math.max(24, ((event.clientX - bounds.left) / bounds.width) * 120)),
+    y: Math.min(108, Math.max(20, ((event.clientY - bounds.top) / bounds.height) * 120)),
   }
 }
 
-function activateLandUse(
-  item: (typeof landUseSlices)[number],
-  event?: PointerEvent,
-) {
+function activateLandUse(item: (typeof landUseSlices)[number], event?: PointerEvent) {
   activeLandUse.value = item
   if (event) updateLandTooltip(event)
   else landTooltipPosition.value = { x: 60, y: 22 }
@@ -143,26 +102,14 @@ function clearActiveLandUse() {
 }
 
 onMounted(async () => {
-  await initialize(
-    config.supermap.leafletSdkUrl,
-    config.supermap.mapServices.base,
-    config.map.center,
-    config.map.zoom,
-    config.map.crs,
-    [config.supermap.mapServices.township],
-    {
-      serviceUrl: config.supermap.dem.serviceUrl,
-      collectionId: config.supermap.dem.collectionId,
-      renderingRule: DEM_RENDERING_RULE,
-    },
-  )
+  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs, [config.supermap.mapServices.township], config.arcgis.accessToken, {
+    serviceUrl: config.supermap.dem.serviceUrl,
+    collectionId: config.supermap.dem.collectionId,
+    renderingRule: DEM_RENDERING_RULE,
+  })
 
   try {
-    demSummary.value = await loadDemSummary(
-      config.supermap.dem.serviceUrl,
-      config.supermap.dem.collectionId,
-      config.supermap.dem.itemId,
-    )
+    demSummary.value = await loadDemSummary(config.supermap.dem.serviceUrl, config.supermap.dem.collectionId, config.supermap.dem.itemId)
   } catch (cause) {
     demError.value = cause instanceof Error ? cause.message : 'DEM 数据加载失败'
   } finally {
@@ -173,10 +120,7 @@ onMounted(async () => {
 
 <template>
   <main class="screen-page master-page">
-    <ScreenHeader
-      title="兰考县和美乡村数字孪生决策平台"
-      subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判"
-    />
+    <ScreenHeader title="兰考县和美乡村数字孪生决策平台" subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判" />
 
     <div class="master-layout">
       <aside class="master-side">
@@ -185,13 +129,8 @@ onMounted(async () => {
             <div class="metric-grid">
               <article class="metric-card">
                 <span>年末总人口</span>
-                <strong
-                  >{{ latestPopulation.populationWan.toFixed(1) }}万</strong
-                >
-                <small
-                  >{{ latestPopulation.year }}年 · 较上年
-                  {{ latestPopulationGrowth.toFixed(1) }}%</small
-                >
+                <strong>{{ latestPopulation.populationWan.toFixed(1) }}万</strong>
+                <small>{{ latestPopulation.year }}年 · 较上年 {{ latestPopulationGrowth.toFixed(1) }}%</small>
               </article>
               <article class="metric-card">
                 <span>人口密度</span>
@@ -200,11 +139,7 @@ onMounted(async () => {
               </article>
             </div>
             <div class="data-bars master-bars scroll-region">
-              <div
-                v-for="item in populationTrend"
-                :key="item.year"
-                class="data-bar"
-              >
+              <div v-for="item in populationTrend" :key="item.year" class="data-bar">
                 <span>{{ item.year }}年</span>
                 <i :style="{ '--value': `${item.barPercent}%` }" />
                 <b>{{ item.populationWan.toFixed(1) }}</b>
@@ -215,11 +150,7 @@ onMounted(async () => {
 
         <PanelCard title="GDP 特征" meta="2020—2025 / 亿元">
           <div class="gdp-chart">
-            <article
-              v-for="item in gdpTrend"
-              :key="item.year"
-              :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`"
-            >
+            <article v-for="item in gdpTrend" :key="item.year" :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`">
               <strong>{{ item.gdpYiYuan.toFixed(1) }}</strong>
               <i :style="{ height: `${item.barPercent}%` }" />
               <span>{{ item.year }}</span>
@@ -228,41 +159,21 @@ onMounted(async () => {
         </PanelCard>
 
         <PanelCard title="三生综合评价" meta="县域协同指数">
-          <RadarChart
-            :labels="['生态', '生活', '生产']"
-            :values="[88, 82, 90]"
-          />
+          <RadarChart :labels="['生态', '生活', '生产']" :values="[88, 82, 90]" />
         </PanelCard>
       </aside>
 
       <section class="master-center">
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
-          <MapToolbox
-            :map="map"
-            :focus-bounds="focusBounds"
-            :initial-center="config.map.center"
-            :initial-zoom="config.map.zoom"
-            export-name="兰考县综合决策地图"
-          />
+          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" export-name="兰考县综合决策地图" />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
-        <PanelCard
-          title="DEM 栅格数据"
-          :meta="
-            demSummary
-              ? `${demSummary.collectionId} / ${demSummary.crs}`
-              : 'SuperMap 影像服务'
-          "
-        >
+        <PanelCard title="DEM 栅格数据" :meta="demSummary ? `${demSummary.collectionId} / ${demSummary.crs}` : 'SuperMap 影像服务'">
           <div class="dem-overview">
             <figure class="dem-preview">
-              <img
-                v-if="demSummary?.thumbnailUrl"
-                :src="demSummary.thumbnailUrl"
-                alt="兰考县 DEM 栅格缩略图"
-              />
+              <img v-if="demSummary?.thumbnailUrl" :src="demSummary.thumbnailUrl" alt="兰考县 DEM 栅格缩略图" />
               <div v-else class="dem-state">
                 {{ demLoading ? '正在读取 DEM 栅格…' : demError }}
               </div>
@@ -274,42 +185,23 @@ onMounted(async () => {
             <div class="dem-stats">
               <article>
                 <span>抽样平均高程</span>
-                <strong>{{
-                  demSummary?.averageElevationM != null
-                    ? `${demSummary.averageElevationM} m`
-                    : '—'
-                }}</strong>
+                <strong>{{ demSummary?.averageElevationM != null ? `${demSummary.averageElevationM} m` : '—' }}</strong>
               </article>
               <article>
                 <span>抽样高程范围</span>
-                <strong
-                  v-if="
-                    demSummary?.minimumElevationM != null &&
-                    demSummary.maximumElevationM != null
-                  "
-                >
-                  {{ demSummary.minimumElevationM }}–{{
-                    demSummary.maximumElevationM
-                  }}
+                <strong v-if="demSummary?.minimumElevationM != null && demSummary.maximumElevationM != null">
+                  {{ demSummary.minimumElevationM }}–{{ demSummary.maximumElevationM }}
                   m
                 </strong>
                 <strong v-else>—</strong>
               </article>
               <article>
                 <span>栅格尺寸</span>
-                <strong>{{
-                  demSummary
-                    ? `${demSummary.width} × ${demSummary.height}`
-                    : '—'
-                }}</strong>
+                <strong>{{ demSummary ? `${demSummary.width} × ${demSummary.height}` : '—' }}</strong>
               </article>
               <article>
                 <span>像元分辨率</span>
-                <strong>{{
-                  demSummary
-                    ? `${demSummary.pixelSizeDegrees.toFixed(6)}°`
-                    : '—'
-                }}</strong>
+                <strong>{{ demSummary ? `${demSummary.pixelSizeDegrees.toFixed(6)}°` : '—' }}</strong>
               </article>
             </div>
           </div>
@@ -325,12 +217,7 @@ onMounted(async () => {
                 <strong>耕地</strong>
               </div>
               <div class="land-visual" @mouseleave="clearActiveLandUse">
-                <svg
-                  class="land-pie"
-                  viewBox="0 0 120 120"
-                  role="img"
-                  aria-label="土地利用结构饼图"
-                >
+                <svg class="land-pie" viewBox="0 0 120 120" role="img" aria-label="土地利用结构饼图">
                   <path
                     v-for="item in landUseSlices"
                     :key="item.name"
@@ -376,11 +263,7 @@ onMounted(async () => {
                   }"
                   aria-hidden="true"
                 >
-                  <span
-                    ><i :style="{ background: activeLandUse.color }" />{{
-                      activeLandUse.name
-                    }}</span
-                  >
+                  <span><i :style="{ background: activeLandUse.color }" />{{ activeLandUse.name }}</span>
                   <strong>{{ activeLandUse.value }}%</strong>
                 </div>
               </div>
@@ -408,15 +291,9 @@ onMounted(async () => {
 
         <PanelCard title="治理问题可视化发现" meta="点位 / 热点 / 属性">
           <div class="issue-stack">
-            <article>
-              <b>人居环境</b><span>沟渠沿线与村庄边界</span><em>32处</em>
-            </article>
-            <article>
-              <b>设施短板</b><span>15 分钟服务覆盖不足</span><em>18处</em>
-            </article>
-            <article>
-              <b>违建疑似</b><span>新增硬化斑块待核查</span><em>9处</em>
-            </article>
+            <article><b>人居环境</b><span>沟渠沿线与村庄边界</span><em>32处</em></article>
+            <article><b>设施短板</b><span>15 分钟服务覆盖不足</span><em>18处</em></article>
+            <article><b>违建疑似</b><span>新增硬化斑块待核查</span><em>9处</em></article>
           </div>
         </PanelCard>
 
@@ -431,21 +308,12 @@ onMounted(async () => {
               <p>联动道路、POI 与 GDP 栅格，推荐 4 处融合节点。</p>
             </article>
           </div>
-          <div class="decision-actions">
-            <button type="button">导出图件</button
-            ><button type="button">生成报告</button
-            ><button type="button">方案推演</button>
-          </div>
+          <div class="decision-actions"><button type="button">导出图件</button><button type="button">生成报告</button><button type="button">方案推演</button></div>
         </PanelCard>
       </aside>
     </div>
   </main>
-  <DecisionAssistant
-    :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
-    :timeout-ms="config.reportTimeoutMs"
-    :context="assistantContext"
-    :prompts="assistantPrompts"
-  />
+  <DecisionAssistant :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`" :timeout-ms="config.reportTimeoutMs" :context="assistantContext" :prompts="assistantPrompts" />
 </template>
 
 <style scoped>
@@ -546,11 +414,7 @@ onMounted(async () => {
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(61, 214, 196, 0.12);
-  background: linear-gradient(
-    135deg,
-    rgba(14, 52, 47, 0.9),
-    rgba(6, 24, 23, 0.96)
-  );
+  background: linear-gradient(135deg, rgba(14, 52, 47, 0.9), rgba(6, 24, 23, 0.96));
 }
 
 .dem-preview img {
@@ -565,12 +429,7 @@ onMounted(async () => {
   inset: 0;
   content: '';
   pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    rgba(5, 25, 22, 0.14),
-    transparent 55%,
-    rgba(8, 31, 28, 0.25)
-  );
+  background: linear-gradient(90deg, rgba(5, 25, 22, 0.14), transparent 55%, rgba(8, 31, 28, 0.25));
 }
 
 .dem-preview figcaption {
