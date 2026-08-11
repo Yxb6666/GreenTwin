@@ -37,6 +37,16 @@ const router = createRouter({
       meta: { label: '三生治理', requiresAuth: true },
     },
     {
+      path: '/governance/scene/:issueId',
+      name: 'governance-scene',
+      component: () => import('@/features/twin/TwinView.vue'),
+      meta: {
+        label: '三生治理 · 三维场景',
+        modulePath: '/governance',
+        requiresAuth: true,
+      },
+    },
+    {
       path: '/:pathMatch(.*)*',
       component: () => import('@/features/not-found/NotFoundView.vue'),
     },

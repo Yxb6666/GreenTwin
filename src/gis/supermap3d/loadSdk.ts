@@ -6,13 +6,15 @@ export function loadSuperMapWebgl(scriptUrl: string, cssUrl: string) {
   if (sdkPromise) return sdkPromise
 
   sdkPromise = new Promise<void>((resolve, reject) => {
-    const resolvedScriptUrl = new URL(scriptUrl, window.location.href)
+    const appBaseUrl = new URL(import.meta.env.BASE_URL, window.location.origin)
+    const resolvedScriptUrl = new URL(scriptUrl, appBaseUrl)
+    const resolvedCssUrl = cssUrl ? new URL(cssUrl, appBaseUrl).href : ''
     target.CESIUM_BASE_URL = new URL('./', resolvedScriptUrl).href
 
     if (cssUrl && !document.querySelector(`link[data-supermap-webgl="${cssUrl}"]`)) {
       const link = document.createElement('link')
       link.rel = 'stylesheet'
-      link.href = cssUrl
+      link.href = resolvedCssUrl
       link.dataset.supermapWebgl = cssUrl
       document.head.appendChild(link)
     }

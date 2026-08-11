@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
@@ -7,6 +8,10 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
+import {
+  inferGovernanceScenario,
+  parseGovernanceSceneContext,
+} from '@/features/governance/sceneContext'
 
 type SceneMode = 'whiteModel'
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
@@ -66,6 +71,8 @@ interface CesiumRuntime {
 }
 
 const config = useRuntimeConfig()
+const route = useRoute()
+const router = useRouter()
 const cesiumContainer = ref<HTMLElement | null>(null)
 const engineStatus = ref('三维引擎初始化中')
 const sceneMode = ref<SceneMode>('whiteModel')
@@ -87,10 +94,25 @@ const parameters = ref({
   outletCount: 4,
   roadRaiseHeight: 0.25,
 })
+const sceneIntroVisible = ref(false)
 
 let viewer: SuperMapViewer | null = null
 let openedLayers: SceneLayer[][] = [[]]
 let generationTimer: number | null = null
+let sceneIntroTimer: number | null = null
+
+const governanceScene = computed(() =>
+  parseGovernanceSceneContext(route.params.issueId, route.query),
+)
+const isGovernanceScene = computed(() => governanceScene.value !== null)
+const sceneTitle = computed(() =>
+  isGovernanceScene.value ? '三生治理 · 三维场景' : '三生模拟',
+)
+const sceneSubtitle = computed(() =>
+  governanceScene.value
+    ? `${governanceScene.value.issueId} / ${governanceScene.value.town} ${governanceScene.value.village} / 二三维一体化治理`
+    : '真实空间场景构建 · 治理方案推演 · 生产生活生态协同决策',
+)
 
 const modeItems: Array<{ key: SceneMode; label: string }> = [
   { key: 'whiteModel', label: '三维白模' },
@@ -310,6 +332,15 @@ function handoffPlan() {
   operationMessage.value = `${currentPlan.value.label}已形成治理任务草案，可进入“三生治理”继续派单`
 }
 
+async function returnToGovernance() {
+  await router.push({
+    name: 'governance',
+    query: governanceScene.value
+      ? { focus: governanceScene.value.issueId }
+      : undefined,
+  })
+}
+
 async function openScene(mode: SceneMode) {
   sceneMode.value = mode
   const url = config.supermap.realspace[mode]
@@ -384,8 +415,14 @@ async function initializeViewer() {
       }),
     )
     viewer.scene.globe.depthTestAgainstTerrain = true
+    const targetLongitude = governanceScene.value?.longitude ?? 114.8172
+    const targetLatitude = governanceScene.value?.latitude ?? 34.8248
     viewer.camera.setView({
-      destination: sdk.Cartesian3.fromDegrees(114.8172, 34.8248, 850),
+      destination: sdk.Cartesian3.fromDegrees(
+        targetLongitude,
+        targetLatitude,
+        isGovernanceScene.value ? 1250 : 850,
+      ),
       orientation: {
         heading: 0,
         pitch: sdk.Math.toRadians(-45),
@@ -397,16 +434,43 @@ async function initializeViewer() {
     } else {
       engineStatus.value = '三维底图运行中，场景服务待配置'
     }
+    if (governanceScene.value) {
+      viewer.camera.flyTo({
+        destination: sdk.Cartesian3.fromDegrees(
+          governanceScene.value.longitude,
+          governanceScene.value.latitude,
+          420,
+        ),
+        orientation: {
+          heading: sdk.Math.toRadians(18),
+          pitch: sdk.Math.toRadians(-42),
+          roll: 0,
+        },
+        duration: 1.8,
+      })
+    }
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
   }
 }
 
-onMounted(initializeViewer)
+onMounted(() => {
+  if (governanceScene.value)
+    activeScenario.value = inferGovernanceScenario(governanceScene.value)
+  sceneIntroVisible.value = isGovernanceScene.value
+  if (sceneIntroVisible.value) {
+    sceneIntroTimer = window.setTimeout(() => {
+      sceneIntroVisible.value = false
+      sceneIntroTimer = null
+    }, 1450)
+  }
+  void initializeViewer()
+})
 
 onBeforeUnmount(() => {
   if (generationTimer !== null) window.clearInterval(generationTimer)
+  if (sceneIntroTimer !== null) window.clearTimeout(sceneIntroTimer)
   openedLayers = [[]]
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
   viewer = null
@@ -414,17 +478,21 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="screen-page twin-page">
+  <div class="twin-route-root">
+    <main class="screen-page twin-page">
     <ScreenHeader
-      title="三生模拟"
-      subtitle="真实空间场景构建 · 治理方案推演 · 生产生活生态协同决策"
+      :title="sceneTitle"
+      :subtitle="sceneSubtitle"
     />
 
     <section class="simulation-workbar panel-frame">
       <div class="workbar-task">
-        <span class="task-id">SIM-2026-001</span>
-        <strong>徐场村道路积水治理模拟</strong>
-        <small>关联事件 ISSUE-2026-018 · 影响范围 400 m</small>
+        <span class="task-id">{{ governanceScene?.issueId ?? 'SIM-2026-001' }}</span>
+        <strong>{{ governanceScene?.subtype ?? '徐场村道路积水治理模拟' }}</strong>
+        <small v-if="governanceScene">
+          {{ governanceScene.town }} / {{ governanceScene.village }} · 二维要素已同步
+        </small>
+        <small v-else>关联事件 ISSUE-2026-018 · 影响范围 400 m</small>
       </div>
       <div class="workbar-progress">
         <span>场景构建</span>
@@ -432,6 +500,14 @@ onBeforeUnmount(() => {
         <strong>{{ buildProgress }}%</strong>
       </div>
       <div class="workbar-actions">
+        <button
+          v-if="isGovernanceScene"
+          type="button"
+          class="tiny-button return-button"
+          @click="returnToGovernance"
+        >
+          ← 返回二维治理
+        </button>
         <button type="button" class="tiny-button" @click="saveDraft">
           保存草案
         </button>
@@ -473,8 +549,17 @@ onBeforeUnmount(() => {
           </div>
           <div class="issue-summary">
             <span>当前问题</span>
-            <strong>连续降雨后道路低洼段积水，影响居民与农产品运输</strong>
-            <small>徐场村东南主路 · 高紧急度 · 待研判</small>
+            <strong>
+              {{
+                governanceScene?.description ||
+                '连续降雨后道路低洼段积水，影响居民与农产品运输'
+              }}
+            </strong>
+            <small v-if="governanceScene">
+              {{ governanceScene.village }} · {{ governanceScene.urgency }}紧急度 ·
+              {{ governanceScene.status }}
+            </small>
+            <small v-else>徐场村东南主路 · 高紧急度 · 待研判</small>
           </div>
         </PanelCard>
 
@@ -555,6 +640,23 @@ onBeforeUnmount(() => {
         :class="{ comparing: isComparing }"
       >
         <div ref="cesiumContainer" class="cesium-container" />
+        <Transition name="scene-intro">
+          <div v-if="sceneIntroVisible" class="scene-intro" aria-hidden="true">
+            <i />
+            <span>2D</span>
+            <b>空间坐标同步</b>
+            <span>3D</span>
+          </div>
+        </Transition>
+
+        <div v-if="governanceScene" class="governance-scene-chip">
+          <span>三维治理定位</span>
+          <strong>{{ governanceScene.issueId }}</strong>
+          <small>
+            {{ governanceScene.longitude.toFixed(6) }},
+            {{ governanceScene.latitude.toFixed(6) }}
+          </small>
+        </div>
 
         <div class="map-toolbar simulation-toolbar">
           <button
@@ -703,16 +805,22 @@ onBeforeUnmount(() => {
         </PanelCard>
       </aside>
     </div>
-  </main>
-  <DecisionAssistant
-    :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
-    :timeout-ms="config.reportTimeoutMs"
-    :context="assistantContext"
-    :prompts="assistantPrompts"
-  />
+    </main>
+    <DecisionAssistant
+      :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
+      :timeout-ms="config.reportTimeoutMs"
+      :context="assistantContext"
+      :prompts="assistantPrompts"
+    />
+  </div>
 </template>
 
 <style scoped>
+.twin-route-root {
+  width: 100%;
+  height: 100%;
+}
+
 .twin-page {
   grid-template-rows: 72px 44px minmax(0, 1fr);
 }
@@ -800,6 +908,12 @@ onBeforeUnmount(() => {
   border-color: var(--cyan);
   background: var(--cyan);
   font-weight: 700;
+}
+
+.workbar-actions .return-button {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.35);
+  background: rgba(61, 214, 196, 0.08);
 }
 
 .twin-layout {
@@ -999,6 +1113,95 @@ onBeforeUnmount(() => {
 .cesium-container {
   position: absolute;
   inset: 0;
+}
+
+.scene-intro {
+  position: absolute;
+  z-index: 800;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: #ecfffb;
+  background:
+    radial-gradient(circle, rgba(31, 119, 107, 0.22), rgba(2, 9, 10, 0.92) 70%),
+    #02090a;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.scene-intro i {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  border: 1px solid rgba(84, 225, 206, 0.6);
+  border-radius: 50%;
+  animation: scene-intro-scan 1.4s ease-out infinite;
+}
+
+.scene-intro span {
+  z-index: 1;
+  display: grid;
+  width: 48px;
+  height: 34px;
+  place-items: center;
+  color: var(--cyan);
+  border: 1px solid rgba(84, 225, 206, 0.45);
+  border-radius: 5px;
+  background: rgba(5, 22, 22, 0.88);
+  font: 700 12px var(--font-data);
+}
+
+.scene-intro b {
+  z-index: 1;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.scene-intro-enter-active,
+.scene-intro-leave-active {
+  transition: opacity 520ms ease, clip-path 700ms cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+
+.scene-intro-enter-from {
+  opacity: 0;
+  clip-path: circle(4% at 50% 50%);
+}
+
+.scene-intro-leave-to {
+  opacity: 0;
+  clip-path: circle(12% at 50% 50%);
+}
+
+.governance-scene-chip {
+  position: absolute;
+  z-index: 110;
+  top: 48px;
+  left: 10px;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  color: var(--text-soft);
+  border: 1px solid rgba(84, 225, 206, 0.3);
+  border-radius: 5px;
+  background: rgba(5, 16, 17, 0.86);
+  backdrop-filter: blur(8px);
+}
+
+.governance-scene-chip span,
+.governance-scene-chip small {
+  font: 8px var(--font-data);
+}
+
+.governance-scene-chip strong {
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+@keyframes scene-intro-scan {
+  from { opacity: 0.9; transform: scale(0.35); }
+  to { opacity: 0; transform: scale(3.8); }
 }
 .simulation-toolbar {
   right: auto;
