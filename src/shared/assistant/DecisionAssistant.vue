@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
+import { useDraggablePanel } from '@/shared/composables/useDraggablePanel'
 import {
   requestDecisionAssistant,
   type DecisionAssistantContext,
@@ -33,6 +34,15 @@ const messages = ref<Message[]>([
     content: `我是${props.context.module} AI 决策助手。我会依据当前页面的实时指标和操作状态进行分析，并明确列出数据依据。`,
   },
 ])
+const {
+  isDragging,
+  onHeaderPointerDown,
+  onHeaderPointerEnd,
+  onHeaderPointerMove,
+  panelRef,
+  panelStyle,
+  resetPosition,
+} = useDraggablePanel(isOpen)
 
 async function scrollToLatest() {
   await nextTick()
@@ -113,11 +123,22 @@ function onComposerKeydown(event: KeyboardEvent) {
     <Transition name="assistant-panel">
       <section
         v-if="isOpen"
+        ref="panelRef"
         id="module-ai-panel"
         class="assistant-panel"
+        :class="{ 'is-dragging': isDragging }"
+        :style="panelStyle"
         :aria-label="`${context.module} AI 决策助手`"
       >
-        <header class="assistant-header">
+        <header
+          class="assistant-header"
+          title="拖动标题栏可移动，双击恢复默认位置"
+          @dblclick="resetPosition"
+          @pointercancel="onHeaderPointerEnd"
+          @pointerdown="onHeaderPointerDown"
+          @pointermove="onHeaderPointerMove"
+          @pointerup="onHeaderPointerEnd"
+        >
           <div class="assistant-identity">
             <span class="assistant-mark">AI</span>
             <div>
@@ -289,7 +310,7 @@ function onComposerKeydown(event: KeyboardEvent) {
   bottom: 18px;
   display: grid;
   overflow: hidden;
-  width: min(410px, calc(100vw - 28px));
+  width: min(410px, calc(100vw - 32px));
   height: min(720px, calc(100vh - 88px));
   color: var(--text);
   border: 1px solid rgba(61, 214, 196, 0.38);
@@ -306,6 +327,12 @@ function onComposerKeydown(event: KeyboardEvent) {
   backdrop-filter: blur(18px);
 }
 
+.assistant-panel.is-dragging {
+  box-shadow:
+    0 28px 76px rgba(0, 0, 0, 0.65),
+    0 0 38px rgba(61, 214, 196, 0.12);
+}
+
 .assistant-header {
   display: flex;
   align-items: center;
@@ -314,6 +341,13 @@ function onComposerKeydown(event: KeyboardEvent) {
   padding: 10px 13px;
   border-bottom: 1px solid rgba(122, 203, 190, 0.15);
   background: rgba(61, 214, 196, 0.035);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.assistant-panel.is-dragging .assistant-header {
+  cursor: grabbing;
 }
 
 .assistant-identity {
@@ -623,9 +657,9 @@ function onComposerKeydown(event: KeyboardEvent) {
 
 @media (max-width: 600px) {
   .assistant-panel {
-    right: 8px;
-    bottom: 8px;
-    width: calc(100vw - 16px);
+    right: 16px;
+    bottom: 16px;
+    width: calc(100vw - 32px);
     height: calc(100vh - 76px);
   }
   .assistant-launcher {
