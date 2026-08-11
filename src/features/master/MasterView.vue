@@ -18,19 +18,20 @@ const { map, focusBounds, selectedTownship, activeBaseMap, arcgisAvailable, erro
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
+const populationLabelYears = new Set([2020, 2021, 2025])
 const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
 const populationChangeRate = computed(() => calculatePopulationChangeRate(populationTrend))
 const populationTrendLabel = computed(() => getPopulationTrendLabel(populationChangeRate.value))
 const populationTrendChart = computed(() => {
   const width = 248
-  const height = 92
-  const left = 22
+  const height = 118
+  const left = 8
   const right = 8
-  const top = 12
-  const bottom = 20
+  const top = 25
+  const bottom = 22
   const values = populationTrend.map((item) => item.populationWan)
-  const minimum = Math.floor(Math.min(...values) - 1)
-  const maximum = Math.ceil(Math.max(...values) + 1)
+  const minimum = Math.min(...values) - 0.8
+  const maximum = Math.max(...values) + 0.8
   const plotWidth = width - left - right
   const plotHeight = height - top - bottom
   const valueRange = maximum - minimum || 1
@@ -199,16 +200,16 @@ onMounted(async () => {
             </div>
             <div class="population-trend" aria-label="2020 至 2025 年兰考县人口变化趋势">
               <div class="population-trend__plot">
-                <svg :viewBox="`0 0 ${populationTrendChart.width} ${populationTrendChart.height}`" role="img" aria-label="人口变化趋势折线面积图">
+                <div class="population-trend__header"><span>人口变化趋势</span><em>万人</em></div>
+                <svg :viewBox="`0 0 ${populationTrendChart.width} ${populationTrendChart.height}`" preserveAspectRatio="none" role="img" aria-label="人口变化趋势折线面积图">
                   <defs>
                     <linearGradient id="population-area-gradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#42e8d8" stop-opacity="0.32" />
-                      <stop offset="100%" stop-color="#42e8d8" stop-opacity="0.02" />
+                      <stop offset="0%" stop-color="#3dd6c4" stop-opacity="0.18" />
+                      <stop offset="100%" stop-color="#3dd6c4" stop-opacity="0.01" />
                     </linearGradient>
                   </defs>
                   <g v-for="grid in populationTrendChart.gridLines" :key="grid.value">
                     <line class="population-grid-line" :x1="populationTrendChart.left" :x2="populationTrendChart.width - populationTrendChart.right" :y1="grid.y" :y2="grid.y" />
-                    <text class="population-axis-label" :x="populationTrendChart.left - 5" :y="grid.y">{{ grid.value }}</text>
                   </g>
                   <path class="population-area" :d="populationTrendChart.areaPath" />
                   <polyline class="population-line" :points="populationTrendChart.linePoints" />
@@ -224,24 +225,27 @@ onMounted(async () => {
                     @blur="activePopulationPoint = null"
                   >
                     <circle class="population-point__hit" :cx="point.x" :cy="point.y" r="8" />
-                    <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3" />
-                    <text class="population-value-label" :x="point.x" :y="point.y - 7">{{ point.populationWan.toFixed(1) }}</text>
+                    <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3.5" />
+                    <text v-if="populationLabelYears.has(point.year)" class="population-value-label" :x="point.x" :y="point.y + (point.year === 2020 ? 14 : -9)">{{ point.populationWan.toFixed(1) }}</text>
                     <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 5">{{ point.year }}</text>
                   </g>
                   <g
                     v-if="activePopulationPoint && activePopulationChartPoint"
                     class="population-tooltip"
-                    :transform="`translate(${Math.min(populationTrendChart.width - 42, Math.max(42, activePopulationChartPoint.x))}, ${Math.max(34, activePopulationChartPoint.y - 4)})`"
+                    :transform="`translate(${Math.min(populationTrendChart.width - 43, Math.max(43, activePopulationChartPoint.x))}, ${Math.max(47, activePopulationChartPoint.y - 5)})`"
                     aria-hidden="true"
                   >
-                    <rect x="-40" y="-30" width="80" height="22" rx="4" />
-                    <text x="0" y="-17">{{ activePopulationPoint.year }}年 · {{ activePopulationPoint.populationWan.toFixed(1) }}万人</text>
+                    <g class="population-tooltip__surface">
+                      <rect x="-42" y="-42" width="84" height="34" rx="4" />
+                      <text class="population-tooltip__year" x="0" y="-29">{{ activePopulationPoint.year }}年</text>
+                      <text x="0" y="-16">年末人口：{{ activePopulationPoint.populationWan.toFixed(1) }}万人</text>
+                    </g>
                   </g>
                 </svg>
               </div>
               <div class="population-trend__summary">
-                <span>2020—2025变化 <strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate > 0 ? '+' : '' }}{{ populationChangeRate.toFixed(1) }}%</strong></span>
-                <span>人口趋势 <strong>{{ populationTrendLabel }}</strong></span>
+                <span><small>2020—2025</small><strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate < 0 ? '↓ ' : populationChangeRate > 0 ? '↑ ' : '' }}{{ Math.abs(populationChangeRate).toFixed(1) }}%</strong></span>
+                <span><small>人口趋势</small><strong>{{ populationTrendLabel }}</strong></span>
               </div>
             </div>
           </div>
@@ -462,30 +466,50 @@ onMounted(async () => {
   display: grid;
   height: 100%;
   min-height: 0;
-  gap: 3px;
-  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  grid-template-rows: 118px auto;
 }
 
 .population-trend__plot {
+  position: relative;
+  height: 118px;
   min-height: 0;
   overflow: visible;
+}
+
+.population-trend__header {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 2px;
+  left: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #b8cbc5;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.population-trend__header em {
+  color: #718b84;
+  font-size: 10px;
+  font-style: normal;
 }
 
 .population-trend__plot svg {
   display: block;
   width: 100%;
-  height: 100%;
-  min-height: 44px;
+  height: 118px;
   overflow: visible;
 }
 
 .population-grid-line {
   stroke: rgba(126, 183, 174, 0.15);
-  stroke-dasharray: 2 3;
-  stroke-width: 0.8;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
 }
 
-.population-axis-label,
 .population-year-label,
 .population-value-label {
   fill: var(--text-soft);
@@ -493,19 +517,15 @@ onMounted(async () => {
   text-anchor: middle;
 }
 
-.population-axis-label {
-  font-size: 6px;
-  dominant-baseline: middle;
-  text-anchor: end;
-}
-
 .population-year-label {
-  font-size: 6.5px;
+  fill: #8fa79f;
+  font-size: 10px;
 }
 
 .population-value-label {
-  fill: #d9fffa;
-  font-size: 6.5px;
+  fill: #e7f3ef;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .population-area {
@@ -514,11 +534,11 @@ onMounted(async () => {
 
 .population-line {
   fill: none;
-  stroke: #42e8d8;
+  stroke: #3dd6c4;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2;
-  filter: drop-shadow(0 0 3px rgba(66, 232, 216, 0.35));
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
 }
 
 .population-point {
@@ -531,15 +551,16 @@ onMounted(async () => {
 }
 
 .population-point__dot {
-  fill: #e8fffc;
-  stroke: #42e8d8;
-  stroke-width: 1.5;
+  fill: #3dd6c4;
+  stroke: #a5f4e8;
+  stroke-width: 1.25;
   transition: 120ms ease;
+  vector-effect: non-scaling-stroke;
 }
 
 .population-point:hover .population-point__dot,
 .population-point:focus-visible .population-point__dot {
-  fill: #42e8d8;
+  fill: #6de4d7;
   r: 4px;
 }
 
@@ -555,8 +576,13 @@ onMounted(async () => {
 
 .population-tooltip text {
   fill: #edfffc;
-  font: 7px var(--font-data);
+  font: 9px var(--font-data);
   text-anchor: middle;
+}
+
+.population-tooltip .population-tooltip__year {
+  fill: #a5f4e8;
+  font-weight: 600;
 }
 
 .population-trend__summary {
@@ -564,23 +590,71 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 3px 6px;
+  padding: 6px 2px 0;
   color: var(--text-soft);
-  border: 1px solid rgba(61, 214, 196, 0.1);
-  border-radius: 4px;
-  background: rgba(61, 214, 196, 0.025);
-  font-size: 7px;
+  border-top: 1px solid rgba(74, 126, 114, 0.2);
+  font-size: 10px;
   white-space: nowrap;
 }
 
+.population-trend__summary span {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.population-trend__summary small {
+  color: #829b94;
+  font-size: 10px;
+}
+
 .population-trend__summary strong {
-  margin-left: 3px;
-  color: var(--cyan);
-  font: 8px var(--font-data);
+  color: #4ad9c8;
+  font: 600 11px var(--font-data);
 }
 
 .population-trend__summary strong.is-negative {
-  color: #8dd9c6;
+  color: #4ad9c8;
+}
+
+@media (max-height: 800px) {
+  .population-trend {
+    gap: 3px;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .population-trend__plot,
+  .population-trend__plot svg {
+    height: 44px;
+  }
+
+  .population-year-label,
+  .population-value-label,
+  .population-point__hit,
+  .population-point__dot {
+    transform: scaleY(2.68);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .population-tooltip__surface {
+    transform: scaleY(2.68);
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .population-trend__summary {
+    padding-top: 3px;
+    font-size: 9px;
+  }
+
+  .population-trend__summary small {
+    font-size: 9px;
+  }
+
+  .population-trend__summary strong {
+    font-size: 10px;
+  }
 }
 
 .gdp-chart {
