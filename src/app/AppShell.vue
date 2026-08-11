@@ -14,9 +14,6 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const showPlatformChrome = computed(() => route.name !== 'login')
-const activeModulePath = computed(
-  () => (route.meta.modulePath as string | undefined) ?? route.path,
-)
 
 async function logout() {
   auth.logout()
@@ -27,12 +24,7 @@ async function logout() {
 <template>
   <div class="app-shell">
     <nav v-if="showPlatformChrome" class="module-nav" aria-label="平台模块导航">
-      <RouterLink
-        v-for="item in modules"
-        :key="item.to"
-        :to="item.to"
-        :class="{ 'router-link-active': activeModulePath.startsWith(item.to) }"
-      >
+      <RouterLink v-for="item in modules" :key="item.to" :to="item.to">
         <span>{{ item.code }}</span>
         {{ item.label }}
       </RouterLink>

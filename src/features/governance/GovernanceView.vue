@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import L from 'leaflet'
-import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
@@ -29,8 +28,6 @@ const ISSUE_PANE = 'governanceIssuePane'
 const SPATIAL_QUERY_PANE = 'governanceSpatialQueryPane'
 
 const config = useRuntimeConfig()
-const route = useRoute()
-const router = useRouter()
 const mapContainer = ref<HTMLElement | null>(null)
 const issues = ref<GovernanceIssue[]>([])
 const selectedId = ref('')
@@ -42,7 +39,6 @@ const spatialIds = ref<Set<string> | null>(null)
 const spatialQueryLabel = ref('全县要素')
 const spatialQueryMode = ref<SpatialQueryMode | null>(null)
 const spatialControlValue = ref<'all' | 'view' | SpatialQueryMode>('all')
-const sceneTransitionIssue = ref<GovernanceIssue | null>(null)
 const filters = reactive({
   keyword: '',
   type: 'all',
@@ -257,34 +253,6 @@ function selectIssue(issue: GovernanceIssue, focus = false) {
     )
 }
 
-async function enterIssueScene(issue: GovernanceIssue) {
-  if (sceneTransitionIssue.value) return
-  selectIssue(issue)
-  sceneTransitionIssue.value = issue
-  map.value?.doubleClickZoom.disable()
-  map.value?.flyTo([issue.latitude, issue.longitude], 16, {
-    duration: 0.72,
-    easeLinearity: 0.18,
-  })
-
-  await new Promise((resolve) => window.setTimeout(resolve, 680))
-  await router.push({
-    name: 'governance-scene',
-    params: { issueId: issue.id },
-    query: {
-      longitude: String(issue.longitude),
-      latitude: String(issue.latitude),
-      town: issue.town,
-      village: issue.village,
-      subtype: issue.subtype,
-      issueType: issue.type,
-      description: issue.description,
-      urgency: issue.urgency,
-      status: issue.status,
-    },
-  })
-}
-
 function openIssueDetail() {
   if (selected.value) detailOpen.value = true
 }
@@ -320,10 +288,6 @@ function refreshIssueMarkers() {
           direction: 'top',
         })
         .on('click', () => selectIssue(issue))
-        .on('dblclick', (event) => {
-          L.DomEvent.stopPropagation(event)
-          void enterIssueScene(issue)
-        })
       issueMarkers.set(issue.id, marker)
     }
     const isActive = selected.value?.id === issue.id
@@ -583,15 +547,7 @@ onMounted(async () => {
   map.value?.on('moveend zoomend', syncMapContext)
   try {
     issues.value = await issuesPromise
-    const requestedFocus =
-      typeof route.query.focus === 'string' ? route.query.focus : ''
-    selectedId.value = issues.value.some((issue) => issue.id === requestedFocus)
-      ? requestedFocus
-      : (issues.value[0]?.id ?? '')
-    const focusedIssue = issues.value.find(
-      (issue) => issue.id === selectedId.value,
-    )
-    if (requestedFocus && focusedIssue) selectIssue(focusedIssue, true)
+    selectedId.value = issues.value[0]?.id ?? ''
   } catch (cause) {
     dataError.value =
       cause instanceof Error ? cause.message : '治理问题要素数据加载失败'
@@ -719,23 +675,6 @@ onBeforeUnmount(() => {
       <section class="governance-center">
         <section class="map-shell panel-frame governance-map">
           <div ref="mapContainer" class="map-container" />
-          <div class="scene-entry-hint">
-            <span>3D</span>
-            双击地图要素进入三维治理场景
-          </div>
-          <div
-            v-if="sceneTransitionIssue"
-            class="scene-transition-overlay"
-            role="status"
-            aria-live="polite"
-          >
-            <div class="scene-transition-overlay__rings" />
-            <div class="scene-transition-overlay__label">
-              <span>二维空间定位完成</span>
-              <strong>{{ sceneTransitionIssue.id }}</strong>
-              <small>正在进入三维治理场景</small>
-            </div>
-          </div>
           <MapToolbox
             :map="map"
             :focus-bounds="focusBounds"
@@ -1445,109 +1384,6 @@ onBeforeUnmount(() => {
     drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
     drop-shadow(0 0 5px var(--issue-color));
   transform: scale(1.28);
-}
-
-.scene-entry-hint {
-  position: absolute;
-  z-index: 640;
-  top: 12px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 11px;
-  color: #d8f8f2;
-  border: 1px solid rgba(84, 225, 206, 0.32);
-  border-radius: 999px;
-  background: rgba(5, 20, 21, 0.78);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  transform: translateX(-50%);
-  backdrop-filter: blur(10px);
-  pointer-events: none;
-}
-
-.scene-entry-hint span {
-  display: grid;
-  width: 25px;
-  height: 17px;
-  place-items: center;
-  color: #041313;
-  border-radius: 4px;
-  background: var(--cyan);
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.scene-transition-overlay {
-  position: absolute;
-  z-index: 1500;
-  inset: 0;
-  display: grid;
-  overflow: hidden;
-  place-items: center;
-  background:
-    radial-gradient(circle at center, rgba(31, 119, 107, 0.2), rgba(2, 9, 10, 0.88) 72%),
-    rgba(2, 9, 10, 0.5);
-  animation: scene-overlay-in 680ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
-  pointer-events: all;
-}
-
-.scene-transition-overlay__rings,
-.scene-transition-overlay__rings::before,
-.scene-transition-overlay__rings::after {
-  position: absolute;
-  width: 150px;
-  height: 150px;
-  border: 1px solid rgba(84, 225, 206, 0.72);
-  border-radius: 50%;
-  content: '';
-  animation: scene-ring-expand 1.35s ease-out infinite;
-}
-
-.scene-transition-overlay__rings::before {
-  inset: -1px;
-  animation-delay: 220ms;
-}
-
-.scene-transition-overlay__rings::after {
-  inset: -1px;
-  animation-delay: 440ms;
-}
-
-.scene-transition-overlay__label {
-  z-index: 1;
-  display: grid;
-  gap: 5px;
-  min-width: 210px;
-  padding: 19px 25px;
-  color: var(--text-soft);
-  border: 1px solid rgba(84, 225, 206, 0.36);
-  border-radius: 8px;
-  background: rgba(4, 18, 18, 0.9);
-  text-align: center;
-  box-shadow: 0 0 50px rgba(61, 214, 196, 0.16);
-  backdrop-filter: blur(14px);
-}
-
-.scene-transition-overlay__label strong {
-  color: #f2fffc;
-  font-size: 18px;
-  letter-spacing: 0.08em;
-}
-
-.scene-transition-overlay__label small {
-  color: var(--cyan);
-}
-
-@keyframes scene-overlay-in {
-  from { opacity: 0; clip-path: circle(3% at 50% 50%); }
-  to { opacity: 1; clip-path: circle(78% at 50% 50%); }
-}
-
-@keyframes scene-ring-expand {
-  from { opacity: 0.8; transform: scale(0.35); }
-  to { opacity: 0; transform: scale(3.6); }
 }
 
 :global(.governance-issue-pin.is-ai-highlighted) {
