@@ -13,7 +13,7 @@ import { gdpTrend, latestDensityRecord, latestPopulation, latestPopulationDensit
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap } = useLeafletMap(mapContainer)
+const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, clearSelectedTownship } = useLeafletMap(mapContainer)
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
@@ -106,7 +106,7 @@ onMounted(async () => {
     serviceUrl: config.supermap.dem.serviceUrl,
     collectionId: config.supermap.dem.collectionId,
     renderingRule: DEM_RENDERING_RULE,
-  })
+  }, { townshipFocus: true })
 
   try {
     demSummary.value = await loadDemSummary(config.supermap.dem.serviceUrl, config.supermap.dem.collectionId, config.supermap.dem.itemId)
@@ -166,7 +166,7 @@ onMounted(async () => {
       <section class="master-center">
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
-          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" export-name="兰考县综合决策地图" />
+          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" :reset-selection="clearSelectedTownship" export-name="兰考县综合决策地图" />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 

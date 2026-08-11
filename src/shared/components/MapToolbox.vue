@@ -16,6 +16,7 @@ const props = defineProps<{
   activeBaseMap: BaseMapMode
   arcgisAvailable: boolean
   changeBaseMap: (mode: BaseMapMode) => boolean
+  resetSelection?: () => void
   exportName?: string
 }>()
 
@@ -209,6 +210,7 @@ function setBaseMap(mode: BaseMapMode) {
 
 function resetView() {
   if (!props.map) return
+  props.resetSelection?.()
   focusMapOnLayer(props.map, props.focusBounds, props.initialCenter, props.initialZoom)
   notify(props.focusBounds ? '已居中显示行政区划图层' : '图层范围不可用，已回到默认视图')
 }

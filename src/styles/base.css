@@ -421,6 +421,11 @@ button {
   display: none;
 }
 
+.leaflet-interactive.township-map-region {
+  cursor: pointer;
+  transition: stroke 140ms ease, stroke-width 140ms ease;
+}
+
 .map-shell::after {
   position: absolute;
   z-index: 2;

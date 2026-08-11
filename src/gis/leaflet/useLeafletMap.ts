@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
+import { focusMapOnTownship } from './mapFocus'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
 import { getTownshipLabel, loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
 
@@ -14,15 +15,38 @@ const TOWNSHIP_STYLE: L.PathOptions = {
   weight: 1.4,
 }
 
+const TOWNSHIP_HOVER_STYLE: L.PathOptions = {
+  color: '#efffc7',
+  opacity: 1,
+  weight: 2.1,
+}
+
+const TOWNSHIP_SELECTED_STYLE: L.PathOptions = {
+  color: '#f7ffdb',
+  opacity: 1,
+  weight: 3,
+}
+
+const TOWNSHIP_NORMAL_BORDER_STYLE: L.PathOptions = {
+  color: TOWNSHIP_STYLE.color,
+  opacity: TOWNSHIP_STYLE.opacity,
+  weight: TOWNSHIP_STYLE.weight,
+}
+
 export interface DemRasterOverlay {
   serviceUrl: string
   collectionId: string
   renderingRule: Record<string, unknown>
 }
 
+export interface LeafletMapInteractionOptions {
+  townshipFocus?: boolean
+}
+
 export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
   const focusBounds = shallowRef<GeographicBounds | null>(null)
+  const selectedTownship = ref<string | null>(null)
   const activeBaseMap = ref<BaseMapMode>('natural')
   const arcgisAvailable = ref(false)
   const error = ref('')
@@ -31,7 +55,27 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let activeBaseLayer: L.TileLayer | null = null
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
+  let selectedTownshipLayer: L.Polygon | null = null
   let disposed = false
+
+  function clearSelectedTownship() {
+    selectedTownshipLayer?.setStyle(TOWNSHIP_NORMAL_BORDER_STYLE)
+    selectedTownshipLayer = null
+    selectedTownship.value = null
+  }
+
+  function selectTownship(instance: L.Map, polygon: L.Polygon, name: string) {
+    if (!focusMapOnTownship(instance, polygon)) return false
+
+    if (selectedTownshipLayer !== polygon) {
+      selectedTownshipLayer?.setStyle(TOWNSHIP_NORMAL_BORDER_STYLE)
+      selectedTownshipLayer = polygon
+    }
+    selectedTownship.value = name
+    polygon.setStyle(TOWNSHIP_SELECTED_STYLE)
+    polygon.bringToFront()
+    return true
+  }
 
   function activateBaseLayer(layer: L.TileLayer, mode: BaseMapMode) {
     if (!map.value) return false
@@ -84,6 +128,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     overlayServiceUrls: string[] = [],
     arcgisToken = '',
     demOverlay?: DemRasterOverlay,
+    interactionOptions: LeafletMapInteractionOptions = {},
   ) {
     await nextTick()
     if (!container.value || map.value) return
@@ -113,7 +158,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
       const townshipPane = instance.createPane('townshipOverlayPane')
       townshipPane.style.zIndex = '410'
-      townshipPane.style.pointerEvents = 'none'
+      townshipPane.style.pointerEvents = interactionOptions.townshipFocus ? 'auto' : 'none'
 
       const townshipLabelPane = instance.createPane('townshipLabelPane')
       townshipLabelPane.style.zIndex = '430'
@@ -167,8 +212,13 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               .then((features) => {
                 if (disposed) return
                 features.forEach((feature) => {
-                  const polygon = L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
                   const label = getTownshipLabel(feature)
+                  const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
+                  const polygon = L.polygon(feature.rings, {
+                    ...TOWNSHIP_STYLE,
+                    className: townshipIsInteractive ? 'township-map-region' : undefined,
+                    interactive: townshipIsInteractive,
+                  }).addTo(instance)
                   if (label) {
                     polygon.bindTooltip(label, {
                       permanent: true,
@@ -177,6 +227,20 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                       pane: 'townshipLabelPane',
                       interactive: false,
                       opacity: 1,
+                    })
+                  }
+                  if (townshipIsInteractive && label) {
+                    polygon.on('mouseover', () => {
+                      if (instance.getContainer().classList.contains('map-is-measuring')) return
+                      instance.getContainer().style.cursor = 'pointer'
+                      if (selectedTownshipLayer !== polygon) polygon.setStyle(TOWNSHIP_HOVER_STYLE)
+                    })
+                    polygon.on('mouseout', () => {
+                      instance.getContainer().style.cursor = ''
+                      if (selectedTownshipLayer !== polygon) polygon.setStyle(TOWNSHIP_NORMAL_BORDER_STYLE)
+                    })
+                    polygon.on('click', (event) => {
+                      if (selectTownship(instance, polygon, label)) L.DomEvent.stopPropagation(event)
                     })
                   }
                 })
@@ -224,6 +288,8 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     map.value?.remove()
     map.value = null
     focusBounds.value = null
+    selectedTownship.value = null
+    selectedTownshipLayer = null
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()
@@ -233,11 +299,13 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   return {
     map,
     focusBounds,
+    selectedTownship,
     activeBaseMap,
     arcgisAvailable,
     error,
     initialize,
     setBaseMap,
+    clearSelectedTownship,
     dispose,
   }
 }
