@@ -3,7 +3,7 @@ import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
-import { loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
+import { getTownshipLabel, loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
   pane: 'townshipOverlayPane',
@@ -115,6 +115,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       townshipPane.style.zIndex = '410'
       townshipPane.style.pointerEvents = 'none'
 
+      const townshipLabelPane = instance.createPane('townshipLabelPane')
+      townshipLabelPane.style.zIndex = '430'
+      townshipLabelPane.style.pointerEvents = 'none'
+
       const demOverlayPane = instance.createPane('demOverlayPane')
       demOverlayPane.style.zIndex = '220'
       demOverlayPane.style.pointerEvents = 'none'
@@ -163,7 +167,18 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               .then((features) => {
                 if (disposed) return
                 features.forEach((feature) => {
-                  L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
+                  const polygon = L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
+                  const label = getTownshipLabel(feature)
+                  if (label) {
+                    polygon.bindTooltip(label, {
+                      permanent: true,
+                      direction: 'center',
+                      className: 'township-map-label',
+                      pane: 'townshipLabelPane',
+                      interactive: false,
+                      opacity: 1,
+                    })
+                  }
                 })
               })
               .catch(() => {

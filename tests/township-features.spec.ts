@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  getTownshipLabel,
   loadTownshipFeatures,
   parseTownshipFeatures,
   resolveTownshipMapServiceUrl,
@@ -79,5 +80,12 @@ describe('行政区划要素解析', () => {
 
   it('丢弃点数与分段信息不一致的损坏几何', () => {
     expect(parseTownshipFeatures({ recordsets: [{ features: [feature('410225101', [5])] }] })).toEqual([])
+  })
+
+  it('按区划代码生成正确的乡镇街道标注并排除非行政图面单元', () => {
+    expect(getTownshipLabel({ code: '410225001', name: '鍏伴槼琛楅亾' })).toBe('兰阳街道')
+    expect(getTownshipLabel({ code: '410225108', name: '浠皝闀�' })).toBe('仪封镇')
+    expect(getTownshipLabel({ code: '410225201', name: '涓変箟瀵ㄤ埂' })).toBe('三义寨乡')
+    expect(getTownshipLabel({ code: '410225402', name: '造纸林场' })).toBeNull()
   })
 })

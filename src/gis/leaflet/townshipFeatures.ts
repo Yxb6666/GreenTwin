@@ -6,6 +6,30 @@ export interface TownshipFeature {
   rings: TownshipRing[]
 }
 
+const LANKAO_TOWNSHIP_NAMES: Readonly<Record<string, string>> = {
+  '410225001': '兰阳街道',
+  '410225002': '桐乡街道',
+  '410225003': '惠安街道',
+  '410225101': '堌阳镇',
+  '410225102': '南彰镇',
+  '410225103': '考城镇',
+  '410225104': '红庙镇',
+  '410225105': '谷营镇',
+  '410225106': '东坝头镇',
+  '410225107': '小宋镇',
+  '410225108': '仪封镇',
+  '410225109': '许河镇',
+  '410225201': '三义寨乡',
+  '410225206': '孟寨乡',
+  '410225208': '葡萄架乡',
+  '410225209': '闫楼乡',
+}
+
+export function getTownshipLabel(feature: Pick<TownshipFeature, 'code' | 'name'>): string | null {
+  const name = LANKAO_TOWNSHIP_NAMES[feature.code] ?? feature.name.trim()
+  return /(?:乡|镇|街道)$/.test(name) ? name : null
+}
+
 interface IServerPoint {
   x?: unknown
   y?: unknown
