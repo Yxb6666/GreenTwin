@@ -5,10 +5,17 @@ type MapFocusController = Pick<L.Map, 'flyTo' | 'flyToBounds'>
 type TownshipFocusController = Pick<L.Map, 'flyToBounds' | 'getContainer'>
 type TownshipLayer = Pick<L.Polygon, 'getBounds'>
 
+const MAP_TOOL_ACTIVE_CLASSES = ['map-is-measuring', 'map-is-drawing', 'map-is-selecting', 'leaflet-draw-drawing']
+
 export const TOWNSHIP_FOCUS_OPTIONS: L.FitBoundsOptions = {
   duration: 0.7,
-  padding: [40, 40],
+  padding: [60, 60],
   maxZoom: 13,
+}
+
+export function isTownshipInteractionBlocked(map: Pick<L.Map, 'getContainer'>) {
+  const container = map.getContainer()
+  return MAP_TOOL_ACTIVE_CLASSES.some((className) => container.classList.contains(className))
 }
 
 export function focusMapOnLayer(
@@ -25,12 +32,13 @@ export function focusMapOnLayer(
   map.flyTo(fallbackCenter, fallbackZoom, { duration: 0.8 })
 }
 
-export function focusMapOnTownship(map: TownshipFocusController, layer: TownshipLayer) {
-  if (map.getContainer().classList.contains('map-is-measuring')) return false
+export function focusMapOnTownship(map: TownshipFocusController, layer: TownshipLayer, beforeFocus?: () => void) {
+  if (isTownshipInteractionBlocked(map)) return false
 
   const bounds = layer.getBounds()
   if (!bounds.isValid()) return false
 
+  beforeFocus?.()
   map.flyToBounds(bounds, TOWNSHIP_FOCUS_OPTIONS)
   return true
 }

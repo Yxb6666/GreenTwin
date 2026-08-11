@@ -38,9 +38,9 @@ describe('地图视图复位', () => {
 })
 
 describe('乡镇行政区点击聚焦', () => {
-  function townshipFocusController(measuring = false) {
+  function townshipFocusController(activeToolClass?: string) {
     const container = document.createElement('div')
-    if (measuring) container.classList.add('map-is-measuring')
+    if (activeToolClass) container.classList.add(activeToolClass)
     return {
       flyToBounds: vi.fn(),
       getContainer: vi.fn(() => container),
@@ -58,27 +58,33 @@ describe('乡镇行政区点击聚焦', () => {
   it('使用行政区自身范围平滑聚焦且限制最大层级', () => {
     const map = townshipFocusController()
     const { layer, bounds } = townshipLayer()
+    const beforeFocus = vi.fn()
 
-    expect(focusMapOnTownship(map, layer)).toBe(true)
+    expect(focusMapOnTownship(map, layer, beforeFocus)).toBe(true)
     expect(layer.getBounds).toHaveBeenCalledOnce()
+    expect(beforeFocus).toHaveBeenCalledOnce()
     expect(map.flyToBounds).toHaveBeenCalledWith(bounds, TOWNSHIP_FOCUS_OPTIONS)
-    expect(TOWNSHIP_FOCUS_OPTIONS).toEqual({ duration: 0.7, padding: [40, 40], maxZoom: 13 })
+    expect(TOWNSHIP_FOCUS_OPTIONS).toEqual({ duration: 0.7, padding: [60, 60], maxZoom: 13 })
   })
 
-  it('测量模式中不触发行政区聚焦', () => {
-    const map = townshipFocusController(true)
+  it.each(['map-is-measuring', 'map-is-drawing', 'map-is-selecting'])('%s 工具状态中不触发行政区聚焦', (activeToolClass) => {
+    const map = townshipFocusController(activeToolClass)
     const { layer } = townshipLayer()
+    const beforeFocus = vi.fn()
 
-    expect(focusMapOnTownship(map, layer)).toBe(false)
+    expect(focusMapOnTownship(map, layer, beforeFocus)).toBe(false)
     expect(layer.getBounds).not.toHaveBeenCalled()
+    expect(beforeFocus).not.toHaveBeenCalled()
     expect(map.flyToBounds).not.toHaveBeenCalled()
   })
 
   it('行政区范围无效时安全退出', () => {
     const map = townshipFocusController()
     const { layer } = townshipLayer(false)
+    const beforeFocus = vi.fn()
 
-    expect(focusMapOnTownship(map, layer)).toBe(false)
+    expect(focusMapOnTownship(map, layer, beforeFocus)).toBe(false)
+    expect(beforeFocus).not.toHaveBeenCalled()
     expect(map.flyToBounds).not.toHaveBeenCalled()
   })
 })

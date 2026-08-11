@@ -415,15 +415,40 @@ button {
   pointer-events: none;
   text-shadow: 0 1px 2px #04110f, 0 0 4px #04110f;
   white-space: nowrap;
+  transition:
+    color 160ms ease,
+    font-size 160ms ease,
+    opacity 160ms ease;
 }
 
 .leaflet-tooltip.township-map-label::before {
   display: none;
 }
 
+.leaflet-tooltip.township-map-label--hover {
+  color: #eff8d5;
+  font-weight: 650;
+}
+
+.leaflet-tooltip.township-map-label--selected {
+  color: #f5f8e8;
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(3, 20, 17, 0.9);
+}
+
+.leaflet-tooltip.township-map-label--dimmed {
+  color: #aab9ad;
+  font-weight: 500;
+}
+
 .leaflet-interactive.township-map-region {
   cursor: pointer;
-  transition: stroke 140ms ease, stroke-width 140ms ease;
+  transition:
+    fill-opacity 160ms ease,
+    stroke 160ms ease,
+    stroke-width 160ms ease,
+    opacity 160ms ease;
 }
 
 .map-shell::after {
