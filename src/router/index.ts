@@ -38,17 +38,24 @@ const router = createRouter({
     },
     {
       path: '/governance/report',
+      name: 'governance-mobile-login',
+      component: () =>
+        import('@/features/governance-mobile/GovernanceMobileLoginView.vue'),
+      meta: { label: '移动端登录', standalone: true },
+    },
+    {
+      path: '/governance/report/form',
       name: 'governance-mobile-report',
       component: () =>
         import('@/features/governance-mobile/GovernanceReportView.vue'),
-      meta: { label: '问题上报', standalone: true },
+      meta: { label: '问题上报', standalone: true, requiresMobileAuth: true },
     },
     {
       path: '/governance/report/success/:id',
       name: 'governance-mobile-success',
       component: () =>
         import('@/features/governance-mobile/GovernanceReportSuccessView.vue'),
-      meta: { label: '上报成功', standalone: true },
+      meta: { label: '上报成功', standalone: true, requiresMobileAuth: true },
     },
     {
       path: '/:pathMatch(.*)*',
@@ -63,6 +70,13 @@ router.beforeEach((to) => {
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  if (to.meta.requiresMobileAuth && !auth.isAuthenticated) {
+    return {
+      name: 'governance-mobile-login',
+      query: { redirect: to.fullPath },
+    }
   }
 
   if (to.meta.publicOnly && auth.isAuthenticated) return { name: 'master' }

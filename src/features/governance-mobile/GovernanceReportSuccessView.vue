@@ -64,7 +64,7 @@ onMounted(() => loadIssue())
   <main class="gm-page gm-success-page">
     <div class="gm-phone-canvas">
       <header class="gm-hero gm-success-header">
-        <button class="gm-home" type="button" aria-label="返回首页" @click="router.push('/governance/report')">
+        <button class="gm-home" type="button" aria-label="返回登录页" @click="router.push('/governance/report')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8v9h-6v-6H9v6H3z" /></svg>
         </button>
         <p class="gm-eyebrow">GREENTWIN · 乡村治理</p>
@@ -80,7 +80,7 @@ onMounted(() => loadIssue())
         <div class="gm-state-icon">!</div>
         <h2>回执暂不可用</h2>
         <p>{{ error }}</p>
-        <button class="gm-primary-button" type="button" @click="router.push('/governance/report')">
+        <button class="gm-primary-button" type="button" @click="router.push('/governance/report/form')">
           返回问题上报
         </button>
       </section>
@@ -93,7 +93,6 @@ onMounted(() => loadIssue())
           <div class="gm-confetti" aria-hidden="true"><i /><i /><i /><i /><i /></div>
           <h2>{{ detailOpen ? '问题上报详情' : '感谢您的上报！' }}</h2>
           <p v-if="!detailOpen">我们已经收到您提交的问题<br />工作人员将尽快审核处理</p>
-          <p v-else>以下信息来自开发环境 Mock API</p>
         </section>
 
         <section class="gm-receipt-card">
@@ -134,7 +133,7 @@ onMounted(() => loadIssue())
           <button class="gm-primary-button" type="button" :disabled="refreshing" @click="loadIssue(true)">
             {{ refreshing ? '正在刷新…' : detailOpen ? '刷新我的上报' : '查看我的上报' }}
           </button>
-          <button class="gm-secondary-button" type="button" @click="router.push('/governance/report')">
+          <button class="gm-secondary-button" type="button" @click="router.push('/governance/report/form')">
             继续上报其他问题
           </button>
         </div>
