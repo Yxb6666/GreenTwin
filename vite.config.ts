@@ -1,8 +1,26 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
+import { createGovernanceIssuesMiddleware } from './server/governance-issues.mjs'
+
+function localHttpsOptions() {
+  const certificatePath = fileURLToPath(
+    new URL('./.cert/greentwin-dev.pem', import.meta.url),
+  )
+  const keyPath = fileURLToPath(
+    new URL('./.cert/greentwin-dev-key.pem', import.meta.url),
+  )
+
+  if (!existsSync(certificatePath) || !existsSync(keyPath)) return undefined
+
+  return {
+    cert: readFileSync(certificatePath),
+    key: readFileSync(keyPath),
+  }
+}
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
   const middleware = createReportMiddleware({
@@ -22,12 +40,39 @@ function deepseekReportApi(env: Record<string, string>): Plugin {
   }
 }
 
+function governanceIssuesMockApi(): Plugin {
+  return {
+    name: 'greentwin-governance-issues-mock-api',
+    apply: 'serve',
+    configureServer(server) {
+      const middleware = createGovernanceIssuesMiddleware({
+        dataPath: fileURLToPath(
+          new URL(
+            './public/data/governance/governance-issues.geojson',
+            import.meta.url,
+          ),
+        ),
+      })
+      server.middlewares.use((request, response, next) => {
+        void middleware(request, response, next)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      strictPort: true,
+      https: localHttpsOptions(),
+    },
     plugins: [
       vue(),
       deepseekReportApi(env),
+      governanceIssuesMockApi(),
       viteStaticCopy({
         targets: [
           {

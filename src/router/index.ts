@@ -37,6 +37,20 @@ const router = createRouter({
       meta: { label: '乡村治理', requiresAuth: true },
     },
     {
+      path: '/governance/report',
+      name: 'governance-mobile-report',
+      component: () =>
+        import('@/features/governance-mobile/GovernanceReportView.vue'),
+      meta: { label: '问题上报', standalone: true },
+    },
+    {
+      path: '/governance/report/success/:id',
+      name: 'governance-mobile-success',
+      component: () =>
+        import('@/features/governance-mobile/GovernanceReportSuccessView.vue'),
+      meta: { label: '上报成功', standalone: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       component: () => import('@/features/not-found/NotFoundView.vue'),
     },
