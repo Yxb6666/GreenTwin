@@ -227,7 +227,7 @@ onMounted(async () => {
                     <circle class="population-point__hit" :cx="point.x" :cy="point.y" r="8" />
                     <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3.5" />
                     <text v-if="populationLabelYears.has(point.year)" class="population-value-label" :x="point.x" :y="point.y + (point.year === 2020 ? 14 : -9)">{{ point.populationWan.toFixed(1) }}</text>
-                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 5">{{ point.year }}</text>
+                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 8">{{ point.year }}</text>
                   </g>
                   <g
                     v-if="activePopulationPoint && activePopulationChartPoint"
@@ -450,16 +450,23 @@ onMounted(async () => {
   display: grid;
   height: 100%;
   min-height: 0;
-  gap: 7px;
+  gap: 4px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
 .population-content .metric-card {
-  padding: 7px 8px;
+  padding: 4px 8px;
 }
 
 .population-content .metric-card strong {
-  margin: 3px 0 1px;
+  margin: 2px 0 1px;
+  line-height: 1.05;
+}
+
+.population-content .metric-card span,
+.population-content .metric-card small {
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .population-trend {
@@ -474,7 +481,7 @@ onMounted(async () => {
   position: relative;
   height: 118px;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .population-trend__header {
@@ -619,33 +626,34 @@ onMounted(async () => {
 
 @media (max-height: 800px) {
   .population-trend {
-    gap: 3px;
-    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 2px;
+    grid-template-rows: 61px auto;
   }
 
   .population-trend__plot,
   .population-trend__plot svg {
-    height: 44px;
+    height: 61px;
   }
 
   .population-year-label,
   .population-value-label,
   .population-point__hit,
   .population-point__dot {
-    transform: scaleY(2.68);
+    transform: scaleY(1.93);
     transform-box: fill-box;
     transform-origin: center;
   }
 
   .population-tooltip__surface {
-    transform: scaleY(2.68);
+    transform: scaleY(1.93);
     transform-box: fill-box;
     transform-origin: center;
   }
 
   .population-trend__summary {
-    padding-top: 3px;
+    padding-top: 2px;
     font-size: 9px;
+    line-height: 1.1;
   }
 
   .population-trend__summary small {
