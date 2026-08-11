@@ -403,10 +403,9 @@ button {
 }
 
 .leaflet-tooltip.township-map-label {
-  padding: 2px 5px;
+  padding: 0;
   border: 0;
-  border-radius: 3px;
-  background: rgba(4, 22, 19, 0.68);
+  background: transparent;
   box-shadow: none;
   color: #f1ffe0;
   font-size: 12px;
