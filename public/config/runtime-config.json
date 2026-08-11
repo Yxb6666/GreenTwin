@@ -28,9 +28,9 @@
     "webglSdkUrl": "supermap3d/Cesium.js",
     "webglWidgetsCssUrl": "supermap3d/Widgets/widgets.css",
     "realspace": {
-      "whiteModel": "https://www.supermapol.com/realspace/services/3D-CBD/rest/realspace/datas/Building@CBD/config",
-      "oblique": "https://www.supermapol.com/realspace/services/3D---1--Masai_Webp/rest/realspace/datas/Config/config",
-      "lidar": "https://www.supermapol.com/realspace/services/3D-cloud/rest/realspace/datas/POINTCLOUD23/config"
+      "whiteModel": "",
+      "oblique": "",
+      "lidar": ""
     }
   }
 }

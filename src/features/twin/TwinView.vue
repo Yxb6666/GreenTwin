@@ -8,7 +8,6 @@ import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
 
-type SceneMode = 'whiteModel'
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
 type MeasureKey = 'ditch' | 'outlet' | 'pump' | 'road'
@@ -21,16 +20,11 @@ interface SuperMapViewer {
   scene: {
     globe: { depthTestAgainstTerrain: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
-    addS3MTilesLayerByScp: (
-      url: string,
-      options: { name: string },
-    ) => Promise<SceneLayer>
   }
   imageryLayers: {
     removeAll: (destroy?: boolean) => void
     addImageryProvider: (provider: unknown) => unknown
   }
-  flyTo: (target: unknown) => Promise<boolean>
   camera: {
     setView: (options: Record<string, unknown>) => void
     flyTo: (options: Record<string, unknown>) => void
@@ -68,7 +62,6 @@ interface CesiumRuntime {
 const config = useRuntimeConfig()
 const cesiumContainer = ref<HTMLElement | null>(null)
 const engineStatus = ref('三维引擎初始化中')
-const sceneMode = ref<SceneMode>('whiteModel')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
 const activeMeasure = ref<MeasureKey>('ditch')
@@ -89,12 +82,14 @@ const parameters = ref({
 })
 
 let viewer: SuperMapViewer | null = null
-let openedLayers: SceneLayer[][] = [[]]
 let generationTimer: number | null = null
 
-const modeItems: Array<{ key: SceneMode; label: string }> = [
-  { key: 'whiteModel', label: '三维白模' },
-]
+// 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
+const simulationFocus = {
+  longitude: 114.964285,
+  latitude: 34.9511,
+  height: 12000,
+}
 
 const scenarioTemplates: Array<{
   key: ScenarioKey
@@ -210,9 +205,6 @@ const planData: Record<
   },
 }
 
-const activeModeLabel = computed(
-  () => modeItems.find((item) => item.key === sceneMode.value)?.label ?? '',
-)
 const currentScenario = computed(
   () =>
     scenarioTemplates.find((item) => item.key === activeScenario.value) ??
@@ -296,7 +288,7 @@ function generatePlan() {
     if (buildProgress.value >= 100) {
       if (generationTimer !== null) window.clearInterval(generationTimer)
       generationTimer = null
-      engineStatus.value = `${activeModeLabel.value}运行中`
+      engineStatus.value = '方案场景已生成 · 等待绑定徐场村真实坐标'
       operationMessage.value = '方案场景构建完成，三生影响指标已同步更新'
     }
   }, 180)
@@ -308,40 +300,6 @@ function saveDraft() {
 
 function handoffPlan() {
   operationMessage.value = `${currentPlan.value.label}已形成治理任务草案，可进入“三生治理”继续派单`
-}
-
-async function openScene(mode: SceneMode) {
-  sceneMode.value = mode
-  const url = config.supermap.realspace[mode]
-  if (!viewer) {
-    engineStatus.value = '三维 Viewer 尚未创建'
-    return
-  }
-  if (!url) {
-    engineStatus.value = `${activeModeLabel.value}服务待配置`
-    return
-  }
-
-  try {
-    engineStatus.value = `正在加载${activeModeLabel.value}`
-    const existingIndex = modeItems.findIndex((item) => item.key === mode)
-    openedLayers.forEach((sceneLayers, index) => {
-      sceneLayers.forEach((layer) => (layer.visible = index === existingIndex))
-    })
-    if (!openedLayers[existingIndex]?.length) {
-      const layer = await viewer.scene.addS3MTilesLayerByScp(url, {
-        name: mode,
-      })
-      openedLayers[existingIndex] = [layer]
-      await viewer.flyTo(layer)
-    }
-    engineStatus.value = `${activeModeLabel.value}运行中`
-  } catch (error) {
-    engineStatus.value =
-      error instanceof Error
-        ? error.message
-        : `${activeModeLabel.value}加载失败`
-  }
 }
 
 function toggleLayer(key: keyof typeof layerVisibility.value) {
@@ -385,18 +343,18 @@ async function initializeViewer() {
     )
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
-      destination: sdk.Cartesian3.fromDegrees(114.8172, 34.8248, 850),
+      destination: sdk.Cartesian3.fromDegrees(
+        simulationFocus.longitude,
+        simulationFocus.latitude,
+        simulationFocus.height,
+      ),
       orientation: {
         heading: 0,
-        pitch: sdk.Math.toRadians(-45),
+        pitch: sdk.Math.toRadians(-65),
         roll: 0,
       },
     })
-    if (config.supermap.realspace.whiteModel) {
-      await openScene('whiteModel')
-    } else {
-      engineStatus.value = '三维底图运行中，场景服务待配置'
-    }
+    engineStatus.value = '堌阳镇范围底图 · 徐场村精确点位待接入'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
@@ -407,7 +365,6 @@ onMounted(initializeViewer)
 
 onBeforeUnmount(() => {
   if (generationTimer !== null) window.clearInterval(generationTimer)
-  openedLayers = [[]]
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
   viewer = null
 })
@@ -583,35 +540,13 @@ onBeforeUnmount(() => {
         </div>
         <div class="scene-status"><i />{{ engineStatus }}</div>
 
-        <div class="simulation-pin simulation-pin--issue">
-          <i>!</i
-          ><span
-            ><strong>道路积水点</strong><small>积水深度约 18 cm</small></span
-          >
-        </div>
-        <div
-          v-if="activePlan !== 'current' || isComparing"
-          class="simulation-pin simulation-pin--measure"
-        >
-          <i>沟</i
-          ><span><strong>拟建排水沟</strong><small>长度 186 m</small></span>
-        </div>
-        <div
-          v-if="activePlan === 'planB' || isComparing"
-          class="simulation-pin simulation-pin--pump"
-        >
-          <i>泵</i
-          ><span><strong>临时泵站</strong><small>排量 320 m³/h</small></span>
+        <div class="location-notice">
+          <strong>当前显示堌阳镇范围</strong>
+          <span>徐场村坐标及本地三维场景尚未接入，暂不展示模拟设施落点</span>
         </div>
 
         <div v-if="isComparing" class="compare-divider">
           <span>方案 A</span><i /><span>方案 B</span>
-        </div>
-
-        <div class="scene-legend">
-          <span><i class="legend-issue" />问题范围</span>
-          <span><i class="legend-measure" />治理措施</span>
-          <span><i class="legend-benefit" />受益区域</span>
         </div>
 
         <div class="version-timeline">
@@ -1015,6 +950,7 @@ onBeforeUnmount(() => {
 .scene-legend,
 .version-timeline,
 .simulation-pin,
+.location-notice,
 .compare-divider {
   position: absolute;
   z-index: 100;
@@ -1059,6 +995,31 @@ onBeforeUnmount(() => {
 .builder-badge strong {
   color: var(--cyan);
   font-size: 9px;
+}
+
+.location-notice {
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: min(360px, calc(100% - 40px));
+  padding: 14px 18px;
+  color: var(--text-soft);
+  text-align: center;
+  border: 1px solid rgba(240, 184, 92, 0.42);
+  border-radius: 7px;
+  background: rgba(5, 16, 17, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
+  transform: translate(-50%, -50%);
+  gap: 5px;
+  backdrop-filter: blur(8px);
+}
+.location-notice strong {
+  color: var(--amber);
+  font-size: 12px;
+}
+.location-notice span {
+  font-size: 9px;
+  line-height: 1.6;
 }
 
 .simulation-pin {
