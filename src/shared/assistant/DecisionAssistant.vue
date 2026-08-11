@@ -36,12 +36,25 @@ const messages = ref<Message[]>([
 ])
 const {
   isDragging,
+  isLauncherDragging,
+  isResizing,
+  launcherRef,
+  launcherStyle,
   onHeaderPointerDown,
   onHeaderPointerEnd,
   onHeaderPointerMove,
+  onLauncherClick,
+  onLauncherPointerCancel,
+  onLauncherPointerDown,
+  onLauncherPointerEnd,
+  onLauncherPointerMove,
+  onResizePointerEnd,
+  onResizePointerMove,
   panelRef,
   panelStyle,
   resetPosition,
+  resizeDirections,
+  startResize,
 } = useDraggablePanel(isOpen)
 
 async function scrollToLatest() {
@@ -105,12 +118,22 @@ function onComposerKeydown(event: KeyboardEvent) {
 <template>
   <Teleport to="body">
     <button
+      ref="launcherRef"
       class="assistant-launcher"
-      :class="{ 'is-open': isOpen }"
+      :class="{
+        'is-open': isOpen,
+        'is-dragging': isLauncherDragging,
+      }"
+      :style="launcherStyle"
       type="button"
       :aria-expanded="isOpen"
       aria-controls="module-ai-panel"
-      @click="isOpen = !isOpen"
+      @click="onLauncherClick"
+      @lostpointercapture="onLauncherPointerEnd"
+      @pointercancel="onLauncherPointerCancel"
+      @pointerdown="onLauncherPointerDown"
+      @pointermove="onLauncherPointerMove"
+      @pointerup="onLauncherPointerEnd"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -126,7 +149,10 @@ function onComposerKeydown(event: KeyboardEvent) {
         ref="panelRef"
         id="module-ai-panel"
         class="assistant-panel"
-        :class="{ 'is-dragging': isDragging }"
+        :class="{
+          'is-dragging': isDragging,
+          'is-resizing': isResizing,
+        }"
         :style="panelStyle"
         :aria-label="`${context.module} AI 决策助手`"
       >
@@ -134,6 +160,7 @@ function onComposerKeydown(event: KeyboardEvent) {
           class="assistant-header"
           title="拖动标题栏可移动，双击恢复默认位置"
           @dblclick="resetPosition"
+          @lostpointercapture="onHeaderPointerEnd"
           @pointercancel="onHeaderPointerEnd"
           @pointerdown="onHeaderPointerDown"
           @pointermove="onHeaderPointerMove"
@@ -148,6 +175,7 @@ function onComposerKeydown(event: KeyboardEvent) {
           </div>
           <button
             type="button"
+            data-no-drag
             aria-label="关闭 AI 助手"
             @click="isOpen = false"
           >
@@ -256,6 +284,18 @@ function onComposerKeydown(event: KeyboardEvent) {
         <p class="assistant-notice">
           AI 结论仅供辅助研判，请结合专业规范与现场情况核实。
         </p>
+        <span
+          v-for="direction in resizeDirections"
+          :key="direction"
+          class="assistant-resize-handle"
+          :class="`is-${direction}`"
+          aria-hidden="true"
+          @lostpointercapture="onResizePointerEnd"
+          @pointercancel="onResizePointerEnd"
+          @pointerdown="startResize(direction, $event)"
+          @pointermove="onResizePointerMove"
+          @pointerup="onResizePointerEnd"
+        />
       </section>
     </Transition>
   </Teleport>
@@ -284,7 +324,9 @@ function onComposerKeydown(event: KeyboardEvent) {
     0 12px 34px rgba(0, 0, 0, 0.38),
     0 0 24px rgba(61, 214, 196, 0.15);
   font-size: 11px;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .assistant-launcher svg,
@@ -301,6 +343,14 @@ function onComposerKeydown(event: KeyboardEvent) {
 .assistant-launcher.is-open {
   opacity: 0;
   pointer-events: none;
+}
+
+.assistant-launcher.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.02);
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.46),
+    0 0 28px rgba(61, 214, 196, 0.2);
 }
 
 .assistant-panel {
@@ -327,10 +377,100 @@ function onComposerKeydown(event: KeyboardEvent) {
   backdrop-filter: blur(18px);
 }
 
-.assistant-panel.is-dragging {
+.assistant-panel.is-dragging,
+.assistant-panel.is-resizing {
+  border-color: rgba(61, 214, 196, 0.58);
   box-shadow:
     0 28px 76px rgba(0, 0, 0, 0.65),
     0 0 38px rgba(61, 214, 196, 0.12);
+}
+
+.assistant-resize-handle {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  user-select: none;
+}
+
+.assistant-resize-handle.is-n,
+.assistant-resize-handle.is-s {
+  right: 12px;
+  left: 12px;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.assistant-resize-handle.is-n {
+  top: 0;
+}
+
+.assistant-resize-handle.is-s {
+  bottom: 0;
+}
+
+.assistant-resize-handle.is-e,
+.assistant-resize-handle.is-w {
+  top: 12px;
+  bottom: 12px;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.assistant-resize-handle.is-e {
+  right: 0;
+}
+
+.assistant-resize-handle.is-w {
+  left: 0;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-sw,
+.assistant-resize-handle.is-nw {
+  width: 14px;
+  height: 14px;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-sw {
+  cursor: nesw-resize;
+}
+
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-nw {
+  cursor: nwse-resize;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-nw {
+  top: 0;
+}
+
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-sw {
+  bottom: 0;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-se {
+  right: 0;
+}
+
+.assistant-resize-handle.is-nw,
+.assistant-resize-handle.is-sw {
+  left: 0;
+}
+
+.assistant-resize-handle.is-se::after {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid rgba(61, 214, 196, 0.52);
+  border-bottom: 1px solid rgba(61, 214, 196, 0.52);
+  content: '';
 }
 
 .assistant-header {
