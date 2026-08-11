@@ -13,7 +13,9 @@ const modules = [
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const showPlatformChrome = computed(() => route.name !== 'login')
+const showPlatformChrome = computed(
+  () => route.name !== 'login' && !route.meta.standalone,
+)
 
 async function logout() {
   auth.logout()

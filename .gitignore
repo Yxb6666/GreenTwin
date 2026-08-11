@@ -3,6 +3,7 @@ dist/
 tmp/
 .env.local
 .env.*.local
+.cert/
 *.log
 .DS_Store
 .idea/
