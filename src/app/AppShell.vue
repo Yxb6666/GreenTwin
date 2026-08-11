@@ -54,7 +54,9 @@ async function logout() {
     </div>
     <RouterView v-slot="{ Component }">
       <Transition name="module" mode="out-in">
-        <component :is="Component" />
+        <div :key="route.fullPath" class="route-view">
+          <component :is="Component" />
+        </div>
       </Transition>
     </RouterView>
   </div>

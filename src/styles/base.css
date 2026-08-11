@@ -66,6 +66,13 @@ button {
   height: 100%;
 }
 
+.route-view {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+
 .module-nav {
   position: fixed;
   z-index: 3000;

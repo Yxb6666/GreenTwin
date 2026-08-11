@@ -97,12 +97,13 @@ function simulationApi(env: Record<string, string>): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const mobileDevelopment = mode === 'mobile'
   return {
     server: {
       host: '0.0.0.0',
-      port: 5173,
+      port: mobileDevelopment ? 5174 : 5173,
       strictPort: true,
-      https: localHttpsOptions(),
+      https: mobileDevelopment ? localHttpsOptions() : undefined,
     },
     plugins: [
       vue(),

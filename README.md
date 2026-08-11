@@ -11,6 +11,14 @@ npm run dev
 
 默认访问 `http://localhost:5173/master`。
 
+手机端定位需要安全上下文，请在已配置 `.cert/` 本地证书后另行启动：
+
+```bash
+npm run dev:mobile
+```
+
+移动端默认访问 `https://局域网IP:5174/governance/mobile/login`。PC 与移动端开发服务使用不同协议和端口，避免 PC 页面通过 HTTPS 访问现有 HTTP 地图服务时触发浏览器混合内容拦截。
+
 ## 验证与构建
 
 ```bash

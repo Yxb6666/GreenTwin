@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:mobile": "vite --mode mobile",
     "build": "npm run type-check && npm run build-only",
     "build-only": "vite build",
     "start": "node server/index.mjs",
