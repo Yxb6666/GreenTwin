@@ -8,7 +8,7 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import { dimensionMeta, scoreTown, towns, type DimensionKey } from './model'
+import { DEFAULT_DIMENSION_WEIGHTS, dimensionMeta, scoreTown, towns, type DimensionKey } from './model'
 import { buildSanshengReportRequest, requestSanshengReport, type ReportMeta, type SanshengReport } from './report'
 import { createReportDocxBlob, createReportDocxFileName } from './reportDocx'
 
@@ -22,11 +22,7 @@ const reportError = ref('')
 const reportOpen = ref(false)
 const isGeneratingReport = ref(false)
 const isExportingReport = ref(false)
-const weights = ref<Record<DimensionKey, number>>({
-  ecology: 34,
-  life: 33,
-  production: 33,
-})
+const weights = ref<Record<DimensionKey, number>>({ ...DEFAULT_DIMENSION_WEIGHTS })
 const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap } = useLeafletMap(mapContainer)
 
 const scoredTowns = computed(() => towns.map((town) => ({ ...town, scores: scoreTown(town, weights.value) })).sort((a, b) => b.scores.composite - a.scores.composite))
@@ -76,7 +72,7 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
 const assistantPrompts = ['分析当前乡镇的优势与短板', '当前权重配置对排名有什么影响？', '与全县平均水平相比表现如何？', '给出三生协同提升的优先建议']
 
 function resetWeights() {
-  weights.value = { ecology: 34, life: 33, production: 33 }
+  weights.value = { ...DEFAULT_DIMENSION_WEIGHTS }
 }
 
 async function generateReport() {

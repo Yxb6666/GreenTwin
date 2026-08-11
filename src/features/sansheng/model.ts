@@ -1,6 +1,12 @@
 export type DimensionKey = 'ecology' | 'life' | 'production'
 export type Direction = 'positive' | 'negative' | 'balanced'
 
+export const DEFAULT_DIMENSION_WEIGHTS: Record<DimensionKey, number> = {
+  ecology: 34,
+  life: 33,
+  production: 33,
+}
+
 export interface Indicator {
   key: string
   name: string

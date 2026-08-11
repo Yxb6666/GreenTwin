@@ -10,16 +10,26 @@ import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import { gdpTrend, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
+import { resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, clearSelectedTownship } = useLeafletMap(mapContainer)
+const { map, focusBounds, selectedTownship, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, clearSelectedTownship } = useLeafletMap(mapContainer)
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
+const sanshengEvaluation = computed(() => resolveMasterSanshengEvaluation(selectedTownship.value))
+const sanshengRadarValues = computed(() => {
+  const scores = sanshengEvaluation.value.scores
+  return scores ? [scores.ecology, scores.life, scores.production] : []
+})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生空间',
-  scopeLabel: activeLandUse.value ? `全县综合态势 · ${activeLandUse.value.name}` : '兰考县全域综合态势',
+  scopeLabel: selectedTownship.value
+    ? `${selectedTownship.value}三生评价 · 其余指标为兰考县县域`
+    : activeLandUse.value
+      ? `兰考县全域综合态势 · ${activeLandUse.value.name}`
+      : '兰考县全域综合态势',
   updatedAt: new Date().toISOString(),
   data: {
     population: {
@@ -36,6 +46,19 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     gdpTrend: gdpTrend.map((item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`),
     landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
     selectedLandUse: activeLandUse.value?.name ?? '未选中',
+    selectedTownship: selectedTownship.value ?? '未选中',
+    townshipSansheng: sanshengEvaluation.value.scores ?? '三生模型当前未配置该行政区指标',
+    dataScopes: {
+      population: '兰考县县域',
+      gdp: '兰考县县域',
+      landUse: '兰考县县域',
+      sansheng:
+        sanshengEvaluation.value.scope === 'township'
+          ? `${sanshengEvaluation.value.areaName}行政区`
+          : sanshengEvaluation.value.scope === 'unavailable'
+            ? `${sanshengEvaluation.value.areaName}行政区（暂无模型数据）`
+            : '兰考县县域',
+    },
     countyScores: { ecology: 88, life: 82, production: 90 },
     dem: demSummary.value === null ? (demLoading.value ? '加载中' : demError.value || '暂无数据') : JSON.stringify(demSummary.value),
   },
@@ -148,7 +171,7 @@ onMounted(async () => {
           </div>
         </PanelCard>
 
-        <PanelCard title="GDP 特征" meta="2020—2025 / 亿元">
+        <PanelCard title="GDP 特征" meta="2020—2025 / 县域统计 / 亿元">
           <div class="gdp-chart">
             <article v-for="item in gdpTrend" :key="item.year" :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`">
               <strong>{{ item.gdpYiYuan.toFixed(1) }}</strong>
@@ -158,8 +181,12 @@ onMounted(async () => {
           </div>
         </PanelCard>
 
-        <PanelCard title="三生综合评价" meta="县域协同指数">
-          <RadarChart :labels="['生态', '生活', '生产']" :values="[88, 82, 90]" />
+        <PanelCard title="三生综合评价" :meta="sanshengEvaluation.meta">
+          <RadarChart v-if="sanshengEvaluation.scores" :labels="['生态', '生活', '生产']" :values="sanshengRadarValues" />
+          <div v-else class="sansheng-empty" role="status">
+            <strong>暂无该区域三生评价数据</strong>
+            <span>三生模型当前未配置该行政区指标</span>
+          </div>
         </PanelCard>
       </aside>
 
@@ -209,7 +236,7 @@ onMounted(async () => {
       </section>
 
       <aside class="master-side">
-        <PanelCard title="土地利用数据" meta="国土空间结构">
+        <PanelCard title="土地利用数据" meta="县域统计 / 国土空间结构">
           <div class="land-use">
             <div class="land-chart">
               <div class="land-chart-note">
@@ -395,6 +422,26 @@ onMounted(async () => {
   color: var(--text-soft);
   font: 9px var(--font-data);
   text-align: center;
+}
+
+.sansheng-empty {
+  display: grid;
+  height: 100%;
+  min-height: 112px;
+  place-content: center;
+  gap: 7px;
+  padding: 12px;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.sansheng-empty strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.sansheng-empty span {
+  font-size: 9px;
 }
 
 .master-map {
