@@ -6,7 +6,12 @@ import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
+import GovernanceAssistant from './GovernanceAssistant.vue'
 import GovernanceIssueDetail from './GovernanceIssueDetail.vue'
+import type {
+  GovernanceAssistantAction,
+  GovernanceAssistantContext,
+} from './assistant'
 import {
   issueStatuses,
   loadGovernanceIssues,
@@ -14,6 +19,7 @@ import {
   queryIssuesByRadius,
   type GovernanceIssue,
   type IssueStatus,
+  type QueryBounds,
 } from './data'
 
 type SpatialQueryMode = 'rectangle' | 'circle'
@@ -28,6 +34,7 @@ const selectedId = ref('')
 const detailOpen = ref(false)
 const toast = ref('')
 const dataError = ref('')
+const aiHighlightedIds = ref<Set<string>>(new Set())
 const spatialIds = ref<Set<string> | null>(null)
 const spatialQueryLabel = ref('全县要素')
 const spatialQueryMode = ref<SpatialQueryMode | null>(null)
@@ -39,6 +46,8 @@ const filters = reactive({
   urgency: 'all',
   status: 'all',
 })
+const mapBounds = ref<QueryBounds | null>(null)
+const mapZoom = ref(config.map.zoom)
 const {
   map,
   focusBounds,
@@ -112,6 +121,38 @@ const townCounts = computed(() =>
 const maxTownCount = computed(() =>
   Math.max(1, ...townCounts.value.map((row) => row.count)),
 )
+const dataUpdatedAt = computed(() =>
+  issues.value.reduce(
+    (latest, issue) => (issue.time > latest ? issue.time : latest),
+    '',
+  ),
+)
+const viewportIssueIds = computed(() => {
+  const bounds = mapBounds.value
+  if (!bounds) return attributeFiltered.value.map((issue) => issue.id)
+  return queryIssuesByBounds(attributeFiltered.value, bounds).map(
+    (issue) => issue.id,
+  )
+})
+const assistantContext = computed<GovernanceAssistantContext>(() => ({
+  module: '乡村治理',
+  scopeLabel: spatialQueryLabel.value,
+  hasSpatialQuery: spatialIds.value !== null,
+  selectedIssueId: selected.value?.id ?? '',
+  dataUpdatedAt: dataUpdatedAt.value,
+  userRole: '平台登录用户（AI只读研判）',
+  map: {
+    bounds: mapBounds.value ?? {
+      west: config.map.center[1] - 0.1,
+      south: config.map.center[0] - 0.1,
+      east: config.map.center[1] + 0.1,
+      north: config.map.center[0] + 0.1,
+    },
+    zoom: mapZoom.value,
+    visibleLayers: ['影像底图', '乡镇边界', '治理问题'],
+  },
+  filters: { ...filters },
+}))
 
 const typeColors: Record<string, string> = {
   人居环境类: '#e77468',
@@ -180,12 +221,16 @@ function filterByStatus(status: IssueStatus) {
   filters.status = filters.status === status ? 'all' : status
 }
 
-function issueMarkerIcon(issue: GovernanceIssue, active: boolean) {
+function issueMarkerIcon(
+  issue: GovernanceIssue,
+  active: boolean,
+  highlighted = false,
+) {
   const color = typeColors[issue.type] ?? '#3dd6c4'
 
   return L.divIcon({
     className: 'governance-issue-marker-shell',
-    html: `<span class="governance-issue-pin${active ? ' is-active' : ''}" style="--issue-color: ${color}" aria-hidden="true"><span class="governance-issue-pin__badge"><b>!</b></span></span>`,
+    html: `<span class="governance-issue-pin${active ? ' is-active' : ''}${highlighted ? ' is-ai-highlighted' : ''}" style="--issue-color: ${color}" aria-hidden="true"><span class="governance-issue-pin__badge"><b>!</b></span></span>`,
     iconSize: [24, 29],
     iconAnchor: [12, 27],
     tooltipAnchor: [0, -24],
@@ -246,8 +291,9 @@ function refreshIssueMarkers() {
       issueMarkers.set(issue.id, marker)
     }
     const isActive = selected.value?.id === issue.id
-    marker.setIcon(issueMarkerIcon(issue, isActive))
-    marker.setZIndexOffset(isActive ? 500 : 0)
+    const isHighlighted = aiHighlightedIds.value.has(issue.id)
+    marker.setIcon(issueMarkerIcon(issue, isActive, isHighlighted))
+    marker.setZIndexOffset(isActive ? 500 : isHighlighted ? 350 : 0)
     if (visibleIds.has(issue.id)) {
       if (!issueLayer!.hasLayer(marker)) marker.addTo(issueLayer!)
     } else if (issueLayer!.hasLayer(marker)) {
@@ -438,6 +484,53 @@ function exportIssues() {
   notify('问题清单已导出')
 }
 
+function syncMapContext() {
+  if (!map.value) return
+  const bounds = map.value.getBounds()
+  mapBounds.value = {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+  }
+  mapZoom.value = map.value.getZoom()
+}
+
+function handleAssistantAction(action: GovernanceAssistantAction) {
+  if (action.type === 'HIGHLIGHT_ISSUES') {
+    const knownIds = action.issueIds.filter((id) =>
+      issues.value.some((issue) => issue.id === id),
+    )
+    aiHighlightedIds.value = new Set(knownIds)
+    refreshIssueMarkers()
+    const highlighted = issues.value.filter((issue) =>
+      aiHighlightedIds.value.has(issue.id),
+    )
+    if (map.value && highlighted.length) {
+      map.value.fitBounds(
+        L.latLngBounds(
+          highlighted.map((issue) => [issue.latitude, issue.longitude]),
+        ),
+        { padding: [46, 46], maxZoom: 13 },
+      )
+    }
+    notify(`AI 已在地图中高亮 ${knownIds.length} 个问题`)
+    return
+  }
+
+  if (action.type === 'LOCATE_ISSUE' || action.type === 'OPEN_ISSUE') {
+    const issue = issues.value.find((item) => item.id === action.issueId)
+    if (!issue) return notify('AI 引用的问题不在当前数据中')
+    selectIssue(issue, true)
+    if (action.type === 'OPEN_ISSUE') detailOpen.value = true
+    return
+  }
+
+  notify(
+    `${action.chart === 'type' ? '问题类型' : action.chart === 'status' ? '处置状态' : '乡镇分布'}图表已在页面中展示`,
+  )
+}
+
 onMounted(async () => {
   const issuesPromise = loadGovernanceIssues(
     `${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`,
@@ -450,6 +543,8 @@ onMounted(async () => {
     config.map.crs,
     [config.supermap.mapServices.township],
   )
+  syncMapContext()
+  map.value?.on('moveend zoomend', syncMapContext)
   try {
     issues.value = await issuesPromise
     selectedId.value = issues.value[0]?.id ?? ''
@@ -464,12 +559,13 @@ watch(filtered, () => {
     selectedId.value = filtered.value[0]?.id ?? ''
 })
 
-watch([map, issues, filtered, selectedId], refreshIssueMarkers, {
+watch([map, issues, filtered, selectedId, aiHighlightedIds], refreshIssueMarkers, {
   immediate: true,
 })
 
 onBeforeUnmount(() => {
   window.clearTimeout(toastTimer)
+  map.value?.off('moveend zoomend', syncMapContext)
   stopSpatialDrawing()
   issueMarkers.clear()
 })
@@ -770,6 +866,15 @@ onBeforeUnmount(() => {
     <Transition name="module"
       ><div v-if="toast" class="toast">{{ toast }}</div></Transition
     >
+    <GovernanceAssistant
+      :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/governance`"
+      :timeout-ms="config.reportTimeoutMs"
+      :context="assistantContext"
+      :issues="attributeFiltered"
+      :scope-issue-ids="filtered.map((issue) => issue.id)"
+      :viewport-issue-ids="viewportIssueIds"
+      @action="handleAssistantAction"
+    />
   </main>
 </template>
 
@@ -1279,6 +1384,14 @@ onBeforeUnmount(() => {
     drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
     drop-shadow(0 0 5px var(--issue-color));
   transform: scale(1.28);
+}
+
+:global(.governance-issue-pin.is-ai-highlighted) {
+  outline: 2px solid #f6e58d;
+  outline-offset: 3px;
+  filter:
+    drop-shadow(0 4px 5px rgba(0, 0, 0, 0.68))
+    drop-shadow(0 0 9px #f6e58d);
 }
 
 :global(.governance-issue-pin.is-active::before) {

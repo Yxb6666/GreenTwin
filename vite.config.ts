@@ -3,6 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
+import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
   const middleware = createReportMiddleware({
@@ -22,12 +23,31 @@ function deepseekReportApi(env: Record<string, string>): Plugin {
   }
 }
 
+function governanceAssistantApi(env: Record<string, string>): Plugin {
+  const middleware = createGovernanceAssistantMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    timeoutMs: Number(env.DEEPSEEK_TIMEOUT_MS) || 90000,
+  })
+
+  return {
+    name: 'greentwin-governance-assistant-api',
+    configureServer(server) {
+      server.middlewares.use('/api/assistant/governance', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [
       vue(),
       deepseekReportApi(env),
+      governanceAssistantApi(env),
       viteStaticCopy({
         targets: [
           {

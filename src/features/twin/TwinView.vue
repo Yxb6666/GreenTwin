@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
+import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
+import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
 
@@ -218,6 +220,43 @@ const currentScenario = computed(
 )
 const currentPlan = computed(() => planData[activePlan.value])
 const isGenerating = computed(() => buildProgress.value < 100)
+const assistantContext = computed<DecisionAssistantContext>(() => ({
+  module: '三生模拟',
+  scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
+  updatedAt: new Date().toISOString(),
+  data: {
+    scenario: currentScenario.value.label,
+    scenarioDomain: currentScenario.value.domain,
+    activePlan: currentPlan.value.label,
+    planMetrics: {
+      composite: currentPlan.value.composite,
+      cost: currentPlan.value.cost,
+      duration: currentPlan.value.duration,
+      residents: currentPlan.value.residents,
+      risk: currentPlan.value.risk,
+    },
+    dimensionScores: {
+      ecology: currentPlan.value.scores[0] ?? 0,
+      life: currentPlan.value.scores[1] ?? 0,
+      production: currentPlan.value.scores[2] ?? 0,
+    },
+    recommendation: currentPlan.value.recommendation,
+    parameters: parameters.value,
+    visibleLayers: layers
+      .filter((item) => layerVisibility.value[item.key])
+      .map((item) => item.label),
+    selectedMeasure:
+      measures.find((item) => item.key === activeMeasure.value)?.label ?? '',
+    buildProgress: buildProgress.value,
+    compareMode: isComparing.value,
+  },
+}))
+const assistantPrompts = [
+  '评估当前方案的收益、成本与风险',
+  '方案 A 与方案 B 应该如何取舍？',
+  '当前参数还有哪些优化空间？',
+  '给出下一步模拟与核验建议',
+]
 
 function cesium(): CesiumRuntime {
   return (window as typeof window & { Cesium: CesiumRuntime }).Cesium
@@ -665,6 +704,12 @@ onBeforeUnmount(() => {
       </aside>
     </div>
   </main>
+  <DecisionAssistant
+    :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
+    :timeout-ms="config.reportTimeoutMs"
+    :context="assistantContext"
+    :prompts="assistantPrompts"
+  />
 </template>
 
 <style scoped>
