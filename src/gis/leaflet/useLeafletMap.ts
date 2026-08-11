@@ -2,7 +2,13 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
-import { buildCountyBoundaryRings, buildCountyInverseMaskRings } from './countyFocusGeometry'
+import {
+  buildCountyBoundaryRings,
+  buildCountyInverseMaskRings,
+  filterCountyBoundaryArtifacts,
+  filterTownshipBoundaryArtifacts,
+  getCountyOuterBoundaryRings,
+} from './countyFocusGeometry'
 import { focusMapOnTownship, isTownshipInteractionBlocked, TOWNSHIP_FOCUS_START_EVENT } from './mapFocus'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
 import {
@@ -12,7 +18,12 @@ import {
   TOWNSHIP_NORMAL_STYLE,
   type TownshipVisualState,
 } from './townshipFocusStyle'
-import { getTownshipLabel, loadTownshipFeatures, resolveTownshipMapServiceUrl } from './townshipFeatures'
+import {
+  getTownshipLabel,
+  loadCountyFeatures,
+  loadTownshipFeatures,
+  resolveTownshipMapServiceUrl,
+} from './townshipFeatures'
 
 interface TownshipLayerEntry {
   name: string
@@ -61,6 +72,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   const townshipLayers: TownshipLayerEntry[] = []
   let countyFocusContextAdded = false
+  let countyFocusContextLoading = false
   let disposed = false
 
   function getTownshipVisualState(entry: TownshipLayerEntry) {
@@ -104,9 +116,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   }
 
   function addCountyFocusContext(instance: L.Map, features: Awaited<ReturnType<typeof loadTownshipFeatures>>) {
-    const boundaryRings = buildCountyBoundaryRings(features)
+    const boundaryRings = filterCountyBoundaryArtifacts(buildCountyBoundaryRings(features))
+    const outlineRings = getCountyOuterBoundaryRings(boundaryRings)
     const maskRings = buildCountyInverseMaskRings(boundaryRings)
-    if (boundaryRings.length === 0 || maskRings.length === 0) return false
+    if (outlineRings.length === 0 || maskRings.length === 0) return false
 
     L.polygon(maskRings, {
       pane: 'countyMaskPane',
@@ -117,11 +130,11 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       fillRule: 'evenodd',
     }).addTo(instance)
 
-    L.polyline(boundaryRings, {
+    L.polyline(outlineRings, {
       pane: 'countyOutlinePane',
       interactive: false,
-      color: '#8fe3c2',
-      weight: 3,
+      color: '#dceb72',
+      weight: 2.8,
       opacity: 1,
       lineCap: 'round',
       lineJoin: 'round',
@@ -278,14 +291,35 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                 const displayFeatures = interactionOptions.townshipFocus
                   ? features.filter((feature) => getTownshipLabel(feature))
                   : features
-                if (interactionOptions.townshipFocus && !countyFocusContextAdded) {
-                  countyFocusContextAdded = addCountyFocusContext(instance, features)
+                if (
+                  interactionOptions.townshipFocus &&
+                  !countyFocusContextAdded &&
+                  !countyFocusContextLoading
+                ) {
+                  countyFocusContextLoading = true
+                  void loadCountyFeatures(overlayServiceUrl)
+                    .then((countyFeatures) => {
+                      if (!disposed && !countyFocusContextAdded) {
+                        countyFocusContextAdded = addCountyFocusContext(instance, countyFeatures)
+                      }
+                    })
+                    .catch(() => {
+                      if (!disposed && !countyFocusContextAdded) {
+                        countyFocusContextAdded = addCountyFocusContext(instance, features)
+                      }
+                    })
+                    .finally(() => {
+                      countyFocusContextLoading = false
+                    })
                 }
                 displayFeatures.forEach((feature) => {
                   const label = getTownshipLabel(feature)
                   const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
                   const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
-                  const polygon = L.polygon(feature.rings, {
+                  const displayRings = townshipIsInteractive
+                    ? filterTownshipBoundaryArtifacts(feature.rings)
+                    : feature.rings
+                  const polygon = L.polygon(displayRings, {
                     ...townshipBaseStyle,
                     className: townshipIsInteractive ? 'township-map-region' : undefined,
                     interactive: townshipIsInteractive,
@@ -374,6 +408,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     hoveredTownship.value = null
     townshipLayers.length = 0
     countyFocusContextAdded = false
+    countyFocusContextLoading = false
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()

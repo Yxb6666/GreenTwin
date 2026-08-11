@@ -7,6 +7,8 @@ interface BoundaryEdge {
 }
 
 const COORDINATE_PRECISION = 8
+const MIN_BOUNDARY_AREA_RATIO = 1e-6
+const MIN_TOWNSHIP_PART_AREA_RATIO = 2e-3
 
 function pointKey(point: [number, number]) {
   return `${point[0].toFixed(COORDINATE_PRECISION)},${point[1].toFixed(COORDINATE_PRECISION)}`
@@ -31,6 +33,42 @@ function addAdjacentEdge(adjacency: Map<string, number[]>, point: string, edgeIn
   const adjacentEdges = adjacency.get(point) ?? []
   adjacentEdges.push(edgeIndex)
   adjacency.set(point, adjacentEdges)
+}
+
+function getRingArea(ring: TownshipRing) {
+  const points = normalizeRing(ring)
+  if (points.length < 3) return 0
+
+  const [originLatitude, originLongitude] = points[0]!
+  return Math.abs(
+    points.reduce((area, [latitude, longitude], index) => {
+      const [nextLatitude, nextLongitude] = points[(index + 1) % points.length]!
+      const x = longitude - originLongitude
+      const y = latitude - originLatitude
+      const nextX = nextLongitude - originLongitude
+      const nextY = nextLatitude - originLatitude
+      return area + x * nextY - nextX * y
+    }, 0) / 2,
+  )
+}
+
+function isPointInsideRing([latitude, longitude]: [number, number], ring: TownshipRing) {
+  const points = normalizeRing(ring)
+  let inside = false
+
+  for (let index = 0, previousIndex = points.length - 1; index < points.length; previousIndex = index++) {
+    const [currentLatitude, currentLongitude] = points[index]!
+    const [previousLatitude, previousLongitude] = points[previousIndex]!
+    const crossesRay =
+      currentLatitude > latitude !== previousLatitude > latitude &&
+      longitude <
+        ((previousLongitude - currentLongitude) * (latitude - currentLatitude)) /
+          (previousLatitude - currentLatitude) +
+          currentLongitude
+    if (crossesRay) inside = !inside
+  }
+
+  return inside
 }
 
 /**
@@ -92,6 +130,37 @@ export function buildCountyBoundaryRings(features: Pick<TownshipFeature, 'rings'
   }
 
   return boundaryRings
+}
+
+function filterRingsByArea(rings: TownshipRing[], minimumAreaRatio: number) {
+  const ringAreas = rings.map(getRingArea)
+  const largestArea = Math.max(...ringAreas, 0)
+  if (largestArea === 0) return []
+
+  return rings.filter((_, index) => ringAreas[index]! >= largestArea * minimumAreaRatio)
+}
+
+export function filterCountyBoundaryArtifacts(boundaryRings: TownshipRing[]) {
+  return filterRingsByArea(boundaryRings, MIN_BOUNDARY_AREA_RATIO)
+}
+
+export function filterTownshipBoundaryArtifacts(townshipRings: TownshipRing[]) {
+  return filterRingsByArea(townshipRings, MIN_TOWNSHIP_PART_AREA_RATIO)
+}
+
+export function getCountyOuterBoundaryRings(boundaryRings: TownshipRing[]) {
+  const ringAreas = boundaryRings.map(getRingArea)
+  return boundaryRings.filter((ring, index) => {
+    const samplePoint = normalizeRing(ring)[0]
+    if (!samplePoint) return false
+
+    return !boundaryRings.some(
+      (candidate, candidateIndex) =>
+        candidateIndex !== index &&
+        ringAreas[candidateIndex]! > ringAreas[index]! &&
+        isPointInsideRing(samplePoint, candidate),
+    )
+  })
 }
 
 export function buildCountyInverseMaskRings(boundaryRings: TownshipRing[], paddingRatio = 4): TownshipRing[] {

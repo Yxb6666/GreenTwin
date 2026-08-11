@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildCountyBoundaryRings, buildCountyInverseMaskRings } from '@/gis/leaflet/countyFocusGeometry'
+import {
+  buildCountyBoundaryRings,
+  buildCountyInverseMaskRings,
+  filterCountyBoundaryArtifacts,
+  filterTownshipBoundaryArtifacts,
+  getCountyOuterBoundaryRings,
+} from '@/gis/leaflet/countyFocusGeometry'
 
 describe('county focus geometry', () => {
   it('消除相邻乡镇共享边并拼成闭合县界', () => {
@@ -21,6 +27,37 @@ describe('county focus geometry', () => {
 
     expect(boundary).toHaveLength(2)
     expect(boundary.every((ring) => ring.at(0)?.every((value, index) => value === ring.at(-1)?.[index]))).toBe(true)
+  })
+
+  it('剔除相对县域面积可忽略的量化残环', () => {
+    const countyRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
+    const artifactRing = [[2, 2], [2.0001, 2], [2.0001, 2.0001], [2, 2.0001], [2, 2]] as Array<
+      [number, number]
+    >
+
+    expect(filterCountyBoundaryArtifacts([countyRing, artifactRing])).toEqual([countyRing])
+  })
+
+  it('县界仅保留最外层轮廓并支持不相连的真实部件', () => {
+    const countyRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
+    const innerRing = [[2, 2], [4, 2], [4, 4], [2, 4], [2, 2]] as Array<[number, number]>
+    const detachedRing = [[20, 20], [22, 20], [22, 22], [20, 22], [20, 20]] as Array<[number, number]>
+
+    expect(getCountyOuterBoundaryRings([countyRing, innerRing, detachedRing])).toEqual([
+      countyRing,
+      detachedRing,
+    ])
+  })
+
+  it('移除乡镇的微小离散残部并保留可辨识多部件', () => {
+    const mainRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
+    const visiblePart = [[20, 20], [21, 20], [21, 21], [20, 21], [20, 20]] as Array<[number, number]>
+    const artifactPart = [[2, 2], [2.4, 2], [2.4, 2.4], [2, 2.4], [2, 2]] as Array<[number, number]>
+
+    expect(filterTownshipBoundaryArtifacts([mainRing, visiblePart, artifactPart])).toEqual([
+      mainRing,
+      visiblePart,
+    ])
   })
 
   it('按县域范围扩展反向遮罩外环并保留县界孔洞', () => {

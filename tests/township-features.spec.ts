@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getTownshipLabel,
+  loadCountyFeatures,
   loadTownshipFeatures,
   parseTownshipFeatures,
+  resolveCountyMapServiceUrl,
   resolveTownshipMapServiceUrl,
 } from '@/gis/leaflet/townshipFeatures'
 
@@ -46,6 +48,30 @@ describe('行政区划要素解析', () => {
     const options = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(JSON.parse(String(options.body)).queryParameters.queryParams).toEqual([
       { name: 'lankao_map_units', attributeFilter: '1=1' },
+    ])
+  })
+
+  it('从同一 iServer 解析并使用正式县界服务', async () => {
+    expect(
+      resolveCountyMapServiceUrl(
+        'http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest/maps/Lankao_map_units',
+      ),
+    ).toBe('http://118.89.55.214:8090/iserver/services/Lankao_County/rest/maps/Lankao_County')
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ recordsets: [{ features: [feature('410225')] }] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await loadCountyFeatures('http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://118.89.55.214:8090/iserver/services/Lankao_County/rest/maps/Lankao_County/queryResults.json?returnContent=true',
+    )
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(options.body)).queryParameters.queryParams).toEqual([
+      { name: 'Lankao_County', attributeFilter: '1=1' },
     ])
   })
 

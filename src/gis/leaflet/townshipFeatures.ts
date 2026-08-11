@@ -1,5 +1,7 @@
 export type TownshipRing = Array<[number, number]>
 
+const COUNTY_SERVICE_NAME = 'Lankao_County'
+
 export interface TownshipFeature {
   code: string
   name: string
@@ -90,9 +92,15 @@ export function resolveTownshipMapServiceUrl(serviceUrl: string): string {
   return `${normalizedUrl}/maps/${mapName}`
 }
 
-export async function loadTownshipFeatures(serviceUrl: string): Promise<TownshipFeature[]> {
-  const mapServiceUrl = resolveTownshipMapServiceUrl(serviceUrl)
-  const datasetName = decodeURIComponent(mapServiceUrl.slice(mapServiceUrl.lastIndexOf('/') + 1)).toLowerCase()
+export function resolveCountyMapServiceUrl(serviceUrl: string): string {
+  const normalizedUrl = serviceUrl.replace(/\/+$/, '')
+  const serviceMatch = normalizedUrl.match(/^(.*\/services\/)[^/]+\/rest(?:\/maps\/[^/]+)?$/i)
+  if (!serviceMatch) return ''
+
+  return `${serviceMatch[1]}${COUNTY_SERVICE_NAME}/rest/maps/${COUNTY_SERVICE_NAME}`
+}
+
+async function loadRegionFeatures(mapServiceUrl: string, datasetName: string, featureLabel: string) {
   const response = await fetch(`${mapServiceUrl}/queryResults.json?returnContent=true`, {
     method: 'POST',
     cache: 'no-store',
@@ -108,9 +116,21 @@ export async function loadTownshipFeatures(serviceUrl: string): Promise<Township
     }),
   })
 
-  if (!response.ok) throw new Error(`iServer 乡镇要素查询失败（HTTP ${response.status}）`)
+  if (!response.ok) throw new Error(`iServer ${featureLabel}查询失败（HTTP ${response.status}）`)
 
   const features = parseTownshipFeatures(await response.json())
-  if (features.length === 0) throw new Error('iServer 未返回有效乡镇要素')
+  if (features.length === 0) throw new Error(`iServer 未返回有效${featureLabel}`)
   return features
+}
+
+export async function loadTownshipFeatures(serviceUrl: string): Promise<TownshipFeature[]> {
+  const mapServiceUrl = resolveTownshipMapServiceUrl(serviceUrl)
+  const datasetName = decodeURIComponent(mapServiceUrl.slice(mapServiceUrl.lastIndexOf('/') + 1)).toLowerCase()
+  return loadRegionFeatures(mapServiceUrl, datasetName, '乡镇要素')
+}
+
+export async function loadCountyFeatures(townshipServiceUrl: string): Promise<TownshipFeature[]> {
+  const mapServiceUrl = resolveCountyMapServiceUrl(townshipServiceUrl)
+  if (!mapServiceUrl) throw new Error('无法从乡镇服务地址解析兰考县县界服务')
+  return loadRegionFeatures(mapServiceUrl, COUNTY_SERVICE_NAME, '县界要素')
 }

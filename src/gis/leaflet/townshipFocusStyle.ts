@@ -6,9 +6,9 @@ export const TOWNSHIP_NORMAL_STYLE: L.PathOptions = {
   pane: 'townshipOverlayPane',
   fillColor: '#2ba57d',
   fillOpacity: 0.05,
-  color: '#c4d978',
-  weight: 1.3,
-  opacity: 0.78,
+  color: '#b9cf65',
+  weight: 1.2,
+  opacity: 0.76,
 }
 
 const TOWNSHIP_HOVER_STYLE: L.PathOptions = {
