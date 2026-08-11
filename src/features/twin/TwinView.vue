@@ -7,6 +7,12 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
+import {
+  createSimulationJob,
+  waitForSimulationJob,
+  type SimulationJob,
+  type SimulationPlacement,
+} from './simulation'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -16,10 +22,18 @@ interface SceneLayer {
   visible: boolean
 }
 
+interface ModelPrimitive {
+  show: boolean
+}
+
 interface SuperMapViewer {
   scene: {
     globe: { depthTestAgainstTerrain: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
+    primitives: {
+      add: (primitive: ModelPrimitive) => ModelPrimitive
+      remove: (primitive: ModelPrimitive) => boolean
+    }
   }
   imageryLayers: {
     removeAll: (destroy?: boolean) => void
@@ -56,6 +70,16 @@ interface CesiumRuntime {
       height: number,
     ) => unknown
   }
+  Model: {
+    fromGltf: (options: {
+      url: string
+      modelMatrix: unknown
+      scale?: number
+    }) => ModelPrimitive
+  }
+  Transforms: {
+    eastNorthUpToFixedFrame: (origin: unknown) => unknown
+  }
   Math: { toRadians: (degrees: number) => number }
 }
 
@@ -65,9 +89,11 @@ const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
 const activeMeasure = ref<MeasureKey>('ditch')
-const buildProgress = ref(100)
+const buildProgress = ref(0)
+const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
+const generatedJob = ref<SimulationJob | null>(null)
 const isComparing = ref(false)
-const operationMessage = ref('方案 A 已完成近实时构建，可以继续调整治理参数')
+const operationMessage = ref('调整治理参数后点击“重新生成”，启动本机 Blender 建模任务')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -82,7 +108,7 @@ const parameters = ref({
 })
 
 let viewer: SuperMapViewer | null = null
-let generationTimer: number | null = null
+let generatedModel: ModelPrimitive | null = null
 
 // 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
 const simulationFocus = {
@@ -211,7 +237,13 @@ const currentScenario = computed(
     scenarioTemplates[0]!,
 )
 const currentPlan = computed(() => planData[activePlan.value])
-const isGenerating = computed(() => buildProgress.value < 100)
+const isGenerating = computed(() => buildState.value === 'running')
+const builderStatus = computed(() => {
+  if (buildState.value === 'running') return '正在真实构建'
+  if (buildState.value === 'ready') return '模型已加载'
+  if (buildState.value === 'error') return '构建失败'
+  return '等待首次构建'
+})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
   scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
@@ -278,20 +310,70 @@ function toggleCompare() {
     : `已退出对比模式，当前查看：${currentPlan.value.label}`
 }
 
-function generatePlan() {
-  if (generationTimer !== null) window.clearInterval(generationTimer)
-  buildProgress.value = 8
-  engineStatus.value = 'Blender 场景构建任务运行中'
-  operationMessage.value = '正在提取GIS数据并重新生成局部三维场景'
-  generationTimer = window.setInterval(() => {
-    buildProgress.value = Math.min(100, buildProgress.value + 12)
-    if (buildProgress.value >= 100) {
-      if (generationTimer !== null) window.clearInterval(generationTimer)
-      generationTimer = null
-      engineStatus.value = '方案场景已生成 · 等待绑定徐场村真实坐标'
-      operationMessage.value = '方案场景构建完成，三生影响指标已同步更新'
-    }
-  }, 180)
+function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement) {
+  if (!viewer) throw new Error('三维地图尚未初始化')
+  const sdk = cesium()
+  if (generatedModel) viewer.scene.primitives.remove(generatedModel)
+  const origin = sdk.Cartesian3.fromDegrees(
+    placement.longitude,
+    placement.latitude,
+    placement.height,
+  )
+  generatedModel = viewer.scene.primitives.add(
+    sdk.Model.fromGltf({
+      url: modelUrl,
+      modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
+      scale: 1,
+    }),
+  )
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      placement.longitude,
+      placement.latitude,
+      420,
+    ),
+    orientation: {
+      heading: sdk.Math.toRadians(18),
+      pitch: sdk.Math.toRadians(-42),
+      roll: 0,
+    },
+  })
+}
+
+async function generatePlan() {
+  buildState.value = 'running'
+  buildProgress.value = 5
+  generatedJob.value = null
+  engineStatus.value = '正在向本机 Blender 提交参数化建模任务'
+  operationMessage.value = '后端将生成道路、排水沟、积水面与示意建筑 GLB'
+  try {
+    const initialJob = await createSimulationJob(config.apiBaseUrl, {
+      scenario: currentScenario.value.label,
+      plan: currentPlan.value.label,
+      ...parameters.value,
+    })
+    const completedJob = await waitForSimulationJob(
+      config.apiBaseUrl,
+      initialJob,
+      {
+        timeoutMs: config.reportTimeoutMs,
+        onProgress: (job) => {
+          buildProgress.value = job.progress
+          engineStatus.value = job.message
+        },
+      },
+    )
+    loadGeneratedModel(completedJob.modelUrl!, completedJob.placement)
+    generatedJob.value = completedJob
+    buildState.value = 'ready'
+    buildProgress.value = 100
+    engineStatus.value = `${completedJob.placement.label} · Blender GLB 已加载`
+    operationMessage.value = '真实 Blender 建模任务已完成；当前为镇域测试定位，不代表徐场村精确落点'
+  } catch (error) {
+    buildState.value = 'error'
+    engineStatus.value = error instanceof Error ? error.message : 'Blender 场景构建失败'
+    operationMessage.value = '请检查 Blender 路径、后端服务和模型输出日志'
+  }
 }
 
 function saveDraft() {
@@ -364,7 +446,8 @@ async function initializeViewer() {
 onMounted(initializeViewer)
 
 onBeforeUnmount(() => {
-  if (generationTimer !== null) window.clearInterval(generationTimer)
+  if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
+  generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
   viewer = null
 })
@@ -536,13 +619,13 @@ onBeforeUnmount(() => {
 
         <div class="builder-badge">
           <span>Blender 4.5 LTS</span>
-          <strong>{{ isGenerating ? '近实时构建中' : '场景已就绪' }}</strong>
+          <strong>{{ builderStatus }}</strong>
         </div>
         <div class="scene-status"><i />{{ engineStatus }}</div>
 
-        <div class="location-notice">
+        <div v-if="!generatedJob" class="location-notice">
           <strong>当前显示堌阳镇范围</strong>
-          <span>徐场村坐标及本地三维场景尚未接入，暂不展示模拟设施落点</span>
+          <span>点击“重新生成”，由本机 Blender 构建参数化测试场景并加载到地图</span>
         </div>
 
         <div v-if="isComparing" class="compare-divider">

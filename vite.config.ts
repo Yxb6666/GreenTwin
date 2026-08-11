@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
+import { createSimulationMiddleware } from './server/simulation.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
   const middleware = createReportMiddleware({
@@ -41,6 +42,21 @@ function governanceAssistantApi(env: Record<string, string>): Plugin {
   }
 }
 
+function simulationApi(env: Record<string, string>): Plugin {
+  const middleware = createSimulationMiddleware({
+    blenderExecutable: env.BLENDER_EXECUTABLE,
+  })
+
+  return {
+    name: 'greentwin-blender-simulation-api',
+    configureServer(server) {
+      server.middlewares.use('/api/simulation', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
@@ -48,6 +64,7 @@ export default defineConfig(({ mode }) => {
       vue(),
       deepseekReportApi(env),
       governanceAssistantApi(env),
+      simulationApi(env),
       viteStaticCopy({
         targets: [
           {

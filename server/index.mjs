@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { createReportMiddleware } from './deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './governance-assistant.mjs'
 import { createDecisionAssistantMiddleware } from './decision-assistant.mjs'
+import { createSimulationMiddleware } from './simulation.mjs'
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const distDirectory = resolve(projectRoot, 'dist')
@@ -17,6 +18,7 @@ const port = Number(process.env.PORT) || 8080
 const reportMiddleware = createReportMiddleware()
 const governanceAssistantMiddleware = createGovernanceAssistantMiddleware()
 const decisionAssistantMiddleware = createDecisionAssistantMiddleware()
+const simulationMiddleware = createSimulationMiddleware()
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -93,6 +95,10 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === '/api/assistant/decision') {
     await decisionAssistantMiddleware(request, response)
+    return
+  }
+  if (url.pathname.startsWith('/api/simulation/')) {
+    await simulationMiddleware(request, response, url.pathname)
     return
   }
   serveApplication(request, response, url.pathname)
