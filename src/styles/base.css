@@ -402,6 +402,25 @@ button {
     auto !important;
 }
 
+.leaflet-tooltip.township-map-label {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #f1ffe0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #04110f, 0 0 4px #04110f;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip.township-map-label::before {
+  display: none;
+}
+
 .map-shell::after {
   position: absolute;
   z-index: 2;

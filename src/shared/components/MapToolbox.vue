@@ -1,25 +1,27 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import L from 'leaflet'
+import { BASE_MAP_OPTIONS, requiresArcGisAccessToken, type BaseMapMode } from '@/gis/leaflet/baseMaps'
 import { focusMapOnLayer } from '@/gis/leaflet/mapFocus'
 import { calculateGeodesicArea, formatArea, formatDistance } from '@/gis/leaflet/measurement'
 import type { GeographicBounds } from '@/gis/leaflet/serviceBounds'
 
 type MeasurementType = 'distance' | 'area'
-type BaseMapMode = 'natural' | 'ecology' | 'planning' | 'night'
 
 const props = defineProps<{
   map: L.Map | null
   focusBounds: GeographicBounds | null
   initialCenter: [number, number]
   initialZoom: number
+  activeBaseMap: BaseMapMode
+  arcgisAvailable: boolean
+  changeBaseMap: (mode: BaseMapMode) => boolean
   exportName?: string
 }>()
 
 const activeMeasurement = ref<MeasurementType | null>(null)
 const measurementMenuOpen = ref(false)
 const baseMapMenuOpen = ref(false)
-const baseMapMode = ref<BaseMapMode>('natural')
 const feedback = ref('')
 let feedbackTimer: number | undefined
 let drawingLayer: L.FeatureGroup | null = null
@@ -27,16 +29,9 @@ let currentPath: L.Polyline | L.Polygon | null = null
 let previewPath: L.Polyline | L.Polygon | null = null
 let points: L.LatLng[] = []
 
-const baseMapOptions: Array<{ key: BaseMapMode; name: string; meta: string }> = [
-  { key: 'natural', name: '本色影像', meta: '原始遥感色彩' },
-  { key: 'ecology', name: '生态增强', meta: '强化植被水系' },
-  { key: 'planning', name: '行政灰图', meta: '弱化影像干扰' },
-  { key: 'night', name: '夜间研判', meta: '暗色高对比' },
-]
+const baseMapOptions = BASE_MAP_OPTIONS
 
-const measurementLabel = computed(() =>
-  activeMeasurement.value === 'distance' ? '距离测量中' : activeMeasurement.value === 'area' ? '面积测量中' : '测量工具',
-)
+const measurementLabel = computed(() => (activeMeasurement.value === 'distance' ? '距离测量中' : activeMeasurement.value === 'area' ? '面积测量中' : '测量工具'))
 
 function notify(message: string) {
   feedback.value = message
@@ -55,7 +50,11 @@ function addResultLabel(position: L.LatLng, value: string) {
   if (!layer) return
   L.marker(position, {
     interactive: false,
-    icon: L.divIcon({ className: 'map-measure-label', html: `<span>${value}</span>`, iconAnchor: [0, 14] }),
+    icon: L.divIcon({
+      className: 'map-measure-label',
+      html: `<span>${value}</span>`,
+      iconAnchor: [0, 14],
+    }),
   }).addTo(layer)
 }
 
@@ -78,17 +77,11 @@ function redrawCurrentPath(cursor?: L.LatLng) {
     fillOpacity: 0.15,
     dashArray: activeMeasurement.value === 'distance' ? '7 6' : undefined,
   }
-  currentPath =
-    activeMeasurement.value === 'distance'
-      ? L.polyline(points, pathOptions).addTo(layer)
-      : L.polygon(points, pathOptions).addTo(layer)
+  currentPath = activeMeasurement.value === 'distance' ? L.polyline(points, pathOptions).addTo(layer) : L.polygon(points, pathOptions).addTo(layer)
 
   if (!cursor || points.length === 0) return
   const previewPoints = [...points, cursor]
-  previewPath =
-    activeMeasurement.value === 'distance'
-      ? L.polyline(previewPoints, { ...pathOptions, opacity: 0.55 }).addTo(layer)
-      : L.polygon(previewPoints, { ...pathOptions, opacity: 0.55 }).addTo(layer)
+  previewPath = activeMeasurement.value === 'distance' ? L.polyline(previewPoints, { ...pathOptions, opacity: 0.55 }).addTo(layer) : L.polygon(previewPoints, { ...pathOptions, opacity: 0.55 }).addTo(layer)
 }
 
 function onMapClick(event: L.LeafletMouseEvent) {
@@ -170,6 +163,16 @@ function clearDrawings() {
   notify('临时标绘与测量结果已清除')
 }
 
+function toggleMeasurementMenu() {
+  measurementMenuOpen.value = !measurementMenuOpen.value
+  baseMapMenuOpen.value = false
+}
+
+function toggleBaseMapMenu() {
+  baseMapMenuOpen.value = !baseMapMenuOpen.value
+  measurementMenuOpen.value = false
+}
+
 function refreshMap() {
   if (!props.map) return notify('地图仍在初始化，请稍后再试')
   props.map.invalidateSize({ animate: false })
@@ -179,14 +182,29 @@ function refreshMap() {
   notify('地图图层已刷新')
 }
 
-function setBaseMap(mode: BaseMapMode) {
+function applyBaseMapFilter(mode: BaseMapMode) {
   if (!props.map) return
-  const pane = props.map.getPane('tilePane')
+  const pane = props.map.getPane('baseMapPane')
   pane?.classList.remove('map-base--natural', 'map-base--ecology', 'map-base--planning', 'map-base--night')
-  pane?.classList.add(`map-base--${mode}`)
-  baseMapMode.value = mode
+  if (['natural', 'ecology', 'planning', 'night'].includes(mode)) {
+    pane?.classList.add(`map-base--${mode}`)
+  }
+}
+
+function setBaseMap(mode: BaseMapMode) {
+  const option = baseMapOptions.find((item) => item.key === mode)
+  if (!props.map || !option) return
+  if (requiresArcGisAccessToken(option) && !props.arcgisAvailable) {
+    notify('请先在 runtime-config.json 中配置 ArcGIS accessToken')
+    return
+  }
+  if (!props.changeBaseMap(mode)) {
+    notify(`${option.name}切换失败，请检查底图配置`)
+    return
+  }
+  applyBaseMapFilter(mode)
   baseMapMenuOpen.value = false
-  notify(`已切换为${baseMapOptions.find((item) => item.key === mode)?.name}`)
+  notify(`已切换为${option.name}`)
 }
 
 function resetView() {
@@ -195,21 +213,9 @@ function resetView() {
   notify(props.focusBounds ? '已居中显示行政区划图层' : '图层范围不可用，已回到默认视图')
 }
 
-async function drawDomImage(
-  context: CanvasRenderingContext2D,
-  element: HTMLImageElement | HTMLCanvasElement,
-  container: HTMLElement,
-  root: DOMRect,
-) {
+async function drawDomImage(context: CanvasRenderingContext2D, element: HTMLImageElement | HTMLCanvasElement, container: HTMLElement, root: DOMRect) {
   const rect = element.getBoundingClientRect()
-  if (
-    rect.width <= 0 ||
-    rect.height <= 0 ||
-    rect.right <= root.left ||
-    rect.bottom <= root.top ||
-    rect.left >= root.right ||
-    rect.top >= root.bottom
-  ) return
+  if (rect.width <= 0 || rect.height <= 0 || rect.right <= root.left || rect.bottom <= root.top || rect.left >= root.right || rect.top >= root.bottom) return
 
   let opacity = 1
   let current: HTMLElement | null = element
@@ -265,7 +271,7 @@ async function exportMap() {
   context.fillRect(0, 0, root.width, root.height)
 
   try {
-    const tiles = [...container.querySelectorAll<HTMLImageElement | HTMLCanvasElement>('.leaflet-tile-pane .leaflet-tile, .leaflet-overlay-pane canvas')]
+    const tiles = [...container.querySelectorAll<HTMLImageElement | HTMLCanvasElement>('.leaflet-map-pane .leaflet-tile, .leaflet-overlay-pane canvas')]
     for (const tile of tiles) await drawDomImage(context, tile, container, root)
     await drawSvgOverlays(context, container, root)
 
@@ -307,9 +313,14 @@ watch(
   () => props.map,
   (map, previousMap) => {
     if (previousMap && previousMap !== map) stopMeasurement()
-    if (map) setBaseMap(baseMapMode.value)
+    if (map) applyBaseMapFilter(props.activeBaseMap)
   },
   { immediate: true },
+)
+
+watch(
+  () => props.activeBaseMap,
+  (mode) => applyBaseMapFilter(mode),
 )
 
 window.addEventListener('keydown', onKeyDown)
@@ -325,39 +336,33 @@ onBeforeUnmount(() => {
   <div class="map-toolbox" aria-label="地图常用工具">
     <div class="map-toolbox__rail" role="toolbar" aria-label="地图操作">
       <button type="button" aria-label="清除临时图层" title="清除临时图层" @click="clearDrawings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" />
+        </svg>
         <span>清除图层</span>
       </button>
-      <button
-        type="button"
-        :class="{ active: measurementMenuOpen || activeMeasurement }"
-        :aria-expanded="measurementMenuOpen"
-        aria-controls="measurement-menu"
-        :aria-label="measurementLabel"
-        title="测量工具"
-        @click="measurementMenuOpen = !measurementMenuOpen; baseMapMenuOpen = false"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 18 9-14 7 5-9 13H4v-4Zm9-14 2 6m-8 5 3 2m0-7 3 2" /></svg>
+      <button type="button" :class="{ active: measurementMenuOpen || activeMeasurement }" :aria-expanded="measurementMenuOpen" aria-controls="measurement-menu" :aria-label="measurementLabel" title="测量工具" @click="toggleMeasurementMenu">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m4 18 9-14 7 5-9 13H4v-4Zm9-14 2 6m-8 5 3 2m0-7 3 2" />
+        </svg>
         <span>{{ activeMeasurement ? '结束测量' : '测量工具' }}</span>
       </button>
       <button type="button" aria-label="刷新地图" title="刷新地图" @click="refreshMap">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5m9.2-3A7 7 0 0 0 6.6 7L4 12m16 0-2.6 5a7 7 0 0 1-11.6-1" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5m9.2-3A7 7 0 0 0 6.6 7L4 12m16 0-2.6 5a7 7 0 0 1-11.6-1" />
+        </svg>
         <span>刷新地图</span>
       </button>
       <button type="button" aria-label="导出地图" title="导出地图" @click="exportMap">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4" />
+        </svg>
         <span>导出地图</span>
       </button>
-      <button
-        type="button"
-        :class="{ active: baseMapMenuOpen }"
-        :aria-expanded="baseMapMenuOpen"
-        aria-controls="basemap-menu"
-        aria-label="切换底图"
-        title="切换底图"
-        @click="baseMapMenuOpen = !baseMapMenuOpen; measurementMenuOpen = false"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-7 9 7 4 7-4M5 16l7 4 7-4" /></svg>
+      <button type="button" :class="{ active: baseMapMenuOpen }" :aria-expanded="baseMapMenuOpen" aria-controls="basemap-menu" aria-label="切换底图" title="切换底图" @click="toggleBaseMapMenu">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 3 9 5-9 5-9-5 9-5Zm-7 9 7 4 7-4M5 16l7 4 7-4" />
+        </svg>
         <span>切换底图</span>
       </button>
     </div>
@@ -365,8 +370,12 @@ onBeforeUnmount(() => {
     <Transition name="tool-panel">
       <div v-if="measurementMenuOpen" id="measurement-menu" class="map-toolbox__panel measure-panel">
         <header><span>MEASURE</span><strong>选择测量方式</strong></header>
-        <button type="button" @click="startMeasurement('distance')"><i>↗</i><span><strong>空间距离</strong><small>沿路径累计长度</small></span></button>
-        <button type="button" @click="startMeasurement('area')"><i>⌑</i><span><strong>地表面积</strong><small>闭合范围估算</small></span></button>
+        <button type="button" @click="startMeasurement('distance')">
+          <i>↗</i><span><strong>空间距离</strong><small>沿路径累计长度</small></span>
+        </button>
+        <button type="button" @click="startMeasurement('area')">
+          <i>⌑</i><span><strong>地表面积</strong><small>闭合范围估算</small></span>
+        </button>
       </div>
     </Transition>
 
@@ -378,12 +387,21 @@ onBeforeUnmount(() => {
             v-for="option in baseMapOptions"
             :key="option.key"
             type="button"
-            :class="[`preview--${option.key}`, { active: baseMapMode === option.key }]"
+            :class="[
+              `preview--${option.key}`,
+              {
+                active: activeBaseMap === option.key,
+                unavailable: requiresArcGisAccessToken(option) && !arcgisAvailable,
+              },
+            ]"
+            :aria-disabled="requiresArcGisAccessToken(option) && !arcgisAvailable"
             @click="setBaseMap(option.key)"
           >
-            <i aria-hidden="true"><b /><b /><b /></i>
+            <i aria-hidden="true" :style="option.previewUrl ? { backgroundImage: `url(${option.previewUrl})` } : undefined"
+              ><template v-if="!option.previewUrl"><b /><b /><b /></template
+            ></i>
             <strong>{{ option.name }}</strong>
-            <small>{{ option.meta }}</small>
+            <small>{{ requiresArcGisAccessToken(option) && !arcgisAvailable ? '需配置 ArcGIS Key' : option.meta }}</small>
           </button>
         </div>
       </div>
@@ -393,19 +411,31 @@ onBeforeUnmount(() => {
       <button type="button" aria-label="放大地图" title="放大" @click="map?.zoomIn()">＋</button>
       <button type="button" aria-label="缩小地图" title="缩小" @click="map?.zoomOut()">−</button>
       <button type="button" aria-label="以行政区划图层为中心" title="居中显示行政区划图层" @click="resetView">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6" /></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6" />
+        </svg>
       </button>
     </div>
 
     <Transition name="tool-feedback">
-      <div v-if="feedback" class="map-toolbox__feedback" role="status">{{ feedback }}</div>
+      <div v-if="feedback" class="map-toolbox__feedback" role="status">
+        {{ feedback }}
+      </div>
     </Transition>
   </div>
 </template>
 
 <style scoped>
-.map-toolbox { position: absolute; z-index: 650; inset: 0; pointer-events: none; }
-.map-toolbox button { color: inherit; font: inherit; }
+.map-toolbox {
+  position: absolute;
+  z-index: 650;
+  inset: 0;
+  pointer-events: none;
+}
+.map-toolbox button {
+  color: inherit;
+  font: inherit;
+}
 
 .map-toolbox__rail {
   position: absolute;
@@ -443,7 +473,14 @@ onBeforeUnmount(() => {
 }
 
 .map-toolbox__rail svg,
-.map-toolbox__zoom svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.map-toolbox__zoom svg {
+  width: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .map-toolbox__rail button > span {
   position: absolute;
@@ -463,7 +500,10 @@ onBeforeUnmount(() => {
 }
 
 .map-toolbox__rail button:hover > span,
-.map-toolbox__rail button:focus-visible > span { opacity: 1; transform: translateX(0); }
+.map-toolbox__rail button:focus-visible > span {
+  opacity: 1;
+  transform: translateX(0);
+}
 
 .map-toolbox__panel {
   position: absolute;
@@ -479,11 +519,24 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(14px);
 }
 
-.map-toolbox__panel header { display: grid; gap: 2px; padding: 2px 2px 9px; border-bottom: 1px solid rgba(122, 203, 190, 0.12); }
-.map-toolbox__panel header span { color: rgba(61, 214, 196, 0.72); font: 8px var(--font-data); letter-spacing: 0.18em; }
-.map-toolbox__panel header strong { font-size: 12px; }
+.map-toolbox__panel header {
+  display: grid;
+  gap: 2px;
+  padding: 2px 2px 9px;
+  border-bottom: 1px solid rgba(122, 203, 190, 0.12);
+}
+.map-toolbox__panel header span {
+  color: rgba(61, 214, 196, 0.72);
+  font: 8px var(--font-data);
+  letter-spacing: 0.18em;
+}
+.map-toolbox__panel header strong {
+  font-size: 12px;
+}
 
-.measure-panel { top: 54px; }
+.measure-panel {
+  top: 54px;
+}
 .measure-panel > button {
   display: flex;
   width: 100%;
@@ -498,27 +551,118 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
 }
-.measure-panel > button:hover { border-color: rgba(61, 214, 196, 0.35); background: rgba(61, 214, 196, 0.09); }
-.measure-panel i { display: grid; width: 28px; height: 28px; border: 1px solid rgba(61, 214, 196, 0.3); border-radius: 5px; place-items: center; color: var(--cyan); font: normal 15px var(--font-data); }
-.measure-panel button span { display: grid; gap: 2px; }
-.measure-panel strong { color: var(--text); font-size: 10px; }
-.measure-panel small { font-size: 8px; }
+.measure-panel > button:hover {
+  border-color: rgba(61, 214, 196, 0.35);
+  background: rgba(61, 214, 196, 0.09);
+}
+.measure-panel i {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(61, 214, 196, 0.3);
+  border-radius: 5px;
+  place-items: center;
+  color: var(--cyan);
+  font: normal 15px var(--font-data);
+}
+.measure-panel button span {
+  display: grid;
+  gap: 2px;
+}
+.measure-panel strong {
+  color: var(--text);
+  font-size: 10px;
+}
+.measure-panel small {
+  font-size: 8px;
+}
 
-.basemap-panel { top: 188px; width: 284px; }
-.basemap-grid { display: grid; gap: 8px; margin-top: 9px; grid-template-columns: repeat(2, 1fr); }
-.basemap-grid button { display: grid; padding: 5px; overflow: hidden; border: 1px solid rgba(122, 203, 190, 0.16); border-radius: 6px; color: var(--text-soft); text-align: left; background: rgba(255, 255, 255, 0.025); cursor: pointer; }
+.basemap-panel {
+  top: 188px;
+  width: 284px;
+  max-height: calc(100% - 210px);
+  overflow-y: auto;
+}
+.basemap-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 9px;
+  grid-template-columns: repeat(2, 1fr);
+}
+.basemap-grid button {
+  display: grid;
+  padding: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(122, 203, 190, 0.16);
+  border-radius: 6px;
+  color: var(--text-soft);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+}
 .basemap-grid button:hover,
-.basemap-grid button.active { border-color: rgba(61, 214, 196, 0.7); box-shadow: inset 0 0 0 1px rgba(61, 214, 196, 0.15); }
-.basemap-grid button > i { position: relative; height: 56px; margin-bottom: 6px; overflow: hidden; border-radius: 4px; background-color: #748b73; background-image: linear-gradient(25deg, transparent 45%, rgba(209, 229, 166, 0.8) 46% 54%, transparent 55%), linear-gradient(118deg, transparent 52%, rgba(100, 165, 183, 0.82) 53% 61%, transparent 62%), radial-gradient(circle at 28% 38%, #9fba75 0 14%, transparent 15%); }
-.basemap-grid button > i b { position: absolute; width: 3px; height: 130%; background: rgba(233, 223, 175, 0.72); transform: rotate(52deg); }
-.basemap-grid button > i b:nth-child(1) { left: 24%; top: -15%; }
-.basemap-grid button > i b:nth-child(2) { left: 62%; top: -10%; transform: rotate(-27deg); }
-.basemap-grid button > i b:nth-child(3) { left: 78%; top: -20%; transform: rotate(73deg); }
-.basemap-grid strong { padding: 0 2px; color: var(--text); font-size: 9px; }
-.basemap-grid small { padding: 2px; font-size: 7px; }
-.preview--ecology > i { filter: saturate(1.65) hue-rotate(8deg) contrast(1.05); }
-.preview--planning > i { filter: grayscale(0.9) brightness(1.18) contrast(0.72); }
-.preview--night > i { filter: grayscale(0.8) invert(0.82) hue-rotate(145deg) brightness(0.42) contrast(1.7); }
+.basemap-grid button.active {
+  border-color: rgba(61, 214, 196, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(61, 214, 196, 0.15);
+}
+.basemap-grid button.unavailable {
+  opacity: 0.58;
+}
+.basemap-grid button > i {
+  position: relative;
+  height: 56px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: #748b73;
+  background-image: linear-gradient(25deg, transparent 45%, rgba(209, 229, 166, 0.8) 46% 54%, transparent 55%), linear-gradient(118deg, transparent 52%, rgba(100, 165, 183, 0.82) 53% 61%, transparent 62%), radial-gradient(circle at 28% 38%, #9fba75 0 14%, transparent 15%);
+}
+.basemap-grid button > i b {
+  position: absolute;
+  width: 3px;
+  height: 130%;
+  background: rgba(233, 223, 175, 0.72);
+  transform: rotate(52deg);
+}
+.basemap-grid button > i b:nth-child(1) {
+  left: 24%;
+  top: -15%;
+}
+.basemap-grid button > i b:nth-child(2) {
+  left: 62%;
+  top: -10%;
+  transform: rotate(-27deg);
+}
+.basemap-grid button > i b:nth-child(3) {
+  left: 78%;
+  top: -20%;
+  transform: rotate(73deg);
+}
+.basemap-grid strong {
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 9px;
+}
+.basemap-grid small {
+  padding: 2px;
+  font-size: 7px;
+}
+.preview--ecology > i {
+  filter: saturate(1.65) hue-rotate(8deg) contrast(1.05);
+}
+.preview--planning > i {
+  filter: grayscale(0.9) brightness(1.18) contrast(0.72);
+}
+.preview--night > i {
+  filter: grayscale(0.8) invert(0.82) hue-rotate(145deg) brightness(0.42) contrast(1.7);
+}
+.preview--light-gray > i,
+.preview--dark-gray > i,
+.preview--outdoor > i,
+.preview--standard > i {
+  background-position: center;
+  background-size: cover;
+}
 
 .map-toolbox__zoom {
   position: absolute;
@@ -532,9 +676,25 @@ onBeforeUnmount(() => {
   background: rgba(5, 20, 21, 0.9);
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.24);
 }
-.map-toolbox__zoom button { display: grid; width: 32px; height: 30px; padding: 0; border: 0; border-bottom: 1px solid rgba(122, 203, 190, 0.13); place-items: center; color: #b8d2cc; background: transparent; cursor: pointer; }
-.map-toolbox__zoom button:last-child { border-bottom: 0; }
-.map-toolbox__zoom button:hover { color: #eafffb; background: rgba(61, 214, 196, 0.13); }
+.map-toolbox__zoom button {
+  display: grid;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(122, 203, 190, 0.13);
+  place-items: center;
+  color: #b8d2cc;
+  background: transparent;
+  cursor: pointer;
+}
+.map-toolbox__zoom button:last-child {
+  border-bottom: 0;
+}
+.map-toolbox__zoom button:hover {
+  color: #eafffb;
+  background: rgba(61, 214, 196, 0.13);
+}
 
 .map-toolbox__feedback {
   position: absolute;
@@ -555,25 +715,67 @@ onBeforeUnmount(() => {
 .tool-panel-enter-active,
 .tool-panel-leave-active,
 .tool-feedback-enter-active,
-.tool-feedback-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
+.tool-feedback-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
 .tool-panel-enter-from,
-.tool-panel-leave-to { opacity: 0; transform: translateX(-5px); }
+.tool-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-5px);
+}
 .tool-feedback-enter-from,
-.tool-feedback-leave-to { opacity: 0; transform: translateY(4px); }
+.tool-feedback-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
 
-:global(.map-is-measuring) { cursor: crosshair !important; }
-:global(.map-is-measuring *) { cursor: crosshair !important; }
-:global(.leaflet-tile-pane) { transition: filter 240ms ease; }
-:global(.map-base--natural) { filter: none; }
-:global(.map-base--ecology) { filter: saturate(1.58) hue-rotate(7deg) contrast(1.08); }
-:global(.map-base--planning) { filter: grayscale(0.92) brightness(1.16) contrast(0.72); }
-:global(.map-base--night) { filter: grayscale(0.78) invert(0.82) hue-rotate(145deg) brightness(0.38) contrast(1.75); }
-:global(.map-measure-label) { width: auto !important; height: auto !important; border: 0 !important; background: transparent !important; }
-:global(.map-measure-label span) { display: block; min-width: max-content; padding: 5px 7px; border: 1px solid rgba(61, 214, 196, 0.6); border-radius: 4px; color: #eafffb; background: rgba(5, 26, 25, 0.92); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.25); font: 10px var(--font-data); transform: translate(7px, -50%); }
+:global(.map-is-measuring) {
+  cursor: crosshair !important;
+}
+:global(.map-is-measuring *) {
+  cursor: crosshair !important;
+}
+:global(.leaflet-baseMap-pane) {
+  transition: filter 240ms ease;
+}
+:global(.map-base--natural) {
+  filter: none;
+}
+:global(.map-base--ecology) {
+  filter: saturate(1.58) hue-rotate(7deg) contrast(1.08);
+}
+:global(.map-base--planning) {
+  filter: grayscale(0.92) brightness(1.16) contrast(0.72);
+}
+:global(.map-base--night) {
+  filter: grayscale(0.78) invert(0.82) hue-rotate(145deg) brightness(0.38) contrast(1.75);
+}
+:global(.map-measure-label) {
+  width: auto !important;
+  height: auto !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+:global(.map-measure-label span) {
+  display: block;
+  min-width: max-content;
+  padding: 5px 7px;
+  border: 1px solid rgba(61, 214, 196, 0.6);
+  border-radius: 4px;
+  color: #eafffb;
+  background: rgba(5, 26, 25, 0.92);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.25);
+  font: 10px var(--font-data);
+  transform: translate(7px, -50%);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .map-toolbox__rail button:hover,
   .map-toolbox__rail button:focus-visible,
-  .map-toolbox__rail button.active { transform: none; }
+  .map-toolbox__rail button.active {
+    transform: none;
+  }
 }
 </style>

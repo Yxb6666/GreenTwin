@@ -5,6 +5,8 @@ import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
 import { createGovernanceIssuesMiddleware } from './server/governance-issues.mjs'
+import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
+import { createSimulationMiddleware } from './server/simulation.mjs'
 
 function localHttpsOptions() {
   const certificatePath = fileURLToPath(
@@ -60,6 +62,39 @@ function governanceIssuesMockApi(): Plugin {
   }
 }
 
+function governanceAssistantApi(env: Record<string, string>): Plugin {
+  const middleware = createGovernanceAssistantMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    timeoutMs: Number(env.DEEPSEEK_TIMEOUT_MS) || 90000,
+  })
+
+  return {
+    name: 'greentwin-governance-assistant-api',
+    configureServer(server) {
+      server.middlewares.use('/api/assistant/governance', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
+function simulationApi(env: Record<string, string>): Plugin {
+  const middleware = createSimulationMiddleware({
+    blenderExecutable: env.BLENDER_EXECUTABLE,
+  })
+
+  return {
+    name: 'greentwin-blender-simulation-api',
+    configureServer(server) {
+      server.middlewares.use('/api/simulation', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
@@ -73,6 +108,8 @@ export default defineConfig(({ mode }) => {
       vue(),
       deepseekReportApi(env),
       governanceIssuesMockApi(),
+      governanceAssistantApi(env),
+      simulationApi(env),
       viteStaticCopy({
         targets: [
           {

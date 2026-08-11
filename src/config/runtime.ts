@@ -10,6 +10,9 @@ export interface RuntimeConfig {
     zoom: number
     crs: 'EPSG4326' | 'EPSG3857'
   }
+  arcgis: {
+    accessToken: string
+  }
   supermap: {
     leafletSdkUrl: string
     mapServices: Record<'base' | 'township' | 'population' | 'gdp' | 'landuse', string>
@@ -37,6 +40,9 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (config.map.crs !== 'EPSG4326' && config.map.crs !== 'EPSG3857') {
     throw new Error('map.crs 必须是 EPSG4326 或 EPSG3857')
   }
+  if (!config.arcgis || typeof config.arcgis.accessToken !== 'string') {
+    throw new Error('缺少 ArcGIS accessToken 运行时配置')
+  }
   if (
     !config.supermap?.leafletSdkUrl ||
     !config.supermap.mapServices?.base ||
@@ -56,5 +62,12 @@ export async function loadRuntimeConfig(): Promise<Readonly<RuntimeConfig>> {
   if (!response.ok) throw new Error(`运行配置请求失败（HTTP ${response.status}）`)
   const config: unknown = await response.json()
   validateConfig(config)
-  return Object.freeze(config)
+  const environmentToken = import.meta.env.VITE_ARCGIS_ACCESS_TOKEN?.trim()
+  const resolvedConfig: RuntimeConfig = environmentToken
+    ? {
+        ...config,
+        arcgis: { ...config.arcgis, accessToken: environmentToken },
+      }
+    : config
+  return Object.freeze(resolvedConfig)
 }
