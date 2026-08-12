@@ -91,4 +91,14 @@ describe('3D Agent 模拟任务服务', () => {
     expect(source).toContain('"material": material')
     expect(source).toContain('"add_box": add_box')
   })
+
+  it('Blender 材质函数兼容 RGB 三元组与 0-255 颜色', async () => {
+    const source = await readFile(
+      resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
+      'utf8',
+    )
+    expect(source).toContain('def _normalize_color(color):')
+    expect(source).toContain('values.append(1.0)')
+    expect(source).toContain('item / 255.0')
+  })
 })

@@ -12,16 +12,31 @@ def read_arguments():
     return sys.argv[separator + 1], sys.argv[separator + 2], sys.argv[separator + 3]
 
 
+def _normalize_color(color):
+    values = list(color)[:4]
+    if len(values) == 3:
+        values.append(1.0)
+    if len(values) != 4:
+        raise ValueError(
+            "材质颜色必须包含 3 或 4 个分量，实际为 %d" % len(values)
+        )
+    numeric = [float(item) for item in values]
+    if any(item < 0 or item > 1 for item in numeric[:3]):
+        numeric = [item / 255.0 for item in numeric]
+    return tuple(numeric)
+
+
 def material(name, color, metallic=0.0, roughness=0.7):
     value = bpy.data.materials.new(name)
-    value.diffuse_color = color
     value.use_nodes = True
     shader = value.node_tree.nodes.get("Principled BSDF")
-    shader.inputs["Base Color"].default_value = color
+    normalized = _normalize_color(color)
+    value.diffuse_color = normalized
+    shader.inputs["Base Color"].default_value = normalized
     shader.inputs["Metallic"].default_value = metallic
     shader.inputs["Roughness"].default_value = roughness
-    if color[3] < 1:
-        shader.inputs["Alpha"].default_value = color[3]
+    if normalized[3] < 1:
+        shader.inputs["Alpha"].default_value = normalized[3]
         value.surface_render_method = "DITHERED"
     return value
 
