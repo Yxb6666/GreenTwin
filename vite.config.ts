@@ -67,6 +67,10 @@ function decisionAssistantApi(env: Record<string, string>): Plugin {
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     anthropicBaseUrl: env.ANTHROPIC_API_BASE_URL,
     anthropicModel: env.ANTHROPIC_MODEL,
+    visionApiKey: env.VISION_API_KEY,
+    visionBaseUrl: env.VISION_API_BASE_URL,
+    visionModel: env.VISION_MODEL,
+    visionProtocol: env.VISION_API_PROTOCOL,
   })
 
   return {
