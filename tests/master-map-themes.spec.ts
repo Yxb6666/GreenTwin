@@ -36,14 +36,41 @@ describe('主控专题地图指标', () => {
   })
 
   it('为 POI 专题生成聚合点详情', () => {
-    const metric = resolveTownshipThemeMetric('poi', yifengFeature, 0)
+    const metric = resolveTownshipThemeMetric(
+      'poi',
+      yifengFeature,
+      0,
+      [],
+      new Map([
+        [
+          yifengFeature.code,
+          {
+            publicService: 12,
+            industry: 28,
+            cultureTourism: 6,
+            total: 46,
+          },
+        ],
+      ]),
+    )
 
-    expect(metric.value).toBeGreaterThan(0)
+    expect(metric.value).toBe(46)
     expect(metric.radius).toBeGreaterThan(0)
     expect(metric.details).toEqual(expect.arrayContaining([expect.stringMatching(/^公共服务 /), expect.stringMatching(/^产业节点 /), expect.stringMatching(/^文旅资源 /)]))
     expect(metric.breakdown?.map(({ label }) => label)).toEqual(['公共服务', '产业节点', '文旅资源'])
     expect(metric.breakdown?.reduce((sum, item) => sum + item.value, 0)).toBe(metric.value)
     expect(metric.radius).toBeCloseTo(Math.min(21, Math.max(11, 8 + Math.sqrt(metric.value) * 1.1)))
+  })
+
+  it('POI 专题缺少真实汇总时不再使用模拟推算值', () => {
+    const metric = resolveTownshipThemeMetric('poi', yifengFeature, 0)
+
+    expect(metric).toMatchObject({
+      value: 0,
+      label: '暂无数据',
+      color: '#435852',
+      dataAvailable: false,
+    })
   })
 
   it('土地利用专题不再生成乡镇主导类型模拟设色', () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import L from 'leaflet'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
@@ -17,6 +17,7 @@ import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, lates
 import { COUNTY_SANSHENG_SCORES, resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
 import { getPointThemeLabelPlacement, type PointThemeLabelDirection } from '@/features/master/pointThemeLabelPlacement'
 import { landUseSource, masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme, type MasterMapThemeKey, type ThemeLegendItem, type TownshipThemeMetric } from '@/features/master/mapThemes'
+import { loadPoiRecords, summarizePoiByTownship, type PoiRecord, type TownshipPoiSummary } from '@/features/master/poiService'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
@@ -27,6 +28,10 @@ const demLoading = ref(true)
 const activeMapTheme = ref<MasterMapThemeKey | null>(null)
 const selectedThemeTownship = ref<TownshipFeature | null>(null)
 const governanceIssues = ref<GovernanceIssue[]>([])
+const poiRecords = shallowRef<PoiRecord[]>([])
+const poiMetricsByTownship = shallowRef<ReadonlyMap<string, TownshipPoiSummary>>(new Map())
+const poiLoading = ref(true)
+const poiError = ref('')
 let thematicLayer: L.LayerGroup | null = null
 const pointThemeLabelOverrides: Partial<Record<string, PointThemeLabelDirection>> = {
   惠安街道: 'right',
@@ -123,6 +128,16 @@ const landUseClassificationReady = computed(() => config.supermap.landuseRaster.
 const activeMapThemeConfig = computed(() => {
   if (activeMapTheme.value == null) return baseAdministrativeTheme
   const theme = masterMapThemes.find((item) => item.key === activeMapTheme.value)!
+  if (theme.key === 'poi') {
+    return {
+      ...theme,
+      description: poiLoading.value
+        ? 'Lankao_POI_2025 真实点位加载中'
+        : poiError.value
+          ? '真实 POI 服务暂不可用'
+          : `${poiRecords.value.length} 个真实 POI 点位`,
+    }
+  }
   if (theme.key === 'landuse' && !landUseClassificationReady.value) {
     return {
       ...theme,
@@ -131,7 +146,7 @@ const activeMapThemeConfig = computed(() => {
   }
   return theme
 })
-const activeTownshipMetrics = computed(() => resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value))
+const activeTownshipMetrics = computed(() => resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value, poiMetricsByTownship.value))
 const activeMapLegend = computed(() => {
   if (activeMapTheme.value == null) return baseAdministrativeLegend
   if (activeMapTheme.value === 'poi') return buildPoiLegend()
@@ -266,6 +281,36 @@ const decisionInsight = computed<MasterDecisionInsight>(() => {
   }
 
   if (themeKey === 'poi') {
+    if (poiLoading.value && poiMetricsByTownship.value.size === 0) {
+      return {
+        meta: '随 POI 专题联动',
+        theme,
+        scope,
+        primaryLabel: '真实 POI',
+        primaryValue: '加载中',
+        secondaryLabel: '数据源',
+        secondaryValue: 'Lankao_POI_2025',
+        assessment: '正在从 SuperMap iServer 读取真实 POI 点位，并按乡镇边界重新聚合。',
+        recommendation: '加载完成后点击地图聚合点，可查看对应乡镇的公共服务、产业节点和文旅资源结构。',
+        chips: ['真实 POI', 'iServer', '乡镇聚合'],
+        note: 'Lankao_POI_2025',
+      }
+    }
+    if (poiError.value && poiMetricsByTownship.value.size === 0) {
+      return {
+        meta: '随 POI 专题联动',
+        theme,
+        scope,
+        primaryLabel: '真实 POI',
+        primaryValue: '加载失败',
+        secondaryLabel: '数据源',
+        secondaryValue: 'Lankao_POI_2025',
+        assessment: '真实 POI 服务暂时不可用，当前不再使用三生指标推算 POI。',
+        recommendation: '请检查 POI iServer 地址、跨域配置和现场网络连通性。',
+        chips: ['真实 POI', '服务异常', '未使用模拟值'],
+        note: poiError.value,
+      }
+    }
     if (hasSelectedTownship && selectedMetric) {
       const strongest = strongestBreakdown(selectedMetric)
       return {
@@ -297,7 +342,7 @@ const decisionInsight = computed<MasterDecisionInsight>(() => {
       assessment: '当前按乡镇展示公共服务、产业节点和文旅资源聚合点，适合快速识别服务集聚区。',
       recommendation: '点击地图聚合点，右侧会切换为对应乡镇的 POI 结构研判。',
       chips: ['公共服务', '产业节点', '文旅资源'],
-      note: '由三生模型 POI 指标聚合展示',
+      note: 'Lankao_POI_2025 真实点位聚合',
     }
   }
 
@@ -456,7 +501,7 @@ function buildPoiLegend(): ThemeLegendItem[] {
   const totals = new Map(masterMapThemeLegends.poi.map((item) => [item.label, { ...item, value: 0 }]))
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = activeMapTheme.value === 'poi' ? activeTownshipMetrics.value[index]! : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
+    const metric = activeMapTheme.value === 'poi' ? activeTownshipMetrics.value[index]! : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value, poiMetricsByTownship.value)
     metric.breakdown?.forEach((item) => {
       const previous = totals.get(item.label)
       totals.set(item.label, {
@@ -515,7 +560,8 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
   if (!thematicLayer) return
   const center = L.latLng(townshipRepresentativePoint(feature))
   const isGovernance = activeMapTheme.value === 'governance'
-  if (isGovernance && metric.value <= 0) return
+  const isPoi = activeMapTheme.value === 'poi'
+  if (metric.dataAvailable === false || ((isGovernance || isPoi) && metric.value <= 0)) return
   const countyBounds =
     focusBounds.value ??
     (() => {
@@ -683,7 +729,15 @@ watch(selectedTownship, (name) => {
   selectedThemeTownship.value = name ? (townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null) : null
 })
 
-watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues], renderThematicMap, { flush: 'post' })
+function refreshPoiMetrics() {
+  poiMetricsByTownship.value =
+    poiRecords.value.length > 0 && townshipFeatures.value.length > 0
+      ? summarizePoiByTownship(poiRecords.value, townshipFeatures.value)
+      : new Map()
+}
+
+watch([poiRecords, townshipFeatures], refreshPoiMetrics, { flush: 'post' })
+watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship], renderThematicMap, { flush: 'post' })
 onBeforeUnmount(() => {
   clearThematicLayer()
   resetTownshipLabelPlacements()
@@ -697,6 +751,19 @@ onMounted(async () => {
     .catch(() => {
       governanceIssues.value = []
     })
+  const poiPromise = loadPoiRecords(config.supermap.mapServices.poi)
+    .then((records) => {
+      poiRecords.value = records
+      poiError.value = ''
+    })
+    .catch((cause) => {
+      poiRecords.value = []
+      poiError.value = cause instanceof Error ? cause.message : 'POI 数据加载失败'
+    })
+    .finally(() => {
+      poiLoading.value = false
+    })
+  void poiPromise
 
   await initialize(
     config.supermap.leafletSdkUrl,
