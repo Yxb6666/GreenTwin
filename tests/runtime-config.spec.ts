@@ -7,6 +7,9 @@ interface RuntimeConfigFixture {
     center: [number, number]
     crs: string
   }
+  arcgis: {
+    accessToken: string
+  }
   supermap: {
     mapServices: {
       base: string
@@ -36,5 +39,7 @@ describe('runtime-config 乡镇地图服务', () => {
     })
     expect(config.map.crs).toBe('EPSG3857')
     expect(config.map.center).toEqual([34.82, 114.82])
+    expect(config.arcgis.accessToken).toBeTypeOf('string')
+    expect(config.arcgis.accessToken).not.toBe('')
   })
 })

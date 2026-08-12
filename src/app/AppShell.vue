@@ -4,10 +4,10 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/features/auth/auth'
 
 const modules = [
-  { to: '/master', code: '01', label: '主控大屏' },
-  { to: '/sansheng', code: '02', label: '三生空间' },
-  { to: '/twin', code: '03', label: '数字孪生' },
-  { to: '/governance', code: '04', label: '乡村治理' },
+  { to: '/master', code: '01', label: '三生空间' },
+  { to: '/governance', code: '02', label: '三生治理' },
+  { to: '/twin', code: '03', label: '三生模拟' },
+  { to: '/sansheng', code: '04', label: '三生评估' },
 ]
 
 const route = useRoute()
@@ -50,9 +50,11 @@ async function logout() {
         </svg>
       </button>
     </div>
-    <RouterView v-slot="{ Component }">
+    <RouterView v-slot="{ Component, route: currentRoute }">
       <Transition name="module" mode="out-in">
-        <component :is="Component" />
+        <div :key="currentRoute.path" class="module-view">
+          <component :is="Component" />
+        </div>
       </Transition>
     </RouterView>
   </div>

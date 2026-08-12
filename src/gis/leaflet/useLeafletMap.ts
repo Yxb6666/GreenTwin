@@ -1,14 +1,17 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
+import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
 import {
+  getTownshipLabel,
   loadTownshipFeatures,
   resolveTownshipMapServiceUrl,
   type TownshipFeature,
 } from './townshipFeatures'
 
 const TOWNSHIP_STYLE: L.PathOptions = {
+  pane: 'townshipOverlayPane',
   color: '#d6ed9f',
   fillColor: '#146f54',
   fillOpacity: 0.48,
@@ -26,9 +29,57 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const map = shallowRef<L.Map | null>(null)
   const focusBounds = shallowRef<GeographicBounds | null>(null)
   const townshipFeatures = shallowRef<TownshipFeature[]>([])
+  const activeBaseMap = ref<BaseMapMode>('natural')
+  const arcgisAvailable = ref(false)
   const error = ref('')
   let resizeObserver: ResizeObserver | null = null
+  let superMapBaseLayer: L.TileLayer | null = null
+  let activeBaseLayer: L.TileLayer | null = null
+  let arcgisAccessToken = ''
+  const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   let disposed = false
+
+  function activateBaseLayer(layer: L.TileLayer, mode: BaseMapMode) {
+    if (!map.value) return false
+    if (activeBaseLayer && activeBaseLayer !== layer) map.value.removeLayer(activeBaseLayer)
+    if (!map.value.hasLayer(layer)) layer.addTo(map.value)
+    activeBaseLayer = layer
+    activeBaseMap.value = mode
+    return true
+  }
+
+  function setBaseMap(mode: BaseMapMode) {
+    const option = getBaseMapOption(mode)
+    if (!option || !map.value) return false
+
+    if (option.source === 'supermap') {
+      activeBaseMap.value = mode
+      return superMapBaseLayer ? activateBaseLayer(superMapBaseLayer, mode) : true
+    }
+
+    if (requiresArcGisAccessToken(option) && !arcgisAccessToken) {
+      error.value = 'ArcGIS 底图尚未配置 accessToken，请更新运行时配置后重试。'
+      return false
+    }
+
+    let layer = arcgisLayers.get(mode)
+    if (!layer) {
+      const tileUrl =
+        option.tileUrl ?? (option.arcgisStyle ? buildArcGisTileUrl(option.arcgisStyle, arcgisAccessToken) : '')
+      if (!tileUrl) return false
+      layer = L.tileLayer(tileUrl, {
+        pane: 'baseMapPane',
+        maxZoom: 20,
+        crossOrigin: true,
+        attribution: '&copy; Esri and data providers',
+      })
+      layer.on('tileerror', () => {
+        if (!disposed) error.value = `${option.name}加载失败，请检查 accessToken、域名限制与网络连接。`
+      })
+      arcgisLayers.set(mode, layer)
+    }
+    return activateBaseLayer(layer, mode)
+  }
 
   async function initialize(
     sdkUrl: string,
@@ -37,6 +88,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     zoom: number,
     crsCode: 'EPSG4326' | 'EPSG3857',
     overlayServiceUrls: string[] = [],
+    arcgisToken = '',
     demOverlay?: DemRasterOverlay,
   ) {
     await nextTick()
@@ -45,7 +97,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     try {
       const instance = L.map(container.value, {
         zoomControl: false,
-        attributionControl: false,
+        attributionControl: true,
         preferCanvas: true,
         zoomSnap: 0.25,
         zoomDelta: 0.25,
@@ -58,6 +110,24 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       }
 
       map.value = instance
+      arcgisAccessToken = arcgisToken.trim()
+      arcgisAvailable.value = Boolean(arcgisAccessToken)
+
+      const baseMapPane = instance.createPane('baseMapPane')
+      baseMapPane.style.zIndex = '200'
+      baseMapPane.style.pointerEvents = 'none'
+
+      const townshipPane = instance.createPane('townshipOverlayPane')
+      townshipPane.style.zIndex = '410'
+      townshipPane.style.pointerEvents = 'none'
+
+      const townshipLabelPane = instance.createPane('townshipLabelPane')
+      townshipLabelPane.style.zIndex = '430'
+      townshipLabelPane.style.pointerEvents = 'none'
+
+      const demOverlayPane = instance.createPane('demOverlayPane')
+      demOverlayPane.style.zIndex = '220'
+      demOverlayPane.style.pointerEvents = 'none'
 
       resizeObserver = new ResizeObserver(() => instance.invalidateSize({ animate: false }))
       resizeObserver.observe(container.value)
@@ -66,14 +136,17 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       void loadSuperMapLeaflet(sdkUrl)
         .then((superMapLeaflet) => {
           if (disposed) return
-          const baseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, {
+          superMapBaseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, {
             transparent: false,
             crossOrigin: true,
+            pane: 'baseMapPane',
           })
-          baseLayer.on('tileerror', () => {
+          superMapBaseLayer.on('tileerror', () => {
             error.value = '二维底图服务响应异常，请检查 iServer 地址、坐标系与跨域配置。'
           })
-          baseLayer.addTo(instance)
+          if (getBaseMapOption(activeBaseMap.value)?.source === 'supermap') {
+            activateBaseLayer(superMapBaseLayer, activeBaseMap.value)
+          }
 
           const addDemLayer = () => {
             if (!demOverlay || disposed) return
@@ -84,6 +157,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               renderingRule: JSON.stringify(demOverlay.renderingRule),
             }).toString()
             const imageTileLayer = L.tileLayer(`${collectionUrl}/tile.png?${tileQuery}&z={z}&x={x}&y={y}`, {
+              pane: 'demOverlayPane',
               zoomOffset: 1,
               opacity: 0.68,
               crossOrigin: true,
@@ -100,7 +174,18 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                 if (disposed) return
                 townshipFeatures.value = [...townshipFeatures.value, ...features]
                 features.forEach((feature) => {
-                  L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
+                  const polygon = L.polygon(feature.rings, TOWNSHIP_STYLE).addTo(instance)
+                  const label = getTownshipLabel(feature)
+                  if (label) {
+                    polygon.bindTooltip(label, {
+                      permanent: true,
+                      direction: 'center',
+                      className: 'township-map-label',
+                      pane: 'townshipLabelPane',
+                      interactive: false,
+                      opacity: 1,
+                    })
+                  }
                 })
               })
               .catch(() => {
@@ -114,7 +199,11 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               .then((bounds) => {
                 if (disposed) return
                 focusBounds.value = bounds
-                instance.fitBounds(bounds, { animate: false, padding: [20, 20], maxZoom: 11.5 })
+                instance.fitBounds(bounds, {
+                  animate: false,
+                  padding: [20, 20],
+                  maxZoom: 11.5,
+                })
                 addDemLayer()
               })
               .catch(() => {
@@ -143,8 +232,21 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     map.value = null
     focusBounds.value = null
     townshipFeatures.value = []
+    superMapBaseLayer = null
+    activeBaseLayer = null
+    arcgisLayers.clear()
   }
 
   onBeforeUnmount(dispose)
-  return { map, focusBounds, townshipFeatures, error, initialize, dispose }
+  return {
+    map,
+    focusBounds,
+    townshipFeatures,
+    activeBaseMap,
+    arcgisAvailable,
+    error,
+    initialize,
+    setBaseMap,
+    dispose,
+  }
 }

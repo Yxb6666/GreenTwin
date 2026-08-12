@@ -5,13 +5,15 @@ import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
+import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
+import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import {
   townshipRepresentativePoint,
   type TownshipFeature,
 } from '@/gis/leaflet/townshipFeatures'
-import { initialIssues } from '@/features/governance/data'
+import { loadGovernanceIssues, type GovernanceIssue } from '@/features/governance/data'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import {
   gdpTrend,
@@ -33,13 +35,47 @@ import {
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { map, focusBounds, townshipFeatures, error: mapError, initialize } = useLeafletMap(mapContainer)
+const {
+  map,
+  focusBounds,
+  townshipFeatures,
+  activeBaseMap,
+  arcgisAvailable,
+  error: mapError,
+  initialize,
+  setBaseMap,
+} = useLeafletMap(mapContainer)
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
 const activeMapTheme = ref<MasterMapThemeKey>('population')
 const selectedTownship = ref<TownshipFeature | null>(null)
+const governanceIssues = ref<GovernanceIssue[]>([])
 let thematicLayer: L.LayerGroup | null = null
+const assistantContext = computed<DecisionAssistantContext>(() => ({
+  module: '三生空间',
+  scopeLabel: activeLandUse.value ? `全县综合态势 · ${activeLandUse.value.name}` : '兰考县全域综合态势',
+  updatedAt: new Date().toISOString(),
+  data: {
+    population: {
+      year: latestPopulation.year,
+      totalWan: latestPopulation.populationWan,
+      densityPerKm2: latestPopulationDensity,
+      annualGrowthPercent: latestPopulationGrowth,
+    },
+    latestGdp: {
+      year: gdpTrend.at(-1)!.year,
+      valueYiYuan: gdpTrend.at(-1)!.gdpYiYuan,
+    },
+    populationTrend: populationTrend.map((item) => `${item.year}:${item.populationWan}万人`),
+    gdpTrend: gdpTrend.map((item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`),
+    landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
+    selectedLandUse: activeLandUse.value?.name ?? '未选中',
+    countyScores: { ecology: 88, life: 82, production: 90 },
+    dem: demSummary.value === null ? (demLoading.value ? '加载中' : demError.value || '暂无数据') : JSON.stringify(demSummary.value),
+  },
+}))
+const assistantPrompts = ['概括当前全县三生空间态势', '人口与 GDP 趋势反映了什么？', '土地利用结构有哪些优化方向？', '结合当前数据给出三项优先行动']
 
 const activeMapThemeConfig = computed(
   () => masterMapThemes.find((theme) => theme.key === activeMapTheme.value) ?? masterMapThemes[0]!,
@@ -52,7 +88,7 @@ const activeMapLegend = computed(() =>
 const selectedTownshipMetric = computed(() => {
   if (!selectedTownship.value) return null
   const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedTownship.value?.code)
-  return resolveTownshipThemeMetric(activeMapTheme.value, selectedTownship.value, Math.max(index, 0), initialIssues)
+  return resolveTownshipThemeMetric(activeMapTheme.value, selectedTownship.value, Math.max(index, 0), governanceIssues.value)
 })
 const mapThemeStatus = computed(() =>
   townshipFeatures.value.length > 0
@@ -120,7 +156,7 @@ function buildPoiLegend(): ThemeLegendItem[] {
   )
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = resolveTownshipThemeMetric('poi', feature, index, initialIssues)
+    const metric = resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
     metric.breakdown?.forEach((item) => {
       const previous = totals.get(item.label)
       totals.set(item.label, {
@@ -228,7 +264,7 @@ function renderThematicMap() {
   thematicLayer = L.layerGroup().addTo(instance)
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = resolveTownshipThemeMetric(activeMapTheme.value, feature, index, initialIssues)
+    const metric = resolveTownshipThemeMetric(activeMapTheme.value, feature, index, governanceIssues.value)
     const selected = selectedTownship.value?.code === feature.code
     const style = polygonStyle(metric, selected)
     const polygon = L.polygon(feature.rings, style)
@@ -269,44 +305,39 @@ function focusTownship(feature: TownshipFeature) {
   })
 }
 
-watch([map, townshipFeatures, activeMapTheme, selectedTownship], renderThematicMap, { flush: 'post' })
+watch([map, townshipFeatures, activeMapTheme, selectedTownship, governanceIssues], renderThematicMap, { flush: 'post' })
 onBeforeUnmount(clearThematicLayer)
 
 onMounted(async () => {
-  await initialize(
-    config.supermap.leafletSdkUrl,
-    config.supermap.mapServices.base,
-    config.map.center,
-    config.map.zoom,
-    config.map.crs,
-    [config.supermap.mapServices.township],
-    {
-      serviceUrl: config.supermap.dem.serviceUrl,
-      collectionId: config.supermap.dem.collectionId,
-      renderingRule: DEM_RENDERING_RULE,
-    },
-  )
+  const issuesPromise = loadGovernanceIssues(`${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`)
+    .then((issues) => {
+      governanceIssues.value = issues
+    })
+    .catch(() => {
+      governanceIssues.value = []
+    })
+
+  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs, [config.supermap.mapServices.township], config.arcgis.accessToken, {
+    serviceUrl: config.supermap.dem.serviceUrl,
+    collectionId: config.supermap.dem.collectionId,
+    renderingRule: DEM_RENDERING_RULE,
+  })
 
   try {
-    demSummary.value = await loadDemSummary(
-      config.supermap.dem.serviceUrl,
-      config.supermap.dem.collectionId,
-      config.supermap.dem.itemId,
-    )
+    demSummary.value = await loadDemSummary(config.supermap.dem.serviceUrl, config.supermap.dem.collectionId, config.supermap.dem.itemId)
   } catch (cause) {
     demError.value = cause instanceof Error ? cause.message : 'DEM 数据加载失败'
   } finally {
     demLoading.value = false
   }
+
+  await issuesPromise
 })
 </script>
 
 <template>
   <main class="screen-page master-page">
-    <ScreenHeader
-      title="兰考县和美乡村数字孪生决策平台"
-      subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判"
-    />
+    <ScreenHeader title="兰考县和美乡村数字孪生决策平台" subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判" />
 
     <div class="master-layout">
       <aside class="master-side">
@@ -336,11 +367,7 @@ onMounted(async () => {
 
         <PanelCard title="GDP 特征" meta="2020—2025 / 亿元">
           <div class="gdp-chart">
-            <article
-              v-for="item in gdpTrend"
-              :key="item.year"
-              :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`"
-            >
+            <article v-for="item in gdpTrend" :key="item.year" :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`">
               <strong>{{ item.gdpYiYuan.toFixed(1) }}</strong>
               <i :style="{ height: `${item.barPercent}%` }" />
               <span>{{ item.year }}</span>
@@ -409,21 +436,24 @@ onMounted(async () => {
             :focus-bounds="focusBounds"
             :initial-center="config.map.center"
             :initial-zoom="config.map.zoom"
+            :active-base-map="activeBaseMap"
+            :arcgis-available="arcgisAvailable"
+            :change-base-map="setBaseMap"
             export-name="兰考县综合决策地图"
           />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
-        <PanelCard
-          title="DEM 栅格数据"
-          :meta="demSummary ? `${demSummary.collectionId} / ${demSummary.crs}` : 'SuperMap 影像服务'"
-        >
+        <PanelCard title="DEM 栅格数据" :meta="demSummary ? `${demSummary.collectionId} / ${demSummary.crs}` : 'SuperMap 影像服务'">
           <div class="dem-overview">
             <figure class="dem-preview">
               <img v-if="demSummary?.thumbnailUrl" :src="demSummary.thumbnailUrl" alt="兰考县 DEM 栅格缩略图" />
-              <div v-else class="dem-state">{{ demLoading ? '正在读取 DEM 栅格…' : demError }}</div>
+              <div v-else class="dem-state">
+                {{ demLoading ? '正在读取 DEM 栅格…' : demError }}
+              </div>
               <figcaption v-if="demSummary">
-                <span>实时栅格</span><b>{{ demSummary.fileName }}</b><em>有效抽样 {{ demSummary.validSampleCount }} 点</em>
+                <span>实时栅格</span><b>{{ demSummary.fileName }}</b
+                ><em>有效抽样 {{ demSummary.validSampleCount }} 点</em>
               </figcaption>
             </figure>
             <div class="dem-stats">
@@ -434,7 +464,8 @@ onMounted(async () => {
               <article>
                 <span>抽样高程范围</span>
                 <strong v-if="demSummary?.minimumElevationM != null && demSummary.maximumElevationM != null">
-                  {{ demSummary.minimumElevationM }}–{{ demSummary.maximumElevationM }} m
+                  {{ demSummary.minimumElevationM }}–{{ demSummary.maximumElevationM }}
+                  m
                 </strong>
                 <strong v-else>—</strong>
               </article>
@@ -460,12 +491,7 @@ onMounted(async () => {
                 <strong>耕地</strong>
               </div>
               <div class="land-visual" @mouseleave="clearActiveLandUse">
-                <svg
-                  class="land-pie"
-                  viewBox="0 0 120 120"
-                  role="img"
-                  aria-label="土地利用结构饼图"
-                >
+                <svg class="land-pie" viewBox="0 0 120 120" role="img" aria-label="土地利用结构饼图">
                   <path
                     v-for="item in landUseSlices"
                     :key="item.name"
@@ -521,10 +547,18 @@ onMounted(async () => {
               </div>
             </div>
             <ul class="land-legend">
-              <li><span><i class="farm" />耕地与设施农业</span><b>42%</b></li>
-              <li><span><i class="forest" />林地草地</span><b>19%</b></li>
-              <li><span><i class="build" />村庄建设用地</span><b>17%</b></li>
-              <li><span><i class="water" />水域沟渠</span><b>10%</b></li>
+              <li>
+                <span><i class="farm" />耕地与设施农业</span><b>42%</b>
+              </li>
+              <li>
+                <span><i class="forest" />林地草地</span><b>19%</b>
+              </li>
+              <li>
+                <span><i class="build" />村庄建设用地</span><b>17%</b>
+              </li>
+              <li>
+                <span><i class="water" />水域沟渠</span><b>10%</b>
+              </li>
             </ul>
           </div>
         </PanelCard>
@@ -539,16 +573,21 @@ onMounted(async () => {
 
         <PanelCard title="决策方案辅助研判" meta="方案比选 / 展示输出">
           <div class="plan-stack">
-            <article><strong>A / 生态廊道修复</strong><p>优先治理水系两侧问题点位，覆盖 12 个重点村。</p></article>
-            <article><strong>B / 产业节点集聚</strong><p>联动道路、POI 与 GDP 栅格，推荐 4 处融合节点。</p></article>
+            <article>
+              <strong>A / 生态廊道修复</strong>
+              <p>优先治理水系两侧问题点位，覆盖 12 个重点村。</p>
+            </article>
+            <article>
+              <strong>B / 产业节点集聚</strong>
+              <p>联动道路、POI 与 GDP 栅格，推荐 4 处融合节点。</p>
+            </article>
           </div>
-          <div class="decision-actions">
-            <button type="button">导出图件</button><button type="button">生成报告</button><button type="button">方案推演</button>
-          </div>
+          <div class="decision-actions"><button type="button">导出图件</button><button type="button">生成报告</button><button type="button">方案推演</button></div>
         </PanelCard>
       </aside>
     </div>
   </main>
+  <DecisionAssistant :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`" :timeout-ms="config.reportTimeoutMs" :context="assistantContext" :prompts="assistantPrompts" />
 </template>
 
 <style scoped>
@@ -1198,10 +1237,18 @@ onMounted(async () => {
   font: 10px var(--font-data);
 }
 
-.farm { background: #d6b657; }
-.forest { background: #4da668; }
-.build { background: #d26d57; }
-.water { background: #48a5cc; }
+.farm {
+  background: #d6b657;
+}
+.forest {
+  background: #4da668;
+}
+.build {
+  background: #d26d57;
+}
+.water {
+  background: #48a5cc;
+}
 
 .issue-stack,
 .plan-stack {
@@ -1219,9 +1266,20 @@ onMounted(async () => {
   grid-template-columns: 62px 1fr auto;
 }
 
-.issue-stack b { font-size: 11px; }
-.issue-stack span { overflow: hidden; color: var(--text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.issue-stack em { color: var(--amber); font: normal 11px var(--font-data); }
+.issue-stack b {
+  font-size: 11px;
+}
+.issue-stack span {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-stack em {
+  color: var(--amber);
+  font: normal 11px var(--font-data);
+}
 
 .plan-stack article {
   padding: 8px;
@@ -1229,8 +1287,16 @@ onMounted(async () => {
   background: rgba(61, 214, 196, 0.035);
 }
 
-.plan-stack strong { color: var(--cyan); font-size: 11px; }
-.plan-stack p { margin: 5px 0 0; color: var(--text-soft); font-size: 9px; line-height: 1.5; }
+.plan-stack strong {
+  color: var(--cyan);
+  font-size: 11px;
+}
+.plan-stack p {
+  margin: 5px 0 0;
+  color: var(--text-soft);
+  font-size: 9px;
+  line-height: 1.5;
+}
 
 .decision-actions {
   display: flex;

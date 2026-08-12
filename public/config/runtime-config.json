@@ -8,6 +8,9 @@
     "zoom": 10,
     "crs": "EPSG3857"
   },
+  "arcgis": {
+    "accessToken": "AAPTarYTr7FRZVMcOVB629-uPPw..U6SNQSYqhnL7olEo1Qy9OuDeJMIYhEAosC_4dUFABcA-ZQGDrpP5WdJYCBCdZb5hKxCYi690huNDk2PBWLe9cFPZbanPp175jQSrhhQBT7sec0QWPuMIIThr9v7wnO7PE6kB-7I6Z9ZdAxkMvG80eYFBHtSIuvYt11METdlAHeWRRdWS6aoGtJv_FwuKBKF0a92dY6IXw-FFXAjYD1R4KwzF6kTZlzKQottKxc-DCGOr2RwJ-06joh8.AT1_4QY65mzD"
+  },
   "supermap": {
     "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",
     "mapServices": {
@@ -25,9 +28,9 @@
     "webglSdkUrl": "supermap3d/Cesium.js",
     "webglWidgetsCssUrl": "supermap3d/Widgets/widgets.css",
     "realspace": {
-      "whiteModel": "https://www.supermapol.com/realspace/services/3D-CBD/rest/realspace/datas/Building@CBD/config",
-      "oblique": "https://www.supermapol.com/realspace/services/3D---1--Masai_Webp/rest/realspace/datas/Config/config",
-      "lidar": "https://www.supermapol.com/realspace/services/3D-cloud/rest/realspace/datas/POINTCLOUD23/config"
+      "whiteModel": "",
+      "oblique": "",
+      "lidar": ""
     }
   }
 }

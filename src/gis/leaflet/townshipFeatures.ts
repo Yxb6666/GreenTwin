@@ -60,6 +60,11 @@ const OFFICIAL_TOWNSHIP_NAMES: Record<string, string> = {
   '410225408': '兰考林场',
 }
 
+export function getTownshipLabel(feature: Pick<TownshipFeature, 'code' | 'name'>): string | null {
+  const name = OFFICIAL_TOWNSHIP_NAMES[feature.code] ?? feature.name.trim()
+  return /(?:乡|镇|街道)$/.test(name) ? name : null
+}
+
 function stringValue(value: unknown) {
   return typeof value === 'string' || typeof value === 'number'
     ? String(value).trim()

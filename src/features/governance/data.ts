@@ -1,5 +1,8 @@
-export type IssueStatus = '待审核' | '已派单' | '处理中' | '已办结'
-export type Urgency = '高' | '中' | '低'
+export const issueStatuses = ['待审核', '已派单', '处理中', '已办结'] as const
+export const urgencyLevels = ['高', '中', '低'] as const
+
+export type IssueStatus = (typeof issueStatuses)[number]
+export type Urgency = (typeof urgencyLevels)[number]
 
 export interface GovernanceIssue {
   id: string
@@ -8,22 +11,157 @@ export interface GovernanceIssue {
   description: string
   contact: string
   phone: string
+  townCode: string
   town: string
+  villageCode: string
   village: string
+  address: string
   time: string
   urgency: Urgency
   status: IssueStatus
+  channel: string
+  dataClass: string
+  longitude: number
+  latitude: number
 }
 
-export const initialIssues: GovernanceIssue[] = [
-  { id: 'GK-2026-001', type: '人居环境类', subtype: '垃圾堆放', description: '村口沟渠旁存在生活垃圾集中堆放。', contact: '王海', phone: '13800010001', town: '城关乡', village: '南街村', time: '2026-07-30T09:12:00+08:00', urgency: '中', status: '处理中' },
-  { id: 'GK-2026-002', type: '基础设施类', subtype: '路灯损坏', description: '村主干道连续三盏路灯无法正常照明。', contact: '李敏', phone: '13800010002', town: '仪封镇', village: '东岗村', time: '2026-07-29T18:35:00+08:00', urgency: '中', status: '已派单' },
-  { id: 'GK-2026-003', type: '空间管控类', subtype: '疑似违建', description: '耕地保护红线附近发现新增硬化斑块。', contact: '赵刚', phone: '13800010003', town: '东坝头镇', village: '沿河村', time: '2026-07-28T14:18:00+08:00', urgency: '高', status: '待审核' },
-  { id: 'GK-2026-004', type: '安全风险类', subtype: '危房隐患', description: '老旧房屋墙体开裂，雨天渗漏严重。', contact: '高峰', phone: '13800010004', town: '许河乡', village: '中街村', time: '2026-07-27T10:26:00+08:00', urgency: '高', status: '处理中' },
-  { id: 'GK-2026-005', type: '人居环境类', subtype: '河道漂浮物', description: '支渠水面有成片漂浮物，需要及时清理。', contact: '陈芳', phone: '13800010005', town: '红庙镇', village: '高庄村', time: '2026-07-25T08:40:00+08:00', urgency: '低', status: '已办结' },
-  { id: 'GK-2026-006', type: '基础设施类', subtype: '道路破损', description: '生产道路出现沉陷，影响农机安全通行。', contact: '刘洋', phone: '13800010006', town: '谷营镇', village: '小宋村', time: '2026-07-23T16:05:00+08:00', urgency: '高', status: '已派单' },
-  { id: 'GK-2026-007', type: '人居环境类', subtype: '污水外溢', description: '污水井堵塞后外溢至道路边缘。', contact: '孙悦', phone: '13800010007', town: '葡萄架乡', village: '贺村', time: '2026-07-20T11:45:00+08:00', urgency: '中', status: '处理中' },
-  { id: 'GK-2026-008', type: '空间管控类', subtype: '占地异常', description: '建设边界外发现硬化场地，需核实审批手续。', contact: '马超', phone: '13800010008', town: '谷营镇', village: '小宋村', time: '2026-07-19T16:42:00+08:00', urgency: '高', status: '已派单' },
-  { id: 'GK-2026-009', type: '空间管控类', subtype: '河道侵占', description: '河道边坡存在临时围挡和杂物堆压。', contact: '朱琳', phone: '13800010009', town: '东坝头镇', village: '沿河村', time: '2026-07-17T09:30:00+08:00', urgency: '中', status: '处理中' },
-  { id: 'GK-2026-010', type: '安全风险类', subtype: '消防通道堵塞', description: '堆物占道导致消防车无法正常通行。', contact: '何静', phone: '13800010010', town: '红庙镇', village: '高庄村', time: '2026-07-15T18:10:00+08:00', urgency: '中', status: '已办结' },
-]
+interface GeoJsonPointFeature {
+  type?: unknown
+  geometry?: { type?: unknown; coordinates?: unknown }
+  properties?: Record<string, unknown>
+}
+
+interface GeoJsonFeatureCollection {
+  type?: unknown
+  features?: unknown
+}
+
+export interface QueryBounds {
+  south: number
+  west: number
+  north: number
+  east: number
+}
+
+function isIssueStatus(value: unknown): value is IssueStatus {
+  return issueStatuses.includes(value as IssueStatus)
+}
+
+function isUrgency(value: unknown): value is Urgency {
+  return urgencyLevels.includes(value as Urgency)
+}
+
+function stringProperty(properties: Record<string, unknown>, key: string) {
+  const value = properties[key]
+  return typeof value === 'string' ? value : ''
+}
+
+export function parseGovernanceIssues(value: unknown): GovernanceIssue[] {
+  if (!value || typeof value !== 'object') return []
+  const collection = value as GeoJsonFeatureCollection
+  if (
+    collection.type !== 'FeatureCollection' ||
+    !Array.isArray(collection.features)
+  )
+    return []
+
+  return collection.features.flatMap((rawFeature) => {
+    if (!rawFeature || typeof rawFeature !== 'object') return []
+    const feature = rawFeature as GeoJsonPointFeature
+    const coordinates = feature.geometry?.coordinates
+    const properties = feature.properties
+    if (
+      feature.type !== 'Feature' ||
+      feature.geometry?.type !== 'Point' ||
+      !Array.isArray(coordinates) ||
+      coordinates.length < 2 ||
+      typeof coordinates[0] !== 'number' ||
+      !Number.isFinite(coordinates[0]) ||
+      typeof coordinates[1] !== 'number' ||
+      !Number.isFinite(coordinates[1]) ||
+      !properties ||
+      !isIssueStatus(properties.status) ||
+      !isUrgency(properties.urgency)
+    )
+      return []
+
+    const issue: GovernanceIssue = {
+      id: stringProperty(properties, 'id'),
+      type: stringProperty(properties, 'type'),
+      subtype: stringProperty(properties, 'subtype'),
+      description: stringProperty(properties, 'description'),
+      contact: stringProperty(properties, 'contact'),
+      phone: stringProperty(properties, 'phone'),
+      townCode: stringProperty(properties, 'townCode'),
+      town: stringProperty(properties, 'town'),
+      villageCode: stringProperty(properties, 'villageCode'),
+      village: stringProperty(properties, 'village'),
+      address: stringProperty(properties, 'address'),
+      time: stringProperty(properties, 'time'),
+      urgency: properties.urgency,
+      status: properties.status,
+      channel: stringProperty(properties, 'channel'),
+      dataClass: stringProperty(properties, 'dataClass'),
+      longitude: coordinates[0],
+      latitude: coordinates[1],
+    }
+
+    return issue.id && issue.type && issue.town ? [issue] : []
+  })
+}
+
+export async function loadGovernanceIssues(
+  dataUrl: string,
+): Promise<GovernanceIssue[]> {
+  const response = await fetch(dataUrl, { cache: 'no-store' })
+  if (!response.ok)
+    throw new Error(`治理问题要素数据加载失败（HTTP ${response.status}）`)
+  const issues = parseGovernanceIssues(await response.json())
+  if (issues.length === 0) throw new Error('治理问题要素数据为空或格式不正确')
+  return issues
+}
+
+export function queryIssuesByBounds(
+  issues: GovernanceIssue[],
+  bounds: QueryBounds,
+) {
+  return issues.filter(
+    (issue) =>
+      issue.latitude >= bounds.south &&
+      issue.latitude <= bounds.north &&
+      issue.longitude >= bounds.west &&
+      issue.longitude <= bounds.east,
+  )
+}
+
+export function distanceInMeters(
+  origin: [number, number],
+  target: [number, number],
+) {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const earthRadius = 6_371_008.8
+  const latitudeDelta = toRadians(target[0] - origin[0])
+  const longitudeDelta = toRadians(target[1] - origin[1])
+  const originLatitude = toRadians(origin[0])
+  const targetLatitude = toRadians(target[0])
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(originLatitude) *
+      Math.cos(targetLatitude) *
+      Math.sin(longitudeDelta / 2) ** 2
+  return (
+    earthRadius * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  )
+}
+
+export function queryIssuesByRadius(
+  issues: GovernanceIssue[],
+  center: [number, number],
+  radiusMeters: number,
+) {
+  return issues.filter(
+    (issue) =>
+      distanceInMeters(center, [issue.latitude, issue.longitude]) <=
+      radiusMeters,
+  )
+}
