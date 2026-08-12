@@ -7,6 +7,7 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
+import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
 import {
   createSimulationJob,
   waitForSimulationJob,
@@ -462,10 +463,10 @@ async function initializeViewer() {
       navigationHelpButton: false,
     })
     viewer.imageryLayers.removeAll(true)
-    engineStatus.value = '正在加载 ArcGIS 世界街道图'
+    engineStatus.value = '正在加载 ArcGIS 导航底图'
     viewer.imageryLayers.addImageryProvider(
       new sdk.UrlTemplateImageryProvider({
-        url: '/api/arcgis/world-streets/raster/{z}/{x}/{y}.png',
+        url: buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken),
         tilingScheme: new sdk.WebMercatorTilingScheme(),
         minimumLevel: 0,
         maximumLevel: 19,
@@ -485,7 +486,7 @@ async function initializeViewer() {
         roll: 0,
       },
     })
-    engineStatus.value = 'ArcGIS 世界街道图 · SuperMap 兼容模式'
+    engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
