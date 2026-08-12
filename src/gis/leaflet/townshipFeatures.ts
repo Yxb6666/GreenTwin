@@ -86,6 +86,49 @@ export function getTownshipLabel(feature: Pick<TownshipFeature, 'code' | 'name'>
   return /(?:乡|镇|街道)$/.test(name) ? name : null
 }
 
+export function getTownshipRingArea(ring: TownshipRing): number {
+  if (ring.length < 3) return 0
+  let doubleArea = 0
+  for (let index = 0; index < ring.length; index += 1) {
+    const [latitude, longitude] = ring[index]!
+    const [nextLatitude, nextLongitude] = ring[(index + 1) % ring.length]!
+    doubleArea += longitude * nextLatitude - nextLongitude * latitude
+  }
+  return Math.abs(doubleArea / 2)
+}
+
+export interface TownshipRingPart<TFeature extends Pick<TownshipFeature, 'code' | 'name' | 'rings'>> {
+  feature: TFeature
+  ring: TownshipRing
+  area: number
+}
+
+/**
+ * Flattens township features into their polygon parts ordered by area ascending.
+ * Detached parts (enclaves) are usually smaller than the main body. Leaflet
+ * paints later layers on top, so parts are ordered by area descending: the main
+ * body is drawn first and small enclaves last, keeping them above the
+ * surrounding township and fully interactive.
+ */
+export function orderTownshipRingParts<TFeature extends Pick<TownshipFeature, 'code' | 'name' | 'rings'>>(
+  features: TFeature[],
+): TownshipRingPart<TFeature>[] {
+  return features
+    .flatMap((feature) =>
+      feature.rings.map((ring) => ({
+        feature,
+        ring,
+        area: getTownshipRingArea(ring),
+      })),
+    )
+    .sort((first, second) => second.area - first.area)
+}
+
+/** Converts a township feature into a Leaflet MultiPolygon latlng structure. */
+export function toLeafletMultiPolygon(feature: Pick<TownshipFeature, 'rings'>): TownshipRing[][] {
+  return feature.rings.map((ring) => [ring])
+}
+
 function stringValue(value: unknown) {
   return typeof value === 'string' || typeof value === 'number'
     ? String(value).trim()
@@ -231,22 +274,15 @@ function ringCentroid(ring: TownshipRing): TownshipPoint | null {
 }
 
 export function townshipRepresentativePoint(feature: TownshipFeature): TownshipPoint {
-  const primaryRing = feature.rings.reduce<TownshipRing | null>((largest, ring) => {
-    const ringArea = Math.abs(
-      ring.reduce((area, [lat, lng], index) => {
-        const [nextLat, nextLng] = ring[(index + 1) % ring.length] ?? [lat, lng]
-        return area + lng * nextLat - nextLng * lat
-      }, 0) / 2,
-    )
-    if (!largest) return ring
-    const largestArea = Math.abs(
-      largest.reduce((area, [lat, lng], index) => {
-        const [nextLat, nextLng] = largest[(index + 1) % largest.length] ?? [lat, lng]
-        return area + lng * nextLat - nextLng * lat
-      }, 0) / 2,
-    )
-    return ringArea > largestArea ? ring : largest
-  }, null)
+  let primaryRing: TownshipRing | null = null
+  let largestArea = -1
+  for (const ring of feature.rings) {
+    const ringArea = getTownshipRingArea(ring)
+    if (ringArea > largestArea) {
+      largestArea = ringArea
+      primaryRing = ring
+    }
+  }
   const primaryFeature = primaryRing ? { ...feature, rings: [primaryRing] } : feature
   const points = primaryFeature.rings.flat()
   if (points.length === 0) return [0, 0]

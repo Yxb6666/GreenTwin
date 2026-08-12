@@ -13,7 +13,6 @@ interface BoundaryEdge {
 
 const COORDINATE_PRECISION = 8
 const MIN_BOUNDARY_AREA_RATIO = 1e-6
-const MIN_TOWNSHIP_PART_AREA_RATIO = 2e-3
 
 function pointKey(point: [number, number]) {
   return `${point[0].toFixed(COORDINATE_PRECISION)},${point[1].toFixed(COORDINATE_PRECISION)}`
@@ -149,8 +148,12 @@ export function filterCountyBoundaryArtifacts(boundaryRings: TownshipRing[]) {
   return filterRingsByArea(boundaryRings, MIN_BOUNDARY_AREA_RATIO)
 }
 
+/**
+ * Removes only degenerate township rings (zero-area geometry noise).
+ * Valid detached parts, however small, are intentionally preserved.
+ */
 export function filterTownshipBoundaryArtifacts(townshipRings: TownshipRing[]) {
-  return filterRingsByArea(townshipRings, MIN_TOWNSHIP_PART_AREA_RATIO)
+  return townshipRings.filter((ring) => getRingArea(ring) > 0)
 }
 
 /**
@@ -172,7 +175,7 @@ export function mergeTownshipFeatures(features: TownshipFeature[]): TownshipFeat
   return OFFICIAL_TOWNSHIP_LABELS.flatMap((name) => {
     const group = groups.get(name)
     if (!group?.length) return []
-    const rings = filterCountyBoundaryArtifacts(buildCountyBoundaryRings(group))
+    const rings = filterTownshipBoundaryArtifacts(buildCountyBoundaryRings(group))
     if (rings.length === 0) return []
     const code = [...group].sort((first, second) => first.code.localeCompare(second.code))[0]!.code
     return [{ code, name, rings }]

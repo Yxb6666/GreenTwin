@@ -25,6 +25,12 @@
       "collectionId": "Lankao-DEM",
       "itemId": "1"
     },
+    "landuseRaster": {
+      "serviceUrl": "http://118.89.55.214:8090/iserver/services/imageservice-LankaoLand/restjsr",
+      "collectionId": "Lankao-Land",
+      "opacity": 0.82,
+      "rendererType": "STRETCHED"
+    },
     "webglSdkUrl": "supermap3d/Cesium.js",
     "webglWidgetsCssUrl": "supermap3d/Widgets/widgets.css",
     "realspace": {

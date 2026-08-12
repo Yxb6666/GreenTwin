@@ -10,35 +10,27 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import {
-  townshipRepresentativePoint,
-  type TownshipFeature,
-} from '@/gis/leaflet/townshipFeatures'
+import { orderTownshipRingParts, townshipRepresentativePoint, type TownshipFeature } from '@/gis/leaflet/townshipFeatures'
 import { loadGovernanceIssues, type GovernanceIssue } from '@/features/governance/data'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
 import { COUNTY_SANSHENG_SCORES, resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
-import {
-  landUseSource,
-  masterMapThemeLegends,
-  masterMapThemes,
-  resolveTownshipThemeMetric,
-  resolveTownshipThemeMetrics,
-  type MasterMapThemeKey,
-  type ThemeLegendItem,
-  type TownshipThemeMetric,
-} from '@/features/master/mapThemes'
+import { getPointThemeLabelPlacement, type PointThemeLabelDirection } from '@/features/master/pointThemeLabelPlacement'
+import { landUseSource, masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme, type MasterMapThemeKey, type ThemeLegendItem, type TownshipThemeMetric } from '@/features/master/mapThemes'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
-const { map, focusBounds, townshipFeatures, selectedTownship, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, clearSelectedTownship, focusTownshipByName } = useLeafletMap(mapContainer)
+const { map, focusBounds, townshipFeatures, selectedTownship, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, setLandUseRaster, clearSelectedTownship, focusTownshipByName, setTownshipLabelPlacement, resetTownshipLabelPlacements } = useLeafletMap(mapContainer)
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
-const activeMapTheme = ref<MasterMapThemeKey>('administrative')
+const activeMapTheme = ref<MasterMapThemeKey | null>(null)
 const selectedThemeTownship = ref<TownshipFeature | null>(null)
 const governanceIssues = ref<GovernanceIssue[]>([])
 let thematicLayer: L.LayerGroup | null = null
+const pointThemeLabelOverrides: Partial<Record<string, PointThemeLabelDirection>> = {
+  惠安街道: 'right',
+}
 const populationLabelYears = new Set([2020, 2021, 2025])
 const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
 const populationChangeRate = computed(() => calculatePopulationChangeRate(populationTrend))
@@ -62,15 +54,24 @@ const populationTrendChart = computed(() => {
     y: top + ((maximum - item.populationWan) / valueRange) * plotHeight,
   }))
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ')
-  const areaPath = points.length
-    ? `M ${points[0]!.x} ${height - bottom} L ${linePoints} L ${points.at(-1)!.x} ${height - bottom} Z`
-    : ''
+  const areaPath = points.length ? `M ${points[0]!.x} ${height - bottom} L ${linePoints} L ${points.at(-1)!.x} ${height - bottom} Z` : ''
   const gridLines = [minimum, (minimum + maximum) / 2, maximum].map((value) => ({
     value,
     y: top + ((maximum - value) / valueRange) * plotHeight,
   }))
 
-  return { width, height, left, right, top, bottom, points, linePoints, areaPath, gridLines }
+  return {
+    width,
+    height,
+    left,
+    right,
+    top,
+    bottom,
+    points,
+    linePoints,
+    areaPath,
+    gridLines,
+  }
 })
 const activePopulationChartPoint = computed(() => {
   if (!activePopulationPoint.value) return null
@@ -79,11 +80,7 @@ const activePopulationChartPoint = computed(() => {
 const sanshengEvaluation = computed(() => resolveMasterSanshengEvaluation(selectedTownship.value))
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生空间',
-  scopeLabel: selectedTownship.value
-    ? `${selectedTownship.value}三生评价 · 其余指标为兰考县县域`
-    : activeLandUse.value
-      ? `兰考县全域综合态势 · ${activeLandUse.value.name}`
-      : '兰考县全域综合态势',
+  scopeLabel: selectedTownship.value ? `${selectedTownship.value}三生评价 · 其余指标为兰考县县域` : activeLandUse.value ? `兰考县全域综合态势 · ${activeLandUse.value.name}` : '兰考县全域综合态势',
   updatedAt: new Date().toISOString(),
   data: {
     population: {
@@ -101,19 +98,12 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
     selectedLandUse: activeLandUse.value?.name ?? '未选中',
     selectedTownship: selectedTownship.value ?? '未选中',
-    townshipSansheng: sanshengEvaluation.value.scores
-      ? { ...sanshengEvaluation.value.scores }
-      : '三生模型当前未配置该行政区指标',
+    townshipSansheng: sanshengEvaluation.value.scores ? { ...sanshengEvaluation.value.scores } : '三生模型当前未配置该行政区指标',
     dataScopes: {
       population: '兰考县县域',
       gdp: '兰考县县域',
       landUse: '兰考县县域',
-      sansheng:
-        sanshengEvaluation.value.scope === 'township'
-          ? `${sanshengEvaluation.value.areaName}行政区`
-          : sanshengEvaluation.value.scope === 'unavailable'
-            ? `${sanshengEvaluation.value.areaName}行政区（暂无模型数据）`
-            : '兰考县县域',
+      sansheng: sanshengEvaluation.value.scope === 'township' ? `${sanshengEvaluation.value.areaName}行政区` : sanshengEvaluation.value.scope === 'unavailable' ? `${sanshengEvaluation.value.areaName}行政区（暂无模型数据）` : '兰考县县域',
     },
     countyScores: { ecology: 88, life: 82, production: 90 },
     dem: demSummary.value === null ? (demLoading.value ? '加载中' : demError.value || '暂无数据') : JSON.stringify(demSummary.value),
@@ -121,19 +111,35 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
 }))
 const assistantPrompts = ['概括当前全县三生空间态势', '人口与 GDP 趋势反映了什么？', '土地利用结构有哪些优化方向？', '结合当前数据给出三项优先行动']
 
-const activeMapThemeConfig = computed(
-  () => masterMapThemes.find((theme) => theme.key === activeMapTheme.value) ?? masterMapThemes[0]!,
-)
-const activeTownshipMetrics = computed(() =>
-  resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value),
-)
+const baseAdministrativeTheme = {
+  label: '行政区划',
+  description: '兰考县现行乡镇、街道行政区划',
+}
+const baseAdministrativeLegend: ThemeLegendItem[] = [
+  { label: '兰考县界', color: '#dceb72', kind: 'line' },
+  { label: '乡镇 / 街道界', color: '#b9cf65', kind: 'line' },
+]
+const landUseClassificationReady = computed(() => config.supermap.landuseRaster.rendererType === 'UNIQUE_VALUES')
+const activeMapThemeConfig = computed(() => {
+  if (activeMapTheme.value == null) return baseAdministrativeTheme
+  const theme = masterMapThemes.find((item) => item.key === activeMapTheme.value)!
+  if (theme.key === 'landuse' && !landUseClassificationReady.value) {
+    return {
+      ...theme,
+      description: 'Lankao-Land 真实栅格 · 服务端分类色表待配置',
+    }
+  }
+  return theme
+})
+const activeTownshipMetrics = computed(() => resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value))
 const activeMapLegend = computed(() => {
+  if (activeMapTheme.value == null) return baseAdministrativeLegend
   if (activeMapTheme.value === 'poi') return buildPoiLegend()
+  if (activeMapTheme.value === 'landuse' && !landUseClassificationReady.value) {
+    return [{ label: '真实栅格（待配置分类色表）', color: '#7E9189' }]
+  }
   const legend = [...masterMapThemeLegends[activeMapTheme.value]]
-  if (
-    activeMapTheme.value === 'sansheng' &&
-    activeTownshipMetrics.value.some((metric) => metric.dataAvailable === false)
-  ) {
+  if (activeMapTheme.value === 'sansheng' && activeTownshipMetrics.value.some((metric) => metric.dataAvailable === false)) {
     legend.push({ label: '暂无数据', color: '#435852' })
   }
   return legend
@@ -141,13 +147,9 @@ const activeMapLegend = computed(() => {
 const selectedTownshipMetric = computed(() => {
   if (!selectedThemeTownship.value) return null
   const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedThemeTownship.value?.code)
-  return index >= 0 ? activeTownshipMetrics.value[index] ?? null : null
+  return index >= 0 ? (activeTownshipMetrics.value[index] ?? null) : null
 })
-const mapThemeStatus = computed(() =>
-  townshipFeatures.value.length > 0
-    ? `${townshipFeatures.value.length} 个行政区`
-    : '行政区划加载中',
-)
+const mapThemeStatus = computed(() => (townshipFeatures.value.length > 0 ? `${townshipFeatures.value.length} 个行政区` : '行政区划加载中'))
 
 function pointOnCircle(angle: number, radius: number) {
   const radians = ((angle - 90) * Math.PI) / 180
@@ -201,17 +203,10 @@ function clearActiveLandUse() {
 }
 
 function buildPoiLegend(): ThemeLegendItem[] {
-  const totals = new Map(
-    masterMapThemeLegends.poi.map((item) => [
-      item.label,
-      { ...item, value: 0 },
-    ]),
-  )
+  const totals = new Map(masterMapThemeLegends.poi.map((item) => [item.label, { ...item, value: 0 }]))
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = activeMapTheme.value === 'poi'
-      ? activeTownshipMetrics.value[index]!
-      : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
+    const metric = activeMapTheme.value === 'poi' ? activeTownshipMetrics.value[index]! : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
     metric.breakdown?.forEach((item) => {
       const previous = totals.get(item.label)
       totals.set(item.label, {
@@ -249,27 +244,20 @@ function townshipName(feature: TownshipFeature) {
 function polygonStyle(metric: TownshipThemeMetric, selected: boolean): L.PathOptions {
   const isPoi = activeMapTheme.value === 'poi'
   const isGovernance = activeMapTheme.value === 'governance'
+  const isLandUse = activeMapTheme.value === 'landuse'
   const isPointTheme = isPoi || isGovernance
 
   return {
-    color: selected ? '#eafffb' : isPointTheme ? '#9DBE78' : '#AFCB78',
+    color: selected ? '#eafffb' : isPointTheme ? '#9DBE78' : isLandUse ? '#C6D879' : '#AFCB78',
     fillColor: metric.color,
-    fillOpacity: isPoi ? 0.08 : isGovernance ? 0.06 : activeMapTheme.value === 'population' ? 0.49 : 0.52,
-    opacity: selected ? 1 : isPointTheme ? 0.55 : 0.75,
+    fillOpacity: isLandUse ? 0.01 : isPoi ? 0.08 : isGovernance ? 0.06 : activeMapTheme.value === 'population' ? 0.49 : 0.52,
+    opacity: selected ? 1 : isPointTheme ? 0.55 : isLandUse ? 0.7 : 0.75,
     weight: selected ? 2.6 : isPointTheme ? 0.8 : 1,
   }
 }
 
 function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
-  const details =
-    metric.breakdown
-      ?.map(
-        (item) =>
-          `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)} ${item.value}</span>`,
-      )
-      .join('') ??
-    metric.details?.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('') ??
-    ''
+  const details = metric.breakdown?.map((item) => `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)} ${item.value}</span>`).join('') ?? metric.details?.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('') ?? ''
   return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
 }
 
@@ -278,13 +266,31 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
   const center = L.latLng(townshipRepresentativePoint(feature))
   const isGovernance = activeMapTheme.value === 'governance'
   if (isGovernance && metric.value <= 0) return
-  const strokeColor = isGovernance
-    ? metric.value >= 10
-      ? '#E6A099'
-      : metric.value >= 5
-        ? '#E4AD92'
-        : '#E8CD8A'
-    : '#A6E8D9'
+  const countyBounds =
+    focusBounds.value ??
+    (() => {
+      const bounds = L.latLngBounds(townshipFeatures.value.flatMap((item) => item.rings.flat()))
+      return [
+        [bounds.getSouth(), bounds.getWest()],
+        [bounds.getNorth(), bounds.getEast()],
+      ] as [[number, number], [number, number]]
+    })()
+  const placement = getPointThemeLabelPlacement(
+    [center.lat, center.lng],
+    countyBounds,
+    metric.radius ?? 18,
+    pointThemeLabelOverrides[townshipName(feature)],
+  )
+  setTownshipLabelPlacement(
+    townshipName(feature),
+    {
+      direction: placement.direction,
+      offset: L.point(placement.offset),
+      className: 'township-map-label township-map-label--point-theme',
+    },
+    center,
+  )
+  const strokeColor = isGovernance ? (metric.value >= 10 ? '#E6A099' : metric.value >= 5 ? '#E4AD92' : '#E8CD8A') : '#A6E8D9'
 
   const circle = L.circleMarker(center, {
     radius: metric.radius ?? 18,
@@ -296,12 +302,18 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
   })
     .bindTooltip(tooltipContent(feature, metric), {
       className: 'master-map-tooltip',
-      direction: 'top',
+      direction: placement.clusterTooltipDirection,
       opacity: 1,
       sticky: true,
     })
     .on('mouseover', () => circle.setStyle({ weight: 2.8, color: '#eafffb', fillOpacity: 0.82 }))
-    .on('mouseout', () => circle.setStyle({ weight: 1.4, color: strokeColor, fillOpacity: isGovernance ? 0.68 : 0.72 }))
+    .on('mouseout', () =>
+      circle.setStyle({
+        weight: 1.4,
+        color: strokeColor,
+        fillOpacity: isGovernance ? 0.68 : 0.72,
+      }),
+    )
     .on('click', () => focusTownship(feature))
     .addTo(thematicLayer)
 
@@ -326,21 +338,45 @@ function resetMapSelection() {
   clearSelectedTownship()
 }
 
+function clearActiveTheme() {
+  if (activeMapTheme.value == null) return false
+  activeMapTheme.value = null
+  return true
+}
+
+function resetToAdministrativeView() {
+  activeMapTheme.value = null
+  selectedThemeTownship.value = null
+  clearSelectedTownship()
+  clearThematicLayer()
+  resetTownshipLabelPlacements()
+}
+
 function renderThematicMap() {
   const instance = map.value
   if (!instance) return
 
   clearThematicLayer()
-  if (townshipFeatures.value.length === 0 || activeMapTheme.value === 'administrative') return
+  resetTownshipLabelPlacements()
+  setLandUseRaster(activeMapTheme.value === 'landuse', config.supermap.landuseRaster)
+  if (townshipFeatures.value.length === 0 || activeMapTheme.value == null) return
 
   thematicLayer = L.layerGroup().addTo(instance)
 
-  townshipFeatures.value.forEach((feature, index) => {
-    const metric = activeTownshipMetrics.value[index]
+  const metricByCode = new Map(
+    townshipFeatures.value.map((feature, index) => [feature.code, activeTownshipMetrics.value[index]]),
+  )
+  const featureParts = new Map<string, L.Polygon[]>()
+
+  orderTownshipRingParts(townshipFeatures.value).forEach(({ feature, ring }) => {
+    const metric = metricByCode.get(feature.code)
     if (!metric) return
     const selected = selectedThemeTownship.value?.code === feature.code
     const style = polygonStyle(metric, selected)
-    const polygon = L.polygon(feature.rings.map((ring) => [ring]), style)
+    const polygon = L.polygon([ring], style)
+    const parts = featureParts.get(feature.code) ?? []
+    parts.push(polygon)
+    featureParts.set(feature.code, parts)
 
     polygon
       .bindTooltip(tooltipContent(feature, metric), {
@@ -350,22 +386,34 @@ function renderThematicMap() {
         sticky: true,
       })
       .on('mouseover', () => {
-        polygon.setStyle({ ...style, color: '#eafffb', fillOpacity: Math.min((style.fillOpacity ?? 0.58) + 0.12, 0.74), weight: 2.4 })
+        parts.forEach((part) =>
+          part.setStyle({
+            ...style,
+            color: '#eafffb',
+            fillOpacity: Math.min((style.fillOpacity ?? 0.58) + 0.12, 0.74),
+            weight: 2.4,
+          }),
+        )
       })
       .on('mouseout', () => {
-        polygon.setStyle(polygonStyle(metric, selectedThemeTownship.value?.code === feature.code))
+        parts.forEach((part) =>
+          part.setStyle(polygonStyle(metric, selectedThemeTownship.value?.code === feature.code)),
+        )
       })
       .on('click', () => focusTownship(feature))
       .addTo(thematicLayer!)
-
-    if (activeMapTheme.value === 'poi' || activeMapTheme.value === 'governance') {
-      addClusterMarker(feature, metric)
-    }
   })
+
+  if (activeMapTheme.value === 'poi' || activeMapTheme.value === 'governance') {
+    townshipFeatures.value.forEach((feature, index) => {
+      const metric = activeTownshipMetrics.value[index]
+      if (metric) addClusterMarker(feature, metric)
+    })
+  }
 }
 
 function setActiveMapTheme(themeKey: MasterMapThemeKey) {
-  activeMapTheme.value = themeKey
+  activeMapTheme.value = toggleMasterMapTheme(activeMapTheme.value, themeKey)
 }
 
 function focusTownship(feature: TownshipFeature) {
@@ -382,13 +430,14 @@ function focusTownship(feature: TownshipFeature) {
 }
 
 watch(selectedTownship, (name) => {
-  selectedThemeTownship.value = name
-    ? townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null
-    : null
+  selectedThemeTownship.value = name ? (townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null) : null
 })
 
 watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues], renderThematicMap, { flush: 'post' })
-onBeforeUnmount(clearThematicLayer)
+onBeforeUnmount(() => {
+  clearThematicLayer()
+  resetTownshipLabelPlacements()
+})
 
 onMounted(async () => {
   const issuesPromise = loadGovernanceIssues(`${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`)
@@ -399,11 +448,21 @@ onMounted(async () => {
       governanceIssues.value = []
     })
 
-  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs, [config.supermap.mapServices.township], config.arcgis.accessToken, {
-    serviceUrl: config.supermap.dem.serviceUrl,
-    collectionId: config.supermap.dem.collectionId,
-    renderingRule: DEM_RENDERING_RULE,
-  }, { townshipFocus: true })
+  await initialize(
+    config.supermap.leafletSdkUrl,
+    config.supermap.mapServices.base,
+    config.map.center,
+    config.map.zoom,
+    config.map.crs,
+    [config.supermap.mapServices.township],
+    config.arcgis.accessToken,
+    {
+      serviceUrl: config.supermap.dem.serviceUrl,
+      collectionId: config.supermap.dem.collectionId,
+      renderingRule: DEM_RENDERING_RULE,
+    },
+    { townshipFocus: true },
+  )
 
   try {
     demSummary.value = await loadDemSummary(config.supermap.dem.serviceUrl, config.supermap.dem.collectionId, config.supermap.dem.itemId)
@@ -452,28 +511,17 @@ onMounted(async () => {
                   </g>
                   <path class="population-area" :d="populationTrendChart.areaPath" />
                   <polyline class="population-line" :points="populationTrendChart.linePoints" />
-                  <g
-                    v-for="point in populationTrendChart.points"
-                    :key="point.year"
-                    class="population-point"
-                    tabindex="0"
-                    :aria-label="`${point.year}年人口 ${point.populationWan.toFixed(1)}万人`"
-                    @pointerenter="activePopulationPoint = point"
-                    @pointerleave="activePopulationPoint = null"
-                    @focus="activePopulationPoint = point"
-                    @blur="activePopulationPoint = null"
-                  >
+                  <g v-for="point in populationTrendChart.points" :key="point.year" class="population-point" tabindex="0" :aria-label="`${point.year}年人口 ${point.populationWan.toFixed(1)}万人`" @pointerenter="activePopulationPoint = point" @pointerleave="activePopulationPoint = null" @focus="activePopulationPoint = point" @blur="activePopulationPoint = null">
                     <circle class="population-point__hit" :cx="point.x" :cy="point.y" r="8" />
                     <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3.5" />
-                    <text v-if="populationLabelYears.has(point.year)" class="population-value-label" :x="point.x" :y="point.y + (point.year === 2020 ? 14 : -9)">{{ point.populationWan.toFixed(1) }}</text>
-                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 8">{{ point.year }}</text>
+                    <text v-if="populationLabelYears.has(point.year)" class="population-value-label" :x="point.x" :y="point.y + (point.year === 2020 ? 14 : -9)">
+                      {{ point.populationWan.toFixed(1) }}
+                    </text>
+                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 8">
+                      {{ point.year }}
+                    </text>
                   </g>
-                  <g
-                    v-if="activePopulationPoint && activePopulationChartPoint"
-                    class="population-tooltip"
-                    :transform="`translate(${Math.min(populationTrendChart.width - 43, Math.max(43, activePopulationChartPoint.x))}, ${Math.max(47, activePopulationChartPoint.y - 5)})`"
-                    aria-hidden="true"
-                  >
+                  <g v-if="activePopulationPoint && activePopulationChartPoint" class="population-tooltip" :transform="`translate(${Math.min(populationTrendChart.width - 43, Math.max(43, activePopulationChartPoint.x))}, ${Math.max(47, activePopulationChartPoint.y - 5)})`" aria-hidden="true">
                     <g class="population-tooltip__surface">
                       <rect x="-42" y="-42" width="84" height="34" rx="4" />
                       <text class="population-tooltip__year" x="0" y="-29">{{ activePopulationPoint.year }}年</text>
@@ -483,8 +531,12 @@ onMounted(async () => {
                 </svg>
               </div>
               <div class="population-trend__summary">
-                <span><small>2020—2025</small><strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate < 0 ? '↓ ' : populationChangeRate > 0 ? '↑ ' : '' }}{{ Math.abs(populationChangeRate).toFixed(1) }}%</strong></span>
-                <span><small>人口趋势</small><strong>{{ populationTrendLabel }}</strong></span>
+                <span
+                  ><small>2020—2025</small><strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate < 0 ? '↓ ' : populationChangeRate > 0 ? '↑ ' : '' }}{{ Math.abs(populationChangeRate).toFixed(1) }}%</strong></span
+                >
+                <span
+                  ><small>人口趋势</small><strong>{{ populationTrendLabel }}</strong></span
+                >
               </div>
             </div>
           </div>
@@ -501,13 +553,7 @@ onMounted(async () => {
         </PanelCard>
 
         <PanelCard title="三生综合评价" :meta="sanshengEvaluation.meta">
-          <MasterSanshengRadar
-            v-if="sanshengEvaluation.scores"
-            :area-name="sanshengEvaluation.areaName"
-            :scope="sanshengEvaluation.scope"
-            :scores="sanshengEvaluation.scores"
-            :reference-scores="sanshengEvaluation.scope === 'township' ? COUNTY_SANSHENG_SCORES : null"
-          />
+          <MasterSanshengRadar v-if="sanshengEvaluation.scores" :area-name="sanshengEvaluation.areaName" :scope="sanshengEvaluation.scope" :scores="sanshengEvaluation.scores" :reference-scores="sanshengEvaluation.scope === 'township' ? COUNTY_SANSHENG_SCORES : null" />
           <div v-else class="sansheng-empty" role="status">
             <strong>暂无该区域三生评价数据</strong>
             <span>三生模型当前未配置该行政区指标</span>
@@ -519,15 +565,7 @@ onMounted(async () => {
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
           <div class="master-theme-tabs" role="tablist" aria-label="主控专题地图">
-            <button
-              v-for="theme in masterMapThemes"
-              :key="theme.key"
-              type="button"
-              role="tab"
-              :aria-selected="activeMapTheme === theme.key"
-              :class="{ active: activeMapTheme === theme.key }"
-              @click="setActiveMapTheme(theme.key)"
-            >
+            <button v-for="theme in masterMapThemes" :key="theme.key" type="button" role="tab" :aria-selected="activeMapTheme === theme.key" :class="{ active: activeMapTheme === theme.key }" @click="setActiveMapTheme(theme.key)">
               <strong>{{ theme.label }}</strong>
             </button>
           </div>
@@ -548,14 +586,8 @@ onMounted(async () => {
               <span>当前行政区</span>
               <strong>{{ townshipName(selectedThemeTownship) }}</strong>
               <em>{{ selectedTownshipMetric.label }}</em>
-              <div
-                v-if="selectedTownshipMetric.breakdown?.length"
-                class="master-map-breakdown"
-              >
-                <span
-                  v-for="item in selectedTownshipMetric.breakdown"
-                  :key="item.label"
-                >
+              <div v-if="selectedTownshipMetric.breakdown?.length" class="master-map-breakdown">
+                <span v-for="item in selectedTownshipMetric.breakdown" :key="item.label">
                   <i :style="{ background: item.color }" />
                   <b>{{ item.label }}</b>
                   <em>{{ item.value }} 个</em>
@@ -563,17 +595,7 @@ onMounted(async () => {
               </div>
             </div>
           </aside>
-          <MapToolbox
-            :map="map"
-            :focus-bounds="focusBounds"
-            :initial-center="config.map.center"
-            :initial-zoom="config.map.zoom"
-            :active-base-map="activeBaseMap"
-            :arcgis-available="arcgisAvailable"
-            :change-base-map="setBaseMap"
-            :reset-selection="resetMapSelection"
-            export-name="兰考县综合决策地图"
-          />
+          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" :reset-selection="resetMapSelection" :reset-to-administrative="resetToAdministrativeView" :clear-theme="clearActiveTheme" export-name="兰考县综合决策地图" />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
@@ -656,6 +678,9 @@ onMounted(async () => {
               </li>
               <li>
                 <span><i class="water" />水域沟渠</span><b>10%</b>
+              </li>
+              <li>
+                <span><i class="other" />其他用地</span><b>12%</b>
               </li>
             </ul>
           </div>
@@ -1001,7 +1026,7 @@ onMounted(async () => {
   left: 66px;
   display: grid;
   gap: 7px;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   pointer-events: auto;
 }
 
@@ -1038,7 +1063,7 @@ onMounted(async () => {
   overflow: hidden;
   color: currentColor;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1454,16 +1479,19 @@ onMounted(async () => {
 }
 
 .farm {
-  background: #d6b657;
+  background: #d6b85a;
 }
 .forest {
-  background: #4da668;
+  background: #58a875;
 }
 .build {
-  background: #d26d57;
+  background: #c97663;
 }
 .water {
-  background: #48a5cc;
+  background: #4ba9c5;
+}
+.other {
+  background: #7e9189;
 }
 
 .issue-stack,
@@ -1532,17 +1560,48 @@ onMounted(async () => {
 }
 
 @media (max-width: 1440px) {
-  .master-layout { grid-template-columns: 260px minmax(460px, 1fr) 270px; gap: 8px; }
-  .master-side, .master-center { gap: 8px; }
-  .master-center { grid-template-rows: minmax(0, 1fr) auto; }
-  .master-theme-tabs { gap: 5px; }
-  .master-theme-tabs button { height: 56px; padding: 5px 7px; }
-  .master-map-legend { width: 230px; gap: 7px; padding: 9px; }
-  .master-map-legend ul { grid-template-columns: 1fr; }
-  .land-use { gap: 8px; grid-template-rows: minmax(82px, 1fr) auto; }
-  .land-visual { width: 96px; height: 96px; }
-  .land-legend { gap: 4px 6px; }
-  .land-legend li { padding: 4px 6px; }
-  .issue-stack article { padding: 5px 6px; }
+  .master-layout {
+    grid-template-columns: 260px minmax(460px, 1fr) 270px;
+    gap: 8px;
+  }
+  .master-side,
+  .master-center {
+    gap: 8px;
+  }
+  .master-center {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .master-theme-tabs {
+    gap: 5px;
+  }
+  .master-theme-tabs button {
+    height: 56px;
+    padding: 5px 7px;
+  }
+  .master-map-legend {
+    width: 230px;
+    gap: 7px;
+    padding: 9px;
+  }
+  .master-map-legend ul {
+    grid-template-columns: 1fr;
+  }
+  .land-use {
+    gap: 8px;
+    grid-template-rows: minmax(82px, 1fr) auto;
+  }
+  .land-visual {
+    width: 96px;
+    height: 96px;
+  }
+  .land-legend {
+    gap: 4px 6px;
+  }
+  .land-legend li {
+    padding: 4px 6px;
+  }
+  .issue-stack article {
+    padding: 5px 6px;
+  }
 }
 </style>

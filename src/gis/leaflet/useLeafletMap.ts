@@ -2,42 +2,29 @@ import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
 import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
-import {
-  buildCountyBoundaryRings,
-  buildCountyInverseMaskRings,
-  filterCountyBoundaryArtifacts,
-  getCountyOuterBoundaryRings,
-  mergeTownshipFeatures,
-} from './countyFocusGeometry'
+import { buildCountyBoundaryRings, buildCountyInverseMaskRings, filterCountyBoundaryArtifacts, getCountyOuterBoundaryRings, mergeTownshipFeatures } from './countyFocusGeometry'
 import { focusMapOnTownship, isTownshipInteractionBlocked, TOWNSHIP_FOCUS_START_EVENT } from './mapFocus'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
-import {
-  getTownshipLabelOpacity,
-  getTownshipPathStyle,
-  resolveTownshipVisualState,
-  TOWNSHIP_NORMAL_STYLE,
-  type TownshipVisualState,
-} from './townshipFocusStyle'
+import { getTownshipLabelOpacity, getTownshipPathStyle, resolveTownshipVisualState, TOWNSHIP_NORMAL_STYLE, type TownshipVisualState } from './townshipFocusStyle'
 import {
   getTownshipLabel,
   loadCountyFeatures,
   loadTownshipFeatures,
+  orderTownshipRingParts,
   resolveTownshipMapServiceUrl,
   type TownshipFeature,
 } from './townshipFeatures'
 
 interface TownshipLayerEntry {
   name: string
-  layer: L.Polygon
+  parts: L.Polygon[]
+  labelPart: L.Polygon
+  bounds: L.LatLngBounds
   baseStyle: L.PathOptions
+  defaultTooltipOptions: L.TooltipOptions
 }
 
-const TOWNSHIP_LABEL_STATE_CLASSES = [
-  'township-map-label--normal',
-  'township-map-label--hover',
-  'township-map-label--selected',
-  'township-map-label--dimmed',
-] as const
+const TOWNSHIP_LABEL_STATE_CLASSES = ['township-map-label--normal', 'township-map-label--hover', 'township-map-label--selected', 'township-map-label--dimmed'] as const
 
 const TOWNSHIP_LEGACY_STYLE: L.PathOptions = {
   pane: 'townshipOverlayPane',
@@ -52,6 +39,12 @@ export interface DemRasterOverlay {
   serviceUrl: string
   collectionId: string
   renderingRule: Record<string, unknown>
+}
+
+export interface LandUseRasterOverlay {
+  serviceUrl: string
+  collectionId: string
+  opacity: number
 }
 
 export interface LeafletMapInteractionOptions {
@@ -70,6 +63,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let resizeObserver: ResizeObserver | null = null
   let superMapBaseLayer: L.TileLayer | null = null
   let activeBaseLayer: L.TileLayer | null = null
+  let landUseRasterLayer: L.TileLayer | null = null
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   const townshipLayers: TownshipLayerEntry[] = []
@@ -83,7 +77,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   }
 
   function refreshTownshipLabel(entry: TownshipLayerEntry, state: TownshipVisualState) {
-    const tooltip = entry.layer.getTooltip()
+    const tooltip = entry.labelPart.getTooltip()
     tooltip?.setOpacity(getTownshipLabelOpacity(state))
     const element = tooltip?.getElement()
     if (!element) return
@@ -94,12 +88,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   function refreshTownshipStyles() {
     townshipLayers.forEach((entry) => {
       const state = getTownshipVisualState(entry)
-      entry.layer.setStyle(getTownshipPathStyle(state, entry.baseStyle))
+      entry.parts.forEach((part) => part.setStyle(getTownshipPathStyle(state, entry.baseStyle)))
       refreshTownshipLabel(entry, state)
     })
 
     const foregroundName = selectedTownship.value ?? hoveredTownship.value
-    townshipLayers.find((entry) => entry.name === foregroundName)?.layer.bringToFront()
+    townshipLayers
+      .find((entry) => entry.name === foregroundName)
+      ?.parts.forEach((part) => part.bringToFront())
   }
 
   function clearSelectedTownship() {
@@ -109,8 +105,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     refreshTownshipStyles()
   }
 
-  function selectTownship(instance: L.Map, polygon: L.Polygon, name: string) {
-    return focusMapOnTownship(instance, polygon, () => {
+  function selectTownship(instance: L.Map, name: string) {
+    const entry = townshipLayers.find((item) => item.name === name)
+    if (!entry) return false
+    return focusMapOnTownship(instance, { getBounds: () => entry.bounds }, () => {
       selectedTownship.value = name
       hoveredTownship.value = null
       refreshTownshipStyles()
@@ -120,8 +118,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
   function focusTownshipByName(name: string) {
     const instance = map.value
-    const entry = townshipLayers.find((item) => item.name === name)
-    return instance && entry ? selectTownship(instance, entry.layer, entry.name) : false
+    return instance ? selectTownship(instance, name) : false
   }
 
   function addCountyFocusContext(instance: L.Map, features: Awaited<ReturnType<typeof loadTownshipFeatures>>) {
@@ -153,43 +150,72 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     return true
   }
 
-  function renderTownshipFeatures(
-    instance: L.Map,
-    features: TownshipFeature[],
-    interactionOptions: LeafletMapInteractionOptions,
-  ) {
-    townshipLayers.splice(0).forEach((entry) => entry.layer.remove())
-    const displayFeatures = interactionOptions.townshipFocus
-      ? features.filter((feature) => getTownshipLabel(feature))
-      : features
+  function setTownshipLabelPlacement(name: string, options: Pick<L.TooltipOptions, 'direction' | 'offset' | 'className'>, position?: L.LatLngExpression) {
+    const entry = townshipLayers.find((item) => item.name === name)
+    const content = entry?.labelPart.getTooltip()?.getContent()
+    if (!entry || content == null) return false
+    entry.labelPart.unbindTooltip().bindTooltip(content, {
+      ...entry.defaultTooltipOptions,
+      ...options,
+    })
+    entry.labelPart.openTooltip(position)
+    refreshTownshipLabel(entry, getTownshipVisualState(entry))
+    return true
+  }
 
-    displayFeatures.forEach((feature) => {
+  function resetTownshipLabelPlacements() {
+    townshipLayers.forEach((entry) => {
+      const content = entry.labelPart.getTooltip()?.getContent()
+      if (content == null) return
+      entry.labelPart.unbindTooltip().bindTooltip(content, entry.defaultTooltipOptions)
+      entry.labelPart.openTooltip()
+      refreshTownshipLabel(entry, getTownshipVisualState(entry))
+    })
+  }
+
+  function renderTownshipFeatures(instance: L.Map, features: TownshipFeature[], interactionOptions: LeafletMapInteractionOptions) {
+    townshipLayers.splice(0).forEach((entry) => entry.parts.forEach((part) => part.remove()))
+    const displayFeatures = interactionOptions.townshipFocus ? features.filter((feature) => getTownshipLabel(feature)) : features
+    const defaultTooltipOptions: L.TooltipOptions = {
+      permanent: true,
+      direction: 'center',
+      className: 'township-map-label',
+      pane: 'townshipLabelPane',
+      interactive: false,
+      opacity: 1,
+    }
+    const entriesByName = new Map<string, TownshipLayerEntry>()
+    const labelCandidates = new Map<string, { polygon: L.Polygon; area: number }>()
+
+    orderTownshipRingParts(displayFeatures).forEach(({ feature, ring, area }) => {
       const label = getTownshipLabel(feature)
       const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
       const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
-      const displayRings = feature.rings
-      const polygon = L.polygon(displayRings.map((ring) => [ring]), {
+      const polygon = L.polygon([ring], {
         ...townshipBaseStyle,
         className: townshipIsInteractive ? 'township-map-region' : undefined,
         interactive: townshipIsInteractive,
       })
-      if (label) {
-        polygon.bindTooltip(label, {
-          permanent: true,
-          direction: 'center',
-          className: 'township-map-label',
-          pane: 'townshipLabelPane',
-          interactive: false,
-          opacity: 1,
-        })
-      }
+
       if (townshipIsInteractive && label) {
-        const entry: TownshipLayerEntry = {
-          name: label,
-          layer: polygon,
-          baseStyle: { ...townshipBaseStyle },
+        let entry = entriesByName.get(label)
+        if (!entry) {
+          entry = {
+            name: label,
+            parts: [],
+            labelPart: polygon,
+            bounds: L.latLngBounds(feature.rings.flat()),
+            baseStyle: { ...townshipBaseStyle },
+            defaultTooltipOptions,
+          }
+          entriesByName.set(label, entry)
+          townshipLayers.push(entry)
         }
-        townshipLayers.push(entry)
+        entry.parts.push(polygon)
+        const previousCandidate = labelCandidates.get(label)
+        if (!previousCandidate || area > previousCandidate.area) {
+          labelCandidates.set(label, { polygon, area })
+        }
         polygon.on('tooltipopen', () => refreshTownshipLabel(entry, getTownshipVisualState(entry)))
         polygon.on('mouseover', () => {
           if (isTownshipInteractionBlocked(instance)) return
@@ -203,10 +229,17 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
           refreshTownshipStyles()
         })
         polygon.on('click', (event) => {
-          if (selectTownship(instance, polygon, label)) L.DomEvent.stopPropagation(event)
+          if (selectTownship(instance, label)) L.DomEvent.stopPropagation(event)
         })
       }
       polygon.addTo(instance)
+    })
+
+    townshipLayers.forEach((entry) => {
+      const candidate = labelCandidates.get(entry.name)
+      if (!candidate) return
+      entry.labelPart = candidate.polygon
+      candidate.polygon.bindTooltip(entry.name, entry.defaultTooltipOptions)
     })
     refreshTownshipStyles()
   }
@@ -236,8 +269,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
 
     let layer = arcgisLayers.get(mode)
     if (!layer) {
-      const tileUrl =
-        option.tileUrl ?? (option.arcgisStyle ? buildArcGisTileUrl(option.arcgisStyle, arcgisAccessToken) : '')
+      const tileUrl = option.tileUrl ?? (option.arcgisStyle ? buildArcGisTileUrl(option.arcgisStyle, arcgisAccessToken) : '')
       if (!tileUrl) return false
       layer = L.tileLayer(tileUrl, {
         pane: 'baseMapPane',
@@ -253,17 +285,32 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     return activateBaseLayer(layer, mode)
   }
 
-  async function initialize(
-    sdkUrl: string,
-    serviceUrl: string,
-    center: [number, number],
-    zoom: number,
-    crsCode: 'EPSG4326' | 'EPSG3857',
-    overlayServiceUrls: string[] = [],
-    arcgisToken = '',
-    demOverlay?: DemRasterOverlay,
-    interactionOptions: LeafletMapInteractionOptions = {},
-  ) {
+  function setLandUseRaster(active: boolean, overlay: LandUseRasterOverlay) {
+    const instance = map.value
+    if (!instance) return false
+    if (!active) {
+      landUseRasterLayer?.remove()
+      landUseRasterLayer = null
+      return true
+    }
+    if (landUseRasterLayer) return true
+
+    const collectionUrl = `${overlay.serviceUrl.replace(/\/+$/, '')}/collections/${encodeURIComponent(overlay.collectionId)}`
+    landUseRasterLayer = L.tileLayer(`${collectionUrl}/tile.png?transparent=true&cacheEnabled=true&z={z}&x={x}&y={y}`, {
+      pane: 'landUseRasterPane',
+      opacity: overlay.opacity,
+      crossOrigin: true,
+      maxZoom: 20,
+      className: 'landuse-raster-tile',
+    })
+    landUseRasterLayer.on('tileerror', () => {
+      if (!disposed) error.value = '土地利用栅格加载失败，请检查 LankaoLand 影像服务与跨域配置。'
+    })
+    landUseRasterLayer.addTo(instance)
+    return true
+  }
+
+  async function initialize(sdkUrl: string, serviceUrl: string, center: [number, number], zoom: number, crsCode: 'EPSG4326' | 'EPSG3857', overlayServiceUrls: string[] = [], arcgisToken = '', demOverlay?: DemRasterOverlay, interactionOptions: LeafletMapInteractionOptions = {}) {
     await nextTick()
     if (!container.value || map.value) return
 
@@ -295,6 +342,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       const countyMaskPane = instance.createPane('countyMaskPane')
       countyMaskPane.style.zIndex = '350'
       countyMaskPane.style.pointerEvents = 'none'
+
+      const landUseRasterPane = instance.createPane('landUseRasterPane')
+      landUseRasterPane.style.zIndex = '280'
+      landUseRasterPane.style.pointerEvents = 'none'
 
       const townshipPane = instance.createPane('townshipOverlayPane')
       townshipPane.style.zIndex = '410'
@@ -356,15 +407,9 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
               .then((features) => {
                 if (disposed) return
                 rawTownshipFeatures = [...rawTownshipFeatures, ...features]
-                const mergedFeatures = interactionOptions.townshipFocus
-                  ? mergeTownshipFeatures(rawTownshipFeatures)
-                  : rawTownshipFeatures
+                const mergedFeatures = interactionOptions.townshipFocus ? mergeTownshipFeatures(rawTownshipFeatures) : rawTownshipFeatures
                 townshipFeatures.value = mergedFeatures
-                if (
-                  interactionOptions.townshipFocus &&
-                  !countyFocusContextAdded &&
-                  !countyFocusContextLoading
-                ) {
+                if (interactionOptions.townshipFocus && !countyFocusContextAdded && !countyFocusContextLoading) {
                   countyFocusContextLoading = true
                   void loadCountyFeatures(overlayServiceUrl)
                     .then((countyFeatures) => {
@@ -433,6 +478,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     countyFocusContextAdded = false
     countyFocusContextLoading = false
     townshipFeatures.value = []
+    landUseRasterLayer = null
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()
@@ -450,8 +496,11 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     error,
     initialize,
     setBaseMap,
+    setLandUseRaster,
     clearSelectedTownship,
     focusTownshipByName,
+    setTownshipLabelPlacement,
+    resetTownshipLabelPlacements,
     dispose,
   }
 }

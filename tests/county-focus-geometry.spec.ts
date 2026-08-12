@@ -63,15 +63,33 @@ describe('county focus geometry', () => {
     ])
   })
 
-  it('移除乡镇的微小离散残部并保留可辨识多部件', () => {
+  it('只移除零面积退化环，保留任何面积大于零的真实部件', () => {
     const mainRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
     const visiblePart = [[20, 20], [21, 20], [21, 21], [20, 21], [20, 20]] as Array<[number, number]>
-    const artifactPart = [[2, 2], [2.4, 2], [2.4, 2.4], [2, 2.4], [2, 2]] as Array<[number, number]>
+    const tinyValidPart = [[2, 2], [2.0001, 2], [2.0001, 2.0001], [2, 2.0001], [2, 2]] as Array<[number, number]>
+    const degenerateRing = [[1, 1], [1.0001, 1], [1.0002, 1], [1, 1]] as Array<[number, number]>
 
-    expect(filterTownshipBoundaryArtifacts([mainRing, visiblePart, artifactPart])).toEqual([
+    expect(filterTownshipBoundaryArtifacts([mainRing, visiblePart, tinyValidPart, degenerateRing])).toEqual([
       mainRing,
       visiblePart,
+      tinyValidPart,
     ])
+  })
+
+  it('合并历史要素时保留面积很小但有效的独立飞地', () => {
+    const merged = mergeTownshipFeatures([
+      {
+        code: '410225201',
+        name: '三义寨乡',
+        rings: [
+          [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+          [[20, 20], [20.0001, 20], [20.0001, 20.0001], [20, 20.0001], [20, 20]],
+        ],
+      },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.rings).toHaveLength(2)
   })
 
   it('按县域范围扩展反向遮罩外环并保留县界孔洞', () => {

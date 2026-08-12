@@ -3,14 +3,7 @@ import { scoreTown, towns, type Town } from '@/features/sansheng/model'
 import type { TownshipFeature } from '@/gis/leaflet/townshipFeatures'
 import { gdpTrend, latestPopulationDensity } from './data'
 
-export type MasterMapThemeKey =
-  | 'administrative'
-  | 'population'
-  | 'gdp'
-  | 'poi'
-  | 'landuse'
-  | 'sansheng'
-  | 'governance'
+export type MasterMapThemeKey = 'population' | 'gdp' | 'poi' | 'landuse' | 'sansheng' | 'governance'
 
 export interface MasterMapTheme {
   key: MasterMapThemeKey
@@ -42,29 +35,44 @@ export interface TownshipThemeMetric {
   dataAvailable?: boolean
 }
 
+export function toggleMasterMapTheme(currentTheme: MasterMapThemeKey | null, nextTheme: MasterMapThemeKey): MasterMapThemeKey | null {
+  return currentTheme === nextTheme ? null : nextTheme
+}
+
 export const landUseSource = [
-  { name: '耕地与设施农业', shortLabel: '耕地', value: 42, color: '#d6b657' },
-  { name: '林地草地', shortLabel: '林草', value: 19, color: '#4da668' },
-  { name: '村庄建设用地', shortLabel: '村建', value: 17, color: '#d26d57' },
-  { name: '水域沟渠', shortLabel: '水域', value: 10, color: '#48a5cc' },
-  { name: '其他用地', shortLabel: '其他', value: 12, color: '#345349' },
+  { name: '耕地与设施农业', shortLabel: '耕地', value: 42, color: '#D6B85A' },
+  { name: '林地草地', shortLabel: '林草', value: 19, color: '#58A875' },
+  { name: '村庄建设用地', shortLabel: '村建', value: 17, color: '#C97663' },
+  { name: '水域沟渠', shortLabel: '水域', value: 10, color: '#4BA9C5' },
+  { name: '其他用地', shortLabel: '其他', value: 12, color: '#7E9189' },
 ]
 
 export const masterMapThemes: MasterMapTheme[] = [
-  { key: 'administrative', label: '行政区划', description: '兰考县现行乡镇、街道行政区划' },
-  { key: 'population', label: '人口密度', description: '按 16 个行政区实际值分位分级' },
+  {
+    key: 'population',
+    label: '人口密度',
+    description: '按 16 个行政区实际值分位分级',
+  },
   { key: 'gdp', label: 'GDP', description: '按行政区展示经济强度分布' },
   { key: 'poi', label: 'POI', description: '公共服务、产业和文旅兴趣点聚合' },
-  { key: 'landuse', label: '土地利用', description: '按行政区主导用地类型展示' },
-  { key: 'sansheng', label: '三生评价', description: '使用三生模型真实的生态、生活、生产协同得分' },
-  { key: 'governance', label: '治理问题', description: '按行政区聚合治理问题数量' },
+  {
+    key: 'landuse',
+    label: '土地利用',
+    description: '兰考县真实土地利用栅格分类',
+  },
+  {
+    key: 'sansheng',
+    label: '三生评价',
+    description: '使用三生模型真实的生态、生活、生产协同得分',
+  },
+  {
+    key: 'governance',
+    label: '治理问题',
+    description: '按行政区聚合治理问题数量',
+  },
 ]
 
 export const masterMapThemeLegends: Record<MasterMapThemeKey, ThemeLegendItem[]> = {
-  administrative: [
-    { label: '兰考县界', color: '#dceb72', kind: 'line' },
-    { label: '乡镇 / 街道界', color: '#b9cf65', kind: 'line' },
-  ],
   population: [
     { label: '低密度', color: '#17443E' },
     { label: '较低', color: '#21665A' },
@@ -84,7 +92,10 @@ export const masterMapThemeLegends: Record<MasterMapThemeKey, ThemeLegendItem[]>
     { label: '产业节点', color: '#D3B15B', kind: 'dot' },
     { label: '文旅资源', color: '#91C978', kind: 'dot' },
   ],
-  landuse: landUseSource.map((item) => ({ label: item.name, color: item.color })),
+  landuse: landUseSource.map((item) => ({
+    label: item.name,
+    color: item.color,
+  })),
   sansheng: [
     { label: '协同偏弱', color: '#174640' },
     { label: '稳步提升', color: '#287666' },
@@ -132,24 +143,18 @@ function relatedIssues(feature: TownshipFeature, issues: GovernanceIssue[]) {
   return issues.filter((issue) => issue.town.trim() === featureName)
 }
 
-export function resolveTownshipThemeMetric(
-  themeKey: Exclude<MasterMapThemeKey, 'administrative'>,
-  feature: TownshipFeature,
-  index: number,
-  issues: GovernanceIssue[] = [],
-): TownshipThemeMetric {
+export function resolveTownshipThemeMetric(themeKey: MasterMapThemeKey, feature: TownshipFeature, index: number, issues: GovernanceIssue[] = []): TownshipThemeMetric {
   const seed = hashFeature(feature, index)
   const sanshengTown = findSanshengTown(feature)
 
   if (themeKey === 'population') {
-    const density = Math.round(
-      clamp(
-        latestPopulationDensity + (seed % 220) - 95 + ((sanshengTown?.life.residentialRatio ?? 62) - 62) * 1.6,
-        520,
-        920,
-      ),
-    )
-    return { value: density, label: `${density} 人/km²`, meta: '人口密度分位分级', color: populationPalette[0]! }
+    const density = Math.round(clamp(latestPopulationDensity + (seed % 220) - 95 + ((sanshengTown?.life.residentialRatio ?? 62) - 62) * 1.6, 520, 920))
+    return {
+      value: density,
+      label: `${density} 人/km²`,
+      meta: '人口密度分位分级',
+      color: populationPalette[0]!,
+    }
   }
 
   if (themeKey === 'gdp') {
@@ -185,9 +190,12 @@ export function resolveTownshipThemeMetric(
   }
 
   if (themeKey === 'landuse') {
-    const landUse = landUseSource[seed % landUseSource.length]!
-    const share = Math.round(clamp(landUse.value + (seed % 19) - 9, 8, 56))
-    return { value: share, label: `${landUse.shortLabel} ${share}%`, meta: `主导类型：${landUse.name}`, color: landUse.color }
+    return {
+      value: 0,
+      label: '真实栅格',
+      meta: 'Lankao-Land 影像服务',
+      color: 'transparent',
+    }
   }
 
   if (themeKey === 'sansheng') {
@@ -206,11 +214,7 @@ export function resolveTownshipThemeMetric(
       label: `${scores.composite.toFixed(1)} 分`,
       meta: '三生协同指数',
       color: sanshengPalette[0]!,
-      details: [
-        `生态 ${scores.ecology.toFixed(1)}`,
-        `生活 ${scores.life.toFixed(1)}`,
-        `生产 ${scores.production.toFixed(1)}`,
-      ],
+      details: [`生态 ${scores.ecology.toFixed(1)}`, `生活 ${scores.life.toFixed(1)}`, `生产 ${scores.production.toFixed(1)}`],
       dataAvailable: true,
     }
   }
@@ -240,12 +244,8 @@ function applyQuantileColors(metrics: TownshipThemeMetric[], palette: string[]) 
   })
 }
 
-export function resolveTownshipThemeMetrics(
-  themeKey: MasterMapThemeKey,
-  features: TownshipFeature[],
-  issues: GovernanceIssue[] = [],
-): TownshipThemeMetric[] {
-  if (themeKey === 'administrative') return []
+export function resolveTownshipThemeMetrics(themeKey: MasterMapThemeKey | null, features: TownshipFeature[], issues: GovernanceIssue[] = []): TownshipThemeMetric[] {
+  if (themeKey == null) return []
   const metrics = features.map((feature, index) => resolveTownshipThemeMetric(themeKey, feature, index, issues))
   if (themeKey === 'population') applyQuantileColors(metrics, populationPalette)
   if (themeKey === 'sansheng') applyQuantileColors(metrics, sanshengPalette)

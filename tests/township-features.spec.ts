@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getTownshipLabel,
+  getTownshipRingArea,
   loadCountyFeatures,
   isPointInsideTownship,
   loadTownshipFeatures,
+  orderTownshipRingParts,
   parseTownshipFeatures,
   resolveCountyMapServiceUrl,
   resolveTownshipMapServiceUrl,
+  toLeafletMultiPolygon,
   townshipRepresentativePoint,
   type TownshipFeature,
 } from '@/gis/leaflet/townshipFeatures'
@@ -224,6 +227,42 @@ describe('行政区划要素解析', () => {
     expect(point[0]).toBeLessThan(5)
     expect(point[1]).toBeLessThan(5)
     expect(isPointInsideTownship(point, multiPartFeature)).toBe(true)
+  })
+
+  it('计算单环鞋带面积用于部件排序', () => {
+    expect(getTownshipRingArea([[0, 0], [0, 2], [2, 2], [2, 0], [0, 0]])).toBeCloseTo(4)
+    expect(getTownshipRingArea([[0, 0], [0, 0], [0, 0]])).toBe(0)
+  })
+
+  it('按面积降序排列多部件，小飞地最后绘制以保持在最上层', () => {
+    const mainPart: TownshipFeature['rings'][number] = [[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]
+    const enclavePart: TownshipFeature['rings'][number] = [[20, 20], [20, 21], [21, 21], [21, 20], [20, 20]]
+    const features: TownshipFeature[] = [
+      { code: '410225001', name: '兰阳街道', rings: [mainPart, enclavePart] },
+    ]
+
+    const ordered = orderTownshipRingParts(features)
+
+    expect(ordered).toHaveLength(2)
+    expect(ordered[0]?.ring).toBe(mainPart)
+    expect(ordered[1]?.ring).toBe(enclavePart)
+    expect(ordered[1]?.feature.code).toBe('410225001')
+  })
+
+  it('将多部件行政区转换为 Leaflet MultiPolygon 结构', () => {
+    const feature: TownshipFeature = {
+      code: '410225108',
+      name: '仪封镇',
+      rings: [
+        [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
+        [[3, 3], [4, 3], [4, 4], [3, 4], [3, 3]],
+      ],
+    }
+
+    expect(toLeafletMultiPolygon(feature)).toEqual([
+      [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+      [[[3, 3], [4, 3], [4, 4], [3, 4], [3, 3]]],
+    ])
   })
 
   it('丢弃点数与分段信息不一致的损坏几何', () => {

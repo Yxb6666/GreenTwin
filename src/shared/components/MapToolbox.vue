@@ -17,6 +17,8 @@ const props = defineProps<{
   arcgisAvailable: boolean
   changeBaseMap: (mode: BaseMapMode) => boolean
   resetSelection?: () => void
+  resetToAdministrative?: () => void
+  clearTheme?: () => boolean
   exportName?: string
 }>()
 
@@ -159,6 +161,10 @@ function startMeasurement(type: MeasurementType) {
 }
 
 function clearDrawings() {
+  if (props.clearTheme?.()) {
+    notify('已清除专题图层，保留当前行政区与地图视角')
+    return
+  }
   clearTransientDrawings()
   notify('临时标绘与测量结果已清除')
 }
@@ -215,7 +221,11 @@ function setBaseMap(mode: BaseMapMode) {
 function resetView() {
   if (!props.map) return
   clearTransientDrawings()
-  props.resetSelection?.()
+  if (props.resetToAdministrative) {
+    props.resetToAdministrative()
+  } else {
+    props.resetSelection?.()
+  }
   focusMapOnLayer(props.map, props.focusBounds, props.initialCenter, props.initialZoom)
   notify(props.focusBounds ? '已居中显示行政区划图层' : '图层范围不可用，已回到默认视图')
 }
@@ -349,7 +359,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="map-toolbox" aria-label="地图常用工具">
     <div class="map-toolbox__rail" role="toolbar" aria-label="地图操作">
-      <button type="button" aria-label="清除临时图层" title="清除临时图层" @click="clearDrawings">
+      <button type="button" aria-label="清除专题或临时图层" title="清除专题或临时图层" @click="clearDrawings">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" />
         </svg>

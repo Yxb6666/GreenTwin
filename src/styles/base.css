@@ -447,6 +447,12 @@ button {
   font-weight: 500;
 }
 
+.leaflet-tooltip.township-map-label--point-theme {
+  color: #f5f8e8;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), -1px 0 2px #04110f, 1px 0 2px #04110f;
+}
+
 .leaflet-interactive.township-map-region {
   cursor: pointer;
   transition:

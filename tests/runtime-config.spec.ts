@@ -20,6 +20,12 @@ interface RuntimeConfigFixture {
       collectionId: string
       itemId: string
     }
+    landuseRaster: {
+      serviceUrl: string
+      collectionId: string
+      opacity: number
+      rendererType: string
+    }
   }
 }
 
@@ -29,13 +35,17 @@ describe('runtime-config 乡镇地图服务', () => {
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as RuntimeConfigFixture
 
     expect(config.supermap.mapServices.base).toContain('/map-geovis-img/rest/maps/GEOVIS_Img')
-    expect(config.supermap.mapServices.township).toBe(
-      'http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest',
-    )
+    expect(config.supermap.mapServices.township).toBe('http://118.89.55.214:8090/iserver/services/Lankao_map_units/rest')
     expect(config.supermap.dem).toEqual({
       serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoDem/restjsr',
       collectionId: 'Lankao-DEM',
       itemId: '1',
+    })
+    expect(config.supermap.landuseRaster).toEqual({
+      serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoLand/restjsr',
+      collectionId: 'Lankao-Land',
+      opacity: 0.82,
+      rendererType: 'STRETCHED',
     })
     expect(config.map.crs).toBe('EPSG3857')
     expect(config.map.center).toEqual([34.82, 114.82])
