@@ -23,6 +23,12 @@ export interface Town {
   production: Record<string, number>
 }
 
+export type DimensionScores = Record<DimensionKey, number>
+
+export interface SanshengScores extends DimensionScores {
+  composite: number
+}
+
 export const dimensionMeta: Record<DimensionKey, { label: string; color: string; indicators: Indicator[] }> = {
   ecology: {
     label: '生态空间',
@@ -102,11 +108,27 @@ export function calculateDimensionScore(town: Town, dimension: DimensionKey) {
   return Number((score / total).toFixed(1))
 }
 
-export function scoreTown(town: Town, weights: Record<DimensionKey, number>) {
+export function calculateCompositeScore(
+  scores: DimensionScores,
+  weights: Record<DimensionKey, number>,
+) {
   const normalized = normalizeWeights(weights)
+  return Number(
+    (
+      scores.ecology * normalized.ecology +
+      scores.life * normalized.life +
+      scores.production * normalized.production
+    ).toFixed(1),
+  )
+}
+
+export function scoreTown(town: Town, weights: Record<DimensionKey, number>) {
   const ecology = calculateDimensionScore(town, 'ecology')
   const life = calculateDimensionScore(town, 'life')
   const production = calculateDimensionScore(town, 'production')
-  const composite = Number((ecology * normalized.ecology + life * normalized.life + production * normalized.production).toFixed(1))
+  const composite = calculateCompositeScore(
+    { ecology, life, production },
+    weights,
+  )
   return { ecology, life, production, composite }
 }

@@ -3,14 +3,14 @@ import { computed, onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
-import RadarChart from '@/shared/components/RadarChart.vue'
+import MasterSanshengRadar from '@/features/master/MasterSanshengRadar.vue'
 import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
 import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
 import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
-import { resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
+import { COUNTY_SANSHENG_SCORES, resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
@@ -56,10 +56,6 @@ const activePopulationChartPoint = computed(() => {
   return populationTrendChart.value.points.find((point) => point.year === activePopulationPoint.value?.year) ?? null
 })
 const sanshengEvaluation = computed(() => resolveMasterSanshengEvaluation(selectedTownship.value))
-const sanshengRadarValues = computed(() => {
-  const scores = sanshengEvaluation.value.scores
-  return scores ? [scores.ecology, scores.life, scores.production] : []
-})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生空间',
   scopeLabel: selectedTownship.value
@@ -84,7 +80,9 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
     selectedLandUse: activeLandUse.value?.name ?? '未选中',
     selectedTownship: selectedTownship.value ?? '未选中',
-    townshipSansheng: sanshengEvaluation.value.scores ?? '三生模型当前未配置该行政区指标',
+    townshipSansheng: sanshengEvaluation.value.scores
+      ? { ...sanshengEvaluation.value.scores }
+      : '三生模型当前未配置该行政区指标',
     dataScopes: {
       population: '兰考县县域',
       gdp: '兰考县县域',
@@ -262,7 +260,13 @@ onMounted(async () => {
         </PanelCard>
 
         <PanelCard title="三生综合评价" :meta="sanshengEvaluation.meta">
-          <RadarChart v-if="sanshengEvaluation.scores" :labels="['生态', '生活', '生产']" :values="sanshengRadarValues" />
+          <MasterSanshengRadar
+            v-if="sanshengEvaluation.scores"
+            :area-name="sanshengEvaluation.areaName"
+            :scope="sanshengEvaluation.scope"
+            :scores="sanshengEvaluation.scores"
+            :reference-scores="sanshengEvaluation.scope === 'township' ? COUNTY_SANSHENG_SCORES : null"
+          />
           <div v-else class="sansheng-empty" role="status">
             <strong>暂无该区域三生评价数据</strong>
             <span>三生模型当前未配置该行政区指标</span>

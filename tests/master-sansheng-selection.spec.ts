@@ -27,11 +27,7 @@ describe('主控页面行政区三生评价联动', () => {
       areaName: name,
       meta: `${name} / 行政区评价`,
       scope: 'township',
-      scores: {
-        ecology: expected.ecology,
-        life: expected.life,
-        production: expected.production,
-      },
+      scores: expected,
     })
   })
 

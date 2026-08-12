@@ -1,23 +1,30 @@
 import {
+  calculateCompositeScore,
   DEFAULT_DIMENSION_WEIGHTS,
   scoreTown,
   towns,
-  type DimensionKey,
+  type SanshengScores,
 } from '@/features/sansheng/model'
-
-export type SanshengRadarScores = Record<DimensionKey, number>
 
 export interface MasterSanshengEvaluation {
   areaName: string
   meta: string
   scope: 'county' | 'township' | 'unavailable'
-  scores: SanshengRadarScores | null
+  scores: SanshengScores | null
 }
 
-export const COUNTY_SANSHENG_SCORES: SanshengRadarScores = {
+const COUNTY_SANSHENG_DIMENSIONS = {
   ecology: 88,
   life: 82,
   production: 90,
+}
+
+export const COUNTY_SANSHENG_SCORES: SanshengScores = {
+  ...COUNTY_SANSHENG_DIMENSIONS,
+  composite: calculateCompositeScore(
+    COUNTY_SANSHENG_DIMENSIONS,
+    DEFAULT_DIMENSION_WEIGHTS,
+  ),
 }
 
 export function resolveMasterSanshengEvaluation(
@@ -43,14 +50,10 @@ export function resolveMasterSanshengEvaluation(
     }
   }
 
-  const { ecology, life, production } = scoreTown(
-    town,
-    DEFAULT_DIMENSION_WEIGHTS,
-  )
   return {
     areaName,
     meta: `${areaName} / 行政区评价`,
     scope: 'township',
-    scores: { ecology, life, production },
+    scores: scoreTown(town, DEFAULT_DIMENSION_WEIGHTS),
   }
 }

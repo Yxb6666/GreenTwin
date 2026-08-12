@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateDimensionScore, normalizeIndicator, normalizeWeights, scoreTown, towns } from '@/features/sansheng/model'
+import { calculateCompositeScore, calculateDimensionScore, normalizeIndicator, normalizeWeights, scoreTown, towns } from '@/features/sansheng/model'
 
 describe('三生空间评价模型', () => {
   it('将权重归一化为 1', () => {
@@ -26,5 +26,14 @@ describe('三生空间评价模型', () => {
     expect(score.composite).toBeGreaterThanOrEqual(0)
     expect(score.composite).toBeLessThanOrEqual(100)
     expect(Number(score.composite.toFixed(1))).toBe(score.composite)
+  })
+
+  it('使用相同权重计算给定维度分数的综合得分', () => {
+    expect(
+      calculateCompositeScore(
+        { ecology: 88, life: 82, production: 90 },
+        { ecology: 34, life: 33, production: 33 },
+      ),
+    ).toBe(86.7)
   })
 })
