@@ -11,6 +11,9 @@ import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
 import AiBuilderAssistant, {
   type AiBuilderStyle,
 } from './AiBuilderAssistant.vue'
+import SceneToolbox, {
+  type SceneMeasureType,
+} from './SceneToolbox.vue'
 import {
   clampModelScale,
   formatPointLabel,
@@ -19,6 +22,11 @@ import {
   toSimulationPlacement,
   type PickedPoint,
 } from './modelPlacement'
+import {
+  calculateGeodesicArea,
+  formatArea,
+  formatDistance,
+} from '@/gis/leaflet/measurement'
 import {
   createSimulationJob,
   waitForSimulationJob,
@@ -75,6 +83,8 @@ interface SuperMapViewer {
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
+    render?: () => void
+    requestRender?: () => void
   }
   imageryLayers: {
     addImageryProvider: (provider: unknown) => unknown
@@ -88,6 +98,9 @@ interface SuperMapViewer {
       position: { x: number; y: number },
       ellipsoid?: unknown,
     ) => unknown
+    positionCartographic?: { height: number }
+    zoomIn: (amount: number) => void
+    zoomOut: (amount: number) => void
   }
   destroy: () => void
   isDestroyed?: () => boolean
@@ -104,6 +117,7 @@ interface CesiumRuntime {
       latitude: number,
       height: number,
     ) => unknown
+    distance: (left: unknown, right: unknown) => number
   }
   Cartesian2: new (x: number, y: number) => unknown
   Cartographic: {
@@ -119,6 +133,8 @@ interface CesiumRuntime {
     LEFT_DOWN: number
     LEFT_UP: number
     MOUSE_MOVE: number
+    LEFT_DOUBLE_CLICK: number
+    RIGHT_CLICK: number
   }
   WebMercatorTilingScheme: new () => unknown
   UrlTemplateImageryProvider: new (options: Record<string, unknown>) => unknown
@@ -172,6 +188,9 @@ const modelSelected = ref(false)
 const modelScale = ref(1)
 const modelHeading = ref(0)
 const selectedPoint = ref<PickedPoint | null>(null)
+const measurementMode = ref<SceneMeasureType | null>(null)
+const toolFeedback = ref('')
+const measurePoints = ref<PickedPoint[]>([])
 const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
 const layerVisibility = ref({
   buildingLayer: true,
@@ -192,6 +211,9 @@ let constructionRun = 0
 let markerEntity: unknown = null
 let eventHandler: CesiumEventHandler | null = null
 let suppressClickAfterDrag = false
+let measurementEntities: unknown[] = []
+let previewEntity: unknown = null
+let feedbackTimer: number | undefined
 
 const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
 
@@ -567,7 +589,8 @@ function selectModel() {
 }
 
 function startModelDrag(movement: CesiumMovement) {
-  if (!viewer || pickMode.value || !movement.position) return
+  if (!viewer || pickMode.value || measurementMode.value || !movement.position)
+    return
   const picked = viewer.scene.pick(movement.position) as {
     primitive?: unknown
     id?: unknown
@@ -581,7 +604,15 @@ function startModelDrag(movement: CesiumMovement) {
 }
 
 function moveModelDrag(movement: CesiumMovement) {
-  if (!isDraggingModel.value || !movement.endPosition) return
+  if (!movement.endPosition) return
+  if (measurementMode.value) {
+    if (measurePoints.value.length > 0) {
+      const cursor = pickGroundPoint(movement.endPosition)
+      if (cursor) drawMeasurePolyline(cursor)
+    }
+    return
+  }
+  if (!isDraggingModel.value) return
   const point = pickGroundPoint(movement.endPosition)
   if (!point) return
   selectedPoint.value = point
@@ -593,6 +624,252 @@ function endModelDrag() {
   isDraggingModel.value = false
 }
 
+function notifyScene(message: string) {
+  toolFeedback.value = message
+  window.clearTimeout(feedbackTimer)
+  feedbackTimer = window.setTimeout(() => (toolFeedback.value = ''), 2400)
+}
+
+function clearMeasurementOverlays() {
+  if (!viewer) return
+  for (const entity of measurementEntities) viewer.entities.remove(entity)
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  measurementEntities = []
+  previewEntity = null
+  measurePoints.value = []
+}
+
+function startMeasurement(type: SceneMeasureType) {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  clearMeasurementOverlays()
+  measurementMode.value = type
+  pickMode.value = false
+  notifyScene(
+    type === 'distance'
+      ? '单击依次取点，双击或右键完成距离测量'
+      : '单击绘制范围，双击或右键完成面积测量',
+  )
+}
+
+function cancelMeasurement() {
+  measurementMode.value = null
+  clearMeasurementOverlays()
+}
+
+function addMeasurePoint(position: { x: number; y: number }) {
+  if (!viewer) return
+  const point = pickGroundPoint(position)
+  if (!point) return
+  const sdk = cesium()
+  const cartesian = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height + 1,
+  )
+  measurePoints.value.push(point)
+  const entity = viewer.entities.add({
+    position: cartesian,
+    point: {
+      pixelSize: 7,
+      color: '#54e1ce',
+      outlineColor: '#eafffb',
+      outlineWidth: 1.5,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  measurementEntities.push(entity)
+  drawMeasurePolyline()
+}
+
+function drawMeasurePolyline(cursor?: PickedPoint) {
+  if (!viewer) return
+  const sdk = cesium()
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  previewEntity = null
+  if (measurePoints.value.length < 2) return
+  const positions = measurePoints.value.map((point) =>
+    sdk.Cartesian3.fromDegrees(
+      point.longitude,
+      point.latitude,
+      point.height + 1,
+    ),
+  )
+  if (cursor)
+    positions.push(
+      sdk.Cartesian3.fromDegrees(
+        cursor.longitude,
+        cursor.latitude,
+        cursor.height + 1,
+      ),
+    )
+  previewEntity = viewer.entities.add({
+    polyline: {
+      positions,
+      width: 2,
+      material: '#54e1ce',
+      clampToGround: false,
+    },
+  })
+  measurementEntities.push(previewEntity)
+}
+
+function finishMeasurement() {
+  const type = measurementMode.value
+  if (!type || !viewer) return
+  const sdk = cesium()
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  previewEntity = null
+  let message = ''
+  if (type === 'distance' && measurePoints.value.length >= 2) {
+    let total = 0
+    for (let index = 1; index < measurePoints.value.length; index += 1) {
+      const current = measurePoints.value[index]!
+      const previous = measurePoints.value[index - 1]!
+      total += sdk.Cartesian3.distance(
+        sdk.Cartesian3.fromDegrees(
+          current.longitude,
+          current.latitude,
+          current.height,
+        ),
+        sdk.Cartesian3.fromDegrees(
+          previous.longitude,
+          previous.latitude,
+          previous.height,
+        ),
+      )
+    }
+    message = `距离测量完成：${formatDistance(total)}`
+  } else if (type === 'area' && measurePoints.value.length >= 3) {
+    const area = calculateGeodesicArea(
+      measurePoints.value.map((point) => ({
+        lat: point.latitude,
+        lng: point.longitude,
+      })),
+    )
+    message = `面积测量完成：${formatArea(area)}`
+  } else {
+    message =
+      type === 'distance'
+        ? '距离测量至少需要两个点'
+        : '面积测量至少需要三个点'
+    clearMeasurementOverlays()
+    measurementMode.value = null
+    notifyScene(message)
+    return
+  }
+  const last = measurePoints.value.at(-1)!
+  const labelEntity = viewer.entities.add({
+    position: sdk.Cartesian3.fromDegrees(
+      last.longitude,
+      last.latitude,
+      last.height + 4,
+    ),
+    label: {
+      text: message.replace('测量完成：', ''),
+      font: '12px sans-serif',
+      fillColor: '#eafffb',
+      showBackground: true,
+      backgroundColor: '#051011',
+      backgroundPadding: { x: 7, y: 4 },
+      pixelOffset: new sdk.Cartesian2(0, -22),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  measurementEntities.push(labelEntity)
+  measurementMode.value = null
+  notifyScene(message)
+}
+
+function clearSceneDrawings() {
+  measurementMode.value = null
+  clearMeasurementOverlays()
+  notifyScene('标绘与测量结果已清除')
+}
+
+function refreshScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  viewer.scene.requestRender?.()
+  notifyScene('三维场景渲染已刷新')
+}
+
+function exportScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  try {
+    const canvas = viewer.scene.canvas as HTMLCanvasElement
+    viewer.scene.render?.()
+    const dataUrl = canvas.toDataURL('image/png')
+    const anchor = document.createElement('a')
+    anchor.href = dataUrl
+    anchor.download = `三生模拟场景-${new Date().toISOString().slice(0, 10)}.png`
+    anchor.click()
+    notifyScene('当前三维场景已导出为 PNG')
+  } catch {
+    notifyScene('三维场景导出失败，请重试')
+  }
+}
+
+function zoomScene(direction: 1 | -1) {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  const height = viewer.camera.positionCartographic?.height ?? 1000
+  const delta = Math.max(180, height * 0.35)
+  if (direction > 0) viewer.camera.zoomIn(delta)
+  else viewer.camera.zoomOut(delta)
+}
+
+function locateScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  const sdk = cesium()
+  const point = selectedPoint.value
+  if (point) {
+    viewer.camera.flyTo({
+      destination: sdk.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude - 0.00012,
+        Math.max(120, point.height + 55),
+      ),
+      orientation: {
+        heading: 0,
+        pitch: sdk.Math.toRadians(-52),
+        roll: 0,
+      },
+    })
+    return
+  }
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      simulationFocus.longitude,
+      simulationFocus.latitude,
+      simulationFocus.height,
+    ),
+    orientation: {
+      heading: 0,
+      pitch: sdk.Math.toRadians(-90),
+      roll: 0,
+    },
+  })
+}
+
+function updateSceneLayer(key: string, visible: boolean) {
+  const layerKey = key as keyof typeof layerVisibility.value
+  layerVisibility.value[layerKey] = visible
+  toggleLayer(layerKey)
+}
+
 function setupSceneInteractions() {
   if (!viewer || eventHandler) return
   const sdk = cesium()
@@ -601,6 +878,10 @@ function setupSceneInteractions() {
     if (!movement.position) return
     if (suppressClickAfterDrag) {
       suppressClickAfterDrag = false
+      return
+    }
+    if (measurementMode.value) {
+      addMeasurePoint(movement.position)
       return
     }
     if (pickMode.value) {
@@ -622,6 +903,18 @@ function setupSceneInteractions() {
   eventHandler.setInputAction(startModelDrag, sdk.ScreenSpaceEventType.LEFT_DOWN)
   eventHandler.setInputAction(moveModelDrag, sdk.ScreenSpaceEventType.MOUSE_MOVE)
   eventHandler.setInputAction(endModelDrag, sdk.ScreenSpaceEventType.LEFT_UP)
+  eventHandler.setInputAction(
+    () => {
+      if (measurementMode.value) finishMeasurement()
+    },
+    sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+  )
+  eventHandler.setInputAction(
+    () => {
+      if (measurementMode.value) finishMeasurement()
+    },
+    sdk.ScreenSpaceEventType.RIGHT_CLICK,
+  )
 }
 
 async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
@@ -748,6 +1041,14 @@ const buildSummary = computed(() => {
   return parts.filter(Boolean).join(' · ')
 })
 
+const sceneLayers = computed(() =>
+  layers.map((item) => ({
+    key: item.key,
+    label: item.label,
+    visible: layerVisibility.value[item.key],
+  })),
+)
+
 function updateModelScale(value: number) {
   modelScale.value = clampModelScale(value)
   applyModelTransform()
@@ -818,6 +1119,7 @@ async function initializeViewer() {
     viewer = new sdk.Viewer(cesiumContainer.value, {
       infoBox: false,
       selectionIndicator: false,
+      preserveDrawingBuffer: true,
       animation: false,
       timeline: false,
       baseLayerPicker: false,
@@ -858,12 +1160,22 @@ async function initializeViewer() {
   }
 }
 
-onMounted(initializeViewer)
+function onWindowKeyDown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  cancelMeasurement()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeyDown)
+  void initializeViewer()
+})
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeyDown)
   constructionRun += 1
   eventHandler?.destroy()
   eventHandler = null
+  cancelMeasurement()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -1021,6 +1333,20 @@ onBeforeUnmount(() => {
           <span>请在地图上点击确定建造位置</span>
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
+        <SceneToolbox
+          :measuring="measurementMode"
+          :layers="sceneLayers"
+          :feedback="toolFeedback"
+          @clear="clearSceneDrawings"
+          @measure="startMeasurement"
+          @end-measure="cancelMeasurement"
+          @refresh="refreshScene"
+          @export="exportScene"
+          @zoom-in="zoomScene(1)"
+          @zoom-out="zoomScene(-1)"
+          @locate="locateScene"
+          @update-layer="updateSceneLayer"
+        />
       </section>
 
       <aside class="twin-right">

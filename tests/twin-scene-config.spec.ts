@@ -36,4 +36,12 @@ describe('三生模拟场景配置', () => {
     )
     expect(source).not.toContain('/api/arcgis/world-streets/raster/')
   })
+
+  it('三生模拟场景内置悬浮工具条并支持截图导出', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('SceneToolbox')
+    expect(source).toContain('preserveDrawingBuffer: true')
+    expect(source).toContain('@update-layer="updateSceneLayer"')
+  })
 })

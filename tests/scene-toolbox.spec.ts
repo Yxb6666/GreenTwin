@@ -1,0 +1,64 @@
+import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import SceneToolbox from '@/features/twin/SceneToolbox.vue'
+
+const layers = [
+  { key: 'buildingLayer', label: '建筑', visible: true },
+  { key: 'roadLayer', label: '道路', visible: true },
+  { key: 'waterLayer', label: '水系', visible: false },
+  { key: 'issueLayer', label: '问题点', visible: true },
+]
+
+describe('三维场景工具条', () => {
+  it('清除、缩放、定位按钮发出对应事件', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '' },
+    })
+    await wrapper
+      .get('button[aria-label="清除标绘与测量结果"]')
+      .trigger('click')
+    await wrapper.get('button[aria-label="放大场景"]').trigger('click')
+    await wrapper.get('button[aria-label="缩小场景"]').trigger('click')
+    await wrapper.get('button[aria-label="定位到当前落点"]').trigger('click')
+
+    expect(wrapper.emitted('clear')).toHaveLength(1)
+    expect(wrapper.emitted('zoom-in')).toHaveLength(1)
+    expect(wrapper.emitted('zoom-out')).toHaveLength(1)
+    expect(wrapper.emitted('locate')).toHaveLength(1)
+  })
+
+  it('测量菜单可选择距离或面积', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '' },
+    })
+    await wrapper.get('button[aria-label="测量工具"]').trigger('click')
+    const options = wrapper.findAll('.measure-panel button')
+
+    expect(options).toHaveLength(2)
+    await options[0]!.trigger('click')
+    expect(wrapper.emitted('measure')?.[0]).toEqual(['distance'])
+  })
+
+  it('测量中点击工具条发出结束测量事件', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: 'area', layers, feedback: '' },
+    })
+    await wrapper.get('button[aria-label="测量工具"]').trigger('click')
+
+    expect(wrapper.emitted('end-measure')).toHaveLength(1)
+  })
+
+  it('图层开关发出更新事件', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '' },
+    })
+    await wrapper.get('button[aria-label="场景图层"]').trigger('click')
+    const input = wrapper.get('.layer-panel input[type="checkbox"]')
+
+    await input.setValue(false)
+    expect(wrapper.emitted('update-layer')?.[0]).toEqual([
+      'buildingLayer',
+      false,
+    ])
+  })
+})
