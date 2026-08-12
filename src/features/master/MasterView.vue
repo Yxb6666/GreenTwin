@@ -5,6 +5,7 @@ import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import MapToolbox from '@/shared/components/MapToolbox.vue'
 import MasterSanshengRadar from '@/features/master/MasterSanshengRadar.vue'
+import TerrainAnalysisDrawer from '@/features/master/TerrainAnalysisDrawer.vue'
 import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
@@ -554,42 +555,7 @@ onMounted(async () => {
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
-        <PanelCard title="DEM 栅格数据" :meta="demSummary ? `${demSummary.collectionId} / ${demSummary.crs}` : 'SuperMap 影像服务'">
-          <div class="dem-overview">
-            <figure class="dem-preview">
-              <img v-if="demSummary?.thumbnailUrl" :src="demSummary.thumbnailUrl" alt="兰考县 DEM 栅格缩略图" />
-              <div v-else class="dem-state">
-                {{ demLoading ? '正在读取 DEM 栅格…' : demError }}
-              </div>
-              <figcaption v-if="demSummary">
-                <span>实时栅格</span><b>{{ demSummary.fileName }}</b
-                ><em>有效抽样 {{ demSummary.validSampleCount }} 点</em>
-              </figcaption>
-            </figure>
-            <div class="dem-stats">
-              <article>
-                <span>抽样平均高程</span>
-                <strong>{{ demSummary?.averageElevationM != null ? `${demSummary.averageElevationM} m` : '—' }}</strong>
-              </article>
-              <article>
-                <span>抽样高程范围</span>
-                <strong v-if="demSummary?.minimumElevationM != null && demSummary.maximumElevationM != null">
-                  {{ demSummary.minimumElevationM }}–{{ demSummary.maximumElevationM }}
-                  m
-                </strong>
-                <strong v-else>—</strong>
-              </article>
-              <article>
-                <span>栅格尺寸</span>
-                <strong>{{ demSummary ? `${demSummary.width} × ${demSummary.height}` : '—' }}</strong>
-              </article>
-              <article>
-                <span>像元分辨率</span>
-                <strong>{{ demSummary ? `${demSummary.pixelSizeDegrees.toFixed(6)}°` : '—' }}</strong>
-              </article>
-            </div>
-          </div>
-        </PanelCard>
+        <TerrainAnalysisDrawer :summary="demSummary" :loading="demLoading" :error="demError" />
       </section>
 
       <aside class="master-side">
@@ -720,7 +686,7 @@ onMounted(async () => {
 }
 
 .master-center {
-  grid-template-rows: minmax(0, 1fr) 196px;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .population-content {
@@ -1294,100 +1260,6 @@ onMounted(async () => {
   font: 11px var(--font-data);
 }
 
-.dem-overview {
-  display: grid;
-  height: 100%;
-  gap: 14px;
-  grid-template-columns: minmax(260px, 1fr) 250px;
-}
-
-.dem-preview {
-  position: relative;
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid rgba(61, 214, 196, 0.12);
-  background: linear-gradient(135deg, rgba(14, 52, 47, 0.9), rgba(6, 24, 23, 0.96));
-}
-
-.dem-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: sepia(0.2) saturate(1.4) hue-rotate(90deg) contrast(1.18);
-}
-
-.dem-preview::after {
-  position: absolute;
-  inset: 0;
-  content: '';
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(5, 25, 22, 0.14), transparent 55%, rgba(8, 31, 28, 0.25));
-}
-
-.dem-preview figcaption {
-  position: absolute;
-  z-index: 1;
-  right: 8px;
-  bottom: 7px;
-  left: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  color: #dff6ec;
-  background: rgba(4, 24, 21, 0.76);
-  backdrop-filter: blur(4px);
-  font-size: 9px;
-}
-
-.dem-preview figcaption span {
-  color: var(--cyan);
-}
-
-.dem-preview figcaption b {
-  font-family: var(--font-data);
-}
-
-.dem-preview figcaption em {
-  margin-left: auto;
-  color: var(--text-soft);
-  font-style: normal;
-}
-
-.dem-state {
-  display: grid;
-  height: 100%;
-  place-items: center;
-  color: var(--text-soft);
-  font-size: 11px;
-}
-
-.dem-stats {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.dem-stats article {
-  display: grid;
-  place-content: center;
-  padding: 7px;
-  border: 1px solid rgba(61, 214, 196, 0.12);
-  text-align: center;
-}
-
-.dem-stats span {
-  color: var(--text-soft);
-  font-size: 10px;
-}
-
-.dem-stats strong {
-  margin-top: 6px;
-  color: var(--cyan);
-  font: 15px var(--font-data);
-}
-
 .land-use {
   display: grid;
   height: 100%;
@@ -1648,7 +1520,7 @@ onMounted(async () => {
 @media (max-width: 1440px) {
   .master-layout { grid-template-columns: 260px minmax(460px, 1fr) 270px; gap: 8px; }
   .master-side, .master-center { gap: 8px; }
-  .master-center { grid-template-rows: minmax(0, 1fr) 170px; }
+  .master-center { grid-template-rows: minmax(0, 1fr) auto; }
   .master-theme-tabs { gap: 5px; }
   .master-theme-tabs button { min-height: 40px; padding: 5px 7px; }
   .master-theme-tabs small { display: none; }
