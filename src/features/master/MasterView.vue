@@ -17,7 +17,7 @@ import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, lates
 import { COUNTY_SANSHENG_SCORES, resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
 import { getPointThemeLabelPlacement, type PointThemeLabelDirection } from '@/features/master/pointThemeLabelPlacement'
 import { landUseSource, masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme, type MasterMapThemeKey, type ThemeLegendItem, type TownshipThemeMetric } from '@/features/master/mapThemes'
-import { loadPoiRecords, summarizePoiByTownship, type PoiRecord, type TownshipPoiSummary } from '@/features/master/poiService'
+import { buildPoiIndexByTownship, loadPoiRecords, type PoiRecord, type TownshipPoiSummary } from '@/features/master/poiService'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
@@ -30,11 +30,19 @@ const selectedThemeTownship = ref<TownshipFeature | null>(null)
 const governanceIssues = ref<GovernanceIssue[]>([])
 const poiRecords = shallowRef<PoiRecord[]>([])
 const poiMetricsByTownship = shallowRef<ReadonlyMap<string, TownshipPoiSummary>>(new Map())
+const poiRecordsByTownship = shallowRef<ReadonlyMap<string, readonly PoiRecord[]>>(new Map())
 const poiLoading = ref(true)
+const poiIndexing = ref(false)
 const poiError = ref('')
 let thematicLayer: L.LayerGroup | null = null
+let poiIndexRequestId = 0
 const pointThemeLabelOverrides: Partial<Record<string, PointThemeLabelDirection>> = {
   惠安街道: 'right',
+}
+const poiBucketLegend: Record<PoiRecord['bucket'], ThemeLegendItem> = {
+  publicService: masterMapThemeLegends.poi[0]!,
+  industry: masterMapThemeLegends.poi[1]!,
+  cultureTourism: masterMapThemeLegends.poi[2]!,
 }
 const populationLabelYears = new Set([2020, 2021, 2025])
 const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
@@ -131,7 +139,7 @@ const activeMapThemeConfig = computed(() => {
   if (theme.key === 'poi') {
     return {
       ...theme,
-      description: poiLoading.value
+      description: poiLoading.value || poiIndexing.value
         ? 'Lankao_POI_2025 真实点位加载中'
         : poiError.value
           ? '真实 POI 服务暂不可用'
@@ -556,6 +564,91 @@ function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
   return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
 }
 
+interface PoiCanvasLayerState {
+  _canvas?: HTMLCanvasElement
+  _poiMap?: L.Map
+  _records: readonly PoiRecord[]
+  _draw: () => void
+}
+
+const PoiCanvasLayerClass = L.Layer.extend({
+  initialize(records: readonly PoiRecord[]) {
+    const layer = this as unknown as PoiCanvasLayerState
+    layer._records = records
+  },
+  onAdd(mapInstance: L.Map) {
+    const layer = this as unknown as PoiCanvasLayerState
+    const canvas = L.DomUtil.create('canvas', 'master-poi-canvas leaflet-zoom-animated') as HTMLCanvasElement
+    layer._poiMap = mapInstance
+    layer._canvas = canvas
+    canvas.style.pointerEvents = 'none'
+    mapInstance.getPanes().overlayPane.appendChild(canvas)
+    mapInstance.on('moveend zoomend resize viewreset', layer._draw, layer)
+    layer._draw()
+  },
+  onRemove(mapInstance: L.Map) {
+    const layer = this as unknown as PoiCanvasLayerState
+    if (layer._canvas?.parentElement) layer._canvas.parentElement.removeChild(layer._canvas)
+    mapInstance.off('moveend zoomend resize viewreset', layer._draw, layer)
+    layer._canvas = undefined
+    layer._poiMap = undefined
+  },
+  _draw() {
+    const layer = this as unknown as PoiCanvasLayerState
+    const mapInstance = layer._poiMap
+    const canvas = layer._canvas
+    if (!mapInstance || !canvas) return
+
+    const size = mapInstance.getSize()
+    const pixelRatio = window.devicePixelRatio || 1
+    const topLeft = mapInstance.containerPointToLayerPoint([0, 0])
+    L.DomUtil.setPosition(canvas, topLeft)
+    canvas.width = size.x * pixelRatio
+    canvas.height = size.y * pixelRatio
+    canvas.style.width = `${size.x}px`
+    canvas.style.height = `${size.y}px`
+
+    const context = canvas.getContext('2d')
+    if (!context) return
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+    context.clearRect(0, 0, size.x, size.y)
+    context.globalAlpha = 0.86
+
+    const radius = layer._records.length > 1500 ? 2.4 : layer._records.length > 600 ? 2.9 : 3.4
+    const bounds = mapInstance.getBounds().pad(0.04)
+    const recordsByBucket = new Map<PoiRecord['bucket'], PoiRecord[]>()
+    layer._records.forEach((record) => {
+      const latLng = L.latLng(record.latitude, record.longitude)
+      if (!bounds.contains(latLng)) return
+      const bucketRecords = recordsByBucket.get(record.bucket) ?? []
+      bucketRecords.push(record)
+      recordsByBucket.set(record.bucket, bucketRecords)
+    })
+
+    recordsByBucket.forEach((records, bucket) => {
+      context.beginPath()
+      records.forEach((record) => {
+        const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+        context.moveTo(point.x + radius, point.y)
+        context.arc(point.x, point.y, radius, 0, Math.PI * 2)
+      })
+      context.fillStyle = poiBucketLegend[bucket].color
+      context.fill()
+    })
+  },
+})
+
+function createPoiCanvasLayer(records: readonly PoiRecord[]) {
+  const Constructor = PoiCanvasLayerClass as unknown as new (records: readonly PoiRecord[]) => L.Layer
+  return new Constructor(records)
+}
+
+function addPoiPointMarkers(feature: TownshipFeature) {
+  if (!thematicLayer) return
+  const records = poiRecordsByTownship.value.get(feature.code) ?? []
+  thematicLayer.addLayer(createPoiCanvasLayer(records))
+}
+
 function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric) {
   if (!thematicLayer) return
   const center = L.latLng(townshipRepresentativePoint(feature))
@@ -700,7 +793,18 @@ function renderThematicMap() {
       .addTo(thematicLayer!)
   })
 
-  if (activeMapTheme.value === 'poi' || activeMapTheme.value === 'governance') {
+  if (activeMapTheme.value === 'poi') {
+    if (selectedThemeTownship.value) {
+      addPoiPointMarkers(selectedThemeTownship.value)
+    } else {
+      townshipFeatures.value.forEach((feature, index) => {
+        const metric = activeTownshipMetrics.value[index]
+        if (metric) addClusterMarker(feature, metric)
+      })
+    }
+  }
+
+  if (activeMapTheme.value === 'governance') {
     townshipFeatures.value.forEach((feature, index) => {
       const metric = activeTownshipMetrics.value[index]
       if (metric) addClusterMarker(feature, metric)
@@ -729,15 +833,25 @@ watch(selectedTownship, (name) => {
   selectedThemeTownship.value = name ? (townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null) : null
 })
 
-function refreshPoiMetrics() {
-  poiMetricsByTownship.value =
-    poiRecords.value.length > 0 && townshipFeatures.value.length > 0
-      ? summarizePoiByTownship(poiRecords.value, townshipFeatures.value)
-      : new Map()
+async function refreshPoiMetrics() {
+  const requestId = ++poiIndexRequestId
+  if (poiRecords.value.length === 0 || townshipFeatures.value.length === 0) {
+    poiMetricsByTownship.value = new Map()
+    poiRecordsByTownship.value = new Map()
+    poiIndexing.value = false
+    return
+  }
+
+  poiIndexing.value = true
+  const index = await buildPoiIndexByTownship(poiRecords.value, townshipFeatures.value)
+  if (requestId !== poiIndexRequestId) return
+  poiMetricsByTownship.value = index.summaries
+  poiRecordsByTownship.value = index.recordsByTownship
+  poiIndexing.value = false
 }
 
 watch([poiRecords, townshipFeatures], refreshPoiMetrics, { flush: 'post' })
-watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship], renderThematicMap, { flush: 'post' })
+watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship, poiRecordsByTownship], renderThematicMap, { flush: 'post' })
 onBeforeUnmount(() => {
   clearThematicLayer()
   resetTownshipLabelPlacements()

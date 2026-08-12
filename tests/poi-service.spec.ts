@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TownshipFeature } from '@/gis/leaflet/townshipFeatures'
 import {
+  filterPoiRecordsByTownship,
   loadPoiRecords,
   parsePoiRecords,
   summarizePoiByTownship,
@@ -104,6 +105,27 @@ describe('真实 POI 服务', () => {
       cultureTourism: 1,
       total: 3,
     })
+  })
+
+  it('按乡镇边界筛选需要绘制的真实 POI 点位', () => {
+    const records = parsePoiRecords({
+      recordsets: [
+        {
+          features: [
+            ...samplePoiQueryResult.recordsets[0]!.features,
+            {
+              ID: 4,
+              fieldValues: ['外部点位', '生活服务', '服务', '116', '36', '', '', '116', '36', '兰考县'],
+              geometry: { center: { x: 116, y: 36 } },
+            },
+          ],
+        },
+      ],
+    })
+
+    const visibleRecords = filterPoiRecordsByTownship(records, township)
+
+    expect(visibleRecords.map((record) => record.name)).toEqual(['测试医院', '测试企业', '测试景点'])
   })
 
   it('支持从 iServer rest 根目录解析地图资源后查询点位', async () => {
