@@ -3,7 +3,7 @@ import { BASE_MAP_OPTIONS, buildArcGisTileUrl, getBaseMapOption } from '@/gis/le
 
 describe('ArcGIS 底图配置', () => {
   it('提供四种指定的 ArcGIS 底图', () => {
-    expect(BASE_MAP_OPTIONS.filter((option) => option.source === 'arcgis').map((option) => option.key)).toEqual([
+    expect(BASE_MAP_OPTIONS.map((option) => option.key)).toEqual([
       'light-gray',
       'dark-gray',
       'outdoor',

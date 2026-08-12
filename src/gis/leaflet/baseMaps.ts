@@ -20,25 +20,6 @@ export interface BaseMapOption {
 
 export const BASE_MAP_OPTIONS: readonly BaseMapOption[] = [
   {
-    key: 'natural',
-    name: '本色影像',
-    meta: '原始遥感色彩',
-    source: 'supermap',
-  },
-  {
-    key: 'ecology',
-    name: '生态增强',
-    meta: '强化植被水系',
-    source: 'supermap',
-  },
-  {
-    key: 'planning',
-    name: '行政灰图',
-    meta: '弱化影像干扰',
-    source: 'supermap',
-  },
-  { key: 'night', name: '夜间研判', meta: '暗色高对比', source: 'supermap' },
-  {
     key: 'light-gray',
     name: 'ArcGIS 浅灰',
     meta: '突出业务专题',
