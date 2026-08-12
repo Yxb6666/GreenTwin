@@ -23,6 +23,7 @@ import {
   loadCountyFeatures,
   loadTownshipFeatures,
   resolveTownshipMapServiceUrl,
+  type TownshipFeature,
 } from './townshipFeatures'
 
 interface TownshipLayerEntry {
@@ -62,6 +63,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const focusBounds = shallowRef<GeographicBounds | null>(null)
   const selectedTownship = ref<string | null>(null)
   const hoveredTownship = ref<string | null>(null)
+  const townshipFeatures = shallowRef<TownshipFeature[]>([])
   const activeBaseMap = ref<BaseMapMode>('natural')
   const arcgisAvailable = ref(false)
   const error = ref('')
@@ -113,6 +115,12 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       refreshTownshipStyles()
       instance.fire(TOWNSHIP_FOCUS_START_EVENT)
     })
+  }
+
+  function focusTownshipByName(name: string) {
+    const instance = map.value
+    const entry = townshipLayers.find((item) => item.name === name)
+    return instance && entry ? selectTownship(instance, entry.layer, entry.name) : false
   }
 
   function addCountyFocusContext(instance: L.Map, features: Awaited<ReturnType<typeof loadTownshipFeatures>>) {
@@ -288,6 +296,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
             void loadTownshipFeatures(overlayServiceUrl)
               .then((features) => {
                 if (disposed) return
+                townshipFeatures.value = [...townshipFeatures.value, ...features]
                 const displayFeatures = interactionOptions.townshipFocus
                   ? features.filter((feature) => getTownshipLabel(feature))
                   : features
@@ -409,6 +418,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     townshipLayers.length = 0
     countyFocusContextAdded = false
     countyFocusContextLoading = false
+    townshipFeatures.value = []
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()
@@ -420,12 +430,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     focusBounds,
     selectedTownship,
     hoveredTownship,
+    townshipFeatures,
     activeBaseMap,
     arcgisAvailable,
     error,
     initialize,
     setBaseMap,
     clearSelectedTownship,
+    focusTownshipByName,
     dispose,
   }
 }

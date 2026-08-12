@@ -50,9 +50,11 @@ async function logout() {
         </svg>
       </button>
     </div>
-    <RouterView v-slot="{ Component }">
+    <RouterView v-slot="{ Component, route: currentRoute }">
       <Transition name="module" mode="out-in">
-        <component :is="Component" />
+        <div :key="currentRoute.path" class="module-view">
+          <component :is="Component" />
+        </div>
       </Transition>
     </RouterView>
   </div>
