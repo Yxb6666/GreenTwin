@@ -27,4 +27,13 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('addS3MTilesLayerByScp')
     expect(source).not.toContain('viewer.flyTo')
   })
+
+  it('三生模拟场景使用 ArcGIS 导航底图而不是街道图栅格代理', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain(
+      "buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken)",
+    )
+    expect(source).not.toContain('/api/arcgis/world-streets/raster/')
+  })
 })

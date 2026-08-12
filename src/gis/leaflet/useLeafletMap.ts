@@ -1,7 +1,13 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet } from './loadSdk'
-import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
+import {
+  buildArcGisTileUrl,
+  DEFAULT_BASE_MAP_MODE,
+  getBaseMapOption,
+  requiresArcGisAccessToken,
+  type BaseMapMode,
+} from './baseMaps'
 import { buildCountyBoundaryRings, buildCountyInverseMaskRings, filterCountyBoundaryArtifacts, getCountyOuterBoundaryRings, mergeTownshipFeatures } from './countyFocusGeometry'
 import { focusMapOnTownship, isTownshipInteractionBlocked, TOWNSHIP_FOCUS_START_EVENT } from './mapFocus'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
@@ -57,7 +63,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const selectedTownship = ref<string | null>(null)
   const hoveredTownship = ref<string | null>(null)
   const townshipFeatures = shallowRef<TownshipFeature[]>([])
-  const activeBaseMap = ref<BaseMapMode>('natural')
+  const activeBaseMap = ref<BaseMapMode>(DEFAULT_BASE_MAP_MODE)
   const arcgisAvailable = ref(false)
   const error = ref('')
   let resizeObserver: ResizeObserver | null = null
@@ -362,6 +368,8 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       const demOverlayPane = instance.createPane('demOverlayPane')
       demOverlayPane.style.zIndex = '220'
       demOverlayPane.style.pointerEvents = 'none'
+
+      setBaseMap(DEFAULT_BASE_MAP_MODE)
 
       resizeObserver = new ResizeObserver(() => instance.invalidateSize({ animate: false }))
       resizeObserver.observe(container.value)

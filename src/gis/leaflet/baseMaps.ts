@@ -6,6 +6,8 @@ export type BaseMapMode =
   | 'light-gray'
   | 'dark-gray'
   | 'outdoor'
+  | 'navigation'
+  | 'topographic'
   | 'standard'
 
 export interface BaseMapOption {
@@ -18,26 +20,9 @@ export interface BaseMapOption {
   previewUrl?: string
 }
 
+export const DEFAULT_BASE_MAP_MODE: BaseMapMode = 'navigation'
+
 export const BASE_MAP_OPTIONS: readonly BaseMapOption[] = [
-  {
-    key: 'natural',
-    name: '本色影像',
-    meta: '原始遥感色彩',
-    source: 'supermap',
-  },
-  {
-    key: 'ecology',
-    name: '生态增强',
-    meta: '强化植被水系',
-    source: 'supermap',
-  },
-  {
-    key: 'planning',
-    name: '行政灰图',
-    meta: '弱化影像干扰',
-    source: 'supermap',
-  },
-  { key: 'night', name: '夜间研判', meta: '暗色高对比', source: 'supermap' },
   {
     key: 'light-gray',
     name: 'ArcGIS 浅灰',
@@ -64,6 +49,25 @@ export const BASE_MAP_OPTIONS: readonly BaseMapOption[] = [
     arcgisStyle: 'arcgis/outdoor',
     previewUrl:
       'https://www.arcgis.com/sharing/rest/content/items/659e7c1b1e374f6c8a89eefe17b23380/info/thumbnail/thumbnail1658946460034.png',
+  },
+  {
+    key: 'navigation',
+    name: 'ArcGIS 导航',
+    meta: '道路与通行导向',
+    source: 'arcgis',
+    arcgisStyle: 'arcgis/navigation',
+    previewUrl:
+      'https://www.arcgis.com/sharing/rest/content/items/ad3775594223464abc4addd501a0c5a8/info/thumbnail/thumbnail1605217390226.jpeg',
+  },
+  {
+    key: 'topographic',
+    name: 'ArcGIS 地形',
+    meta: '地貌与自然要素',
+    source: 'arcgis',
+    tileUrl:
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    previewUrl:
+      'https://www.arcgis.com/sharing/rest/content/items/dd247558455c4ffab54566901a14f42c/info/thumbnail/thumbnail1659481851289.png',
   },
   {
     key: 'standard',

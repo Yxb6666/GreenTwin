@@ -7,10 +7,12 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
+import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
 import {
   createSimulationJob,
   waitForSimulationJob,
   type SimulationJob,
+  type SimulationParameters,
   type SimulationPlacement,
 } from './simulation'
 
@@ -24,11 +26,12 @@ interface SceneLayer {
 
 interface ModelPrimitive {
   show: boolean
+  readyPromise?: Promise<ModelPrimitive>
 }
 
 interface SuperMapViewer {
   scene: {
-    globe: { depthTestAgainstTerrain: boolean }
+    globe: { depthTestAgainstTerrain: boolean; show: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
@@ -36,8 +39,8 @@ interface SuperMapViewer {
     }
   }
   imageryLayers: {
-    removeAll: (destroy?: boolean) => void
     addImageryProvider: (provider: unknown) => unknown
+    removeAll: (destroy?: boolean) => void
   }
   camera: {
     setView: (options: Record<string, unknown>) => void
@@ -52,17 +55,6 @@ interface CesiumRuntime {
     container: HTMLElement,
     options: Record<string, unknown>,
   ) => SuperMapViewer
-  UrlTemplateImageryProvider: new (options: {
-    url: string
-    minimumLevel?: number
-    maximumLevel?: number
-    tilingScheme?: unknown
-    customTags?: Record<
-      string,
-      (provider: unknown, x: number, y: number, level: number) => string
-    >
-  }) => unknown
-  WebMercatorTilingScheme: new () => unknown
   Cartesian3: {
     fromDegrees: (
       longitude: number,
@@ -70,11 +62,15 @@ interface CesiumRuntime {
       height: number,
     ) => unknown
   }
+  WebMercatorTilingScheme: new () => unknown
+  UrlTemplateImageryProvider: new (options: Record<string, unknown>) => unknown
   Model: {
     fromGltf: (options: {
       url: string
       modelMatrix: unknown
       scale?: number
+      minimumPixelSize?: number
+      maximumScale?: number
     }) => ModelPrimitive
   }
   Transforms: {
@@ -92,6 +88,11 @@ const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
 const generatedJob = ref<SimulationJob | null>(null)
+const buildInstruction = ref('帮我在地图处建造一个古风样式的建筑')
+const conversation = ref([
+  { role: 'assistant', text: '请描述想在地图中建造的内容，我会生成方案并演示施工过程。' },
+])
+const constructionStage = ref(0)
 const isComparing = ref(false)
 const operationMessage = ref('调整治理参数后点击“重新生成”，启动本机 Blender 建模任务')
 const layerVisibility = ref({
@@ -109,6 +110,17 @@ const parameters = ref({
 
 let viewer: SuperMapViewer | null = null
 let generatedModel: ModelPrimitive | null = null
+let constructionRun = 0
+
+const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
+
+function inferBuildingStyle(
+  instruction: string,
+): NonNullable<SimulationParameters['buildingStyle']> {
+  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction)) return 'traditional-chinese'
+  if (/现代|办公|商业|玻璃|公寓|高层|科技/.test(instruction)) return 'modern'
+  return 'rural'
+}
 
 // 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
 const simulationFocus = {
@@ -310,7 +322,11 @@ function toggleCompare() {
     : `已退出对比模式，当前查看：${currentPlan.value.label}`
 }
 
-function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement) {
+async function loadGeneratedModel(
+  modelUrl: string,
+  placement: SimulationPlacement,
+  focus = true,
+) {
   if (!viewer) throw new Error('三维地图尚未初始化')
   const sdk = cesium()
   if (generatedModel) viewer.scene.primitives.remove(generatedModel)
@@ -324,23 +340,53 @@ function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement) {
       url: modelUrl,
       modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
       scale: 1,
+      minimumPixelSize: 96,
+      maximumScale: 8,
     }),
   )
-  viewer.camera.flyTo({
+  if (generatedModel.readyPromise) await generatedModel.readyPromise
+  if (focus) viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
       placement.longitude,
-      placement.latitude,
-      420,
+      placement.latitude - 0.00028,
+      65,
     ),
     orientation: {
-      heading: sdk.Math.toRadians(18),
-      pitch: sdk.Math.toRadians(-42),
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
       roll: 0,
     },
   })
 }
 
+async function playConstruction(job: SimulationJob) {
+  const urls = job.stageUrls?.length ? job.stageUrls : [job.modelUrl!]
+  const run = ++constructionRun
+  for (let index = 0; index < urls.length; index += 1) {
+    if (run !== constructionRun) return
+    constructionStage.value = Math.min(index + 1, 4)
+    buildProgress.value = 72 + Math.round(((index + 1) / urls.length) * 28)
+    engineStatus.value = `施工演示：${constructionStages[constructionStage.value]}`
+    await loadGeneratedModel(urls[index]!, job.placement, index === 0)
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 900))
+  }
+}
+
 async function generatePlan() {
+  const instruction = buildInstruction.value.trim()
+  if (!instruction) return
+  conversation.value.push({ role: 'user', text: instruction })
+  const buildingStyle = inferBuildingStyle(instruction)
+  const styleLabel = {
+    'traditional-chinese': '传统中式',
+    modern: '现代',
+    rural: '乡村通用',
+  }[buildingStyle]
+  conversation.value.push({
+    role: 'assistant',
+    text: `已解析建造需求，当前采用“${styleLabel}”生成方案，正在准备施工演示。`,
+  })
+  constructionStage.value = 0
   buildState.value = 'running'
   buildProgress.value = 5
   generatedJob.value = null
@@ -351,6 +397,8 @@ async function generatePlan() {
       scenario: currentScenario.value.label,
       plan: currentPlan.value.label,
       ...parameters.value,
+      prompt: instruction,
+      buildingStyle,
     })
     const completedJob = await waitForSimulationJob(
       config.apiBaseUrl,
@@ -363,16 +411,21 @@ async function generatePlan() {
         },
       },
     )
-    loadGeneratedModel(completedJob.modelUrl!, completedJob.placement)
+    await playConstruction(completedJob)
     generatedJob.value = completedJob
     buildState.value = 'ready'
     buildProgress.value = 100
     engineStatus.value = `${completedJob.placement.label} · Blender GLB 已加载`
     operationMessage.value = '真实 Blender 建模任务已完成；当前为镇域测试定位，不代表徐场村精确落点'
+    conversation.value.push({
+      role: 'assistant',
+      text: `${styleLabel}建筑已完成，可在地图中旋转、缩放并查看最终效果。`,
+    })
   } catch (error) {
     buildState.value = 'error'
     engineStatus.value = error instanceof Error ? error.message : 'Blender 场景构建失败'
     operationMessage.value = '请检查 Blender 路径、后端服务和模型输出日志'
+    conversation.value.push({ role: 'assistant', text: `建造失败：${engineStatus.value}` })
   }
 }
 
@@ -410,19 +463,16 @@ async function initializeViewer() {
       navigationHelpButton: false,
     })
     viewer.imageryLayers.removeAll(true)
-    const baseMapUrl = config.supermap.mapServices.base.replace(/\/+$/, '')
+    engineStatus.value = '正在加载 ArcGIS 导航底图'
     viewer.imageryLayers.addImageryProvider(
       new sdk.UrlTemplateImageryProvider({
-        url: `${baseMapUrl}/tileImage.png?scale={scale}&x={x}&y={y}&width=256&height=256&transparent=false&cacheEnabled=true`,
-        minimumLevel: 0,
-        maximumLevel: 18,
+        url: buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken),
         tilingScheme: new sdk.WebMercatorTilingScheme(),
-        customTags: {
-          scale: (_provider, _x, _y, level) =>
-            String(1.6901635716026553e-9 * 2 ** level),
-        },
+        minimumLevel: 0,
+        maximumLevel: 19,
       }),
     )
+    viewer.scene.globe.show = true
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
@@ -432,11 +482,11 @@ async function initializeViewer() {
       ),
       orientation: {
         heading: 0,
-        pitch: sdk.Math.toRadians(-65),
+        pitch: sdk.Math.toRadians(-90),
         roll: 0,
       },
     })
-    engineStatus.value = '堌阳镇范围底图 · 徐场村精确点位待接入'
+    engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
@@ -446,6 +496,7 @@ async function initializeViewer() {
 onMounted(initializeViewer)
 
 onBeforeUnmount(() => {
+  constructionRun += 1
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -595,6 +646,42 @@ onBeforeUnmount(() => {
         :class="{ comparing: isComparing }"
       >
         <div ref="cesiumContainer" class="cesium-container" />
+
+        <form class="build-dialog" @submit.prevent="generatePlan">
+          <header>
+            <span><i />AI 建造助手</span>
+            <small>{{ isGenerating ? constructionStages[constructionStage] : '自然语言驱动建模' }}</small>
+          </header>
+          <div class="build-conversation" aria-live="polite">
+            <p
+              v-for="(message, index) in conversation.slice(-3)"
+              :key="`${message.role}-${index}`"
+              :class="message.role"
+            >
+              {{ message.text }}
+            </p>
+          </div>
+          <div v-if="isGenerating" class="construction-steps">
+            <span
+              v-for="(stage, index) in constructionStages.slice(1)"
+              :key="stage"
+              :class="{ active: constructionStage >= index + 1 }"
+            >{{ stage }}</span>
+          </div>
+          <label>
+            <textarea
+              v-model="buildInstruction"
+              :disabled="isGenerating"
+              rows="2"
+              aria-label="建筑建造指令"
+              placeholder="例如：在这里建造一座两层中式古风建筑"
+              @keydown.ctrl.enter="generatePlan"
+            />
+            <button type="submit" :disabled="isGenerating || !buildInstruction.trim()">
+              {{ isGenerating ? `${buildProgress}%` : '开始建造' }}
+            </button>
+          </label>
+        </form>
 
         <div class="map-toolbar simulation-toolbar">
           <button
@@ -1018,6 +1105,100 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
 }
+.build-dialog {
+  position: absolute;
+  z-index: 35;
+  right: 14px;
+  bottom: 68px;
+  display: grid;
+  width: min(360px, calc(100% - 28px));
+  padding: 12px;
+  gap: 9px;
+  border: 1px solid rgba(61, 214, 196, 0.32);
+  border-radius: 10px;
+  background: rgba(4, 17, 18, 0.94);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+}
+.build-dialog header,
+.build-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.build-dialog header span {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+}
+.build-dialog header small {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 8px;
+}
+.build-conversation {
+  display: grid;
+  max-height: 112px;
+  overflow: auto;
+  gap: 6px;
+}
+.build-conversation p {
+  width: fit-content;
+  max-width: 88%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 9px;
+  line-height: 1.55;
+}
+.build-conversation p.user {
+  margin-left: auto;
+  color: #d9fffa;
+  background: rgba(61, 214, 196, 0.14);
+}
+.construction-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+.construction-steps span {
+  padding-top: 4px;
+  color: rgba(205, 231, 225, 0.35);
+  border-top: 2px solid rgba(205, 231, 225, 0.12);
+  font-size: 7px;
+  text-align: center;
+}
+.construction-steps span.active {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+.build-dialog textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 8px;
+  color: var(--text-main);
+  border: 1px solid rgba(122, 203, 190, 0.2);
+  border-radius: 6px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.24);
+  font: 10px/1.45 inherit;
+}
+.build-dialog textarea:focus { border-color: var(--cyan); }
+.build-dialog button {
+  align-self: stretch;
+  padding: 0 12px;
+  color: #052321;
+  border: 0;
+  border-radius: 6px;
+  background: var(--cyan);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.build-dialog button:disabled { opacity: 0.5; cursor: wait; }
 .simulation-toolbar {
   right: auto;
   left: 10px;

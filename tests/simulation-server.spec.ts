@@ -10,7 +10,8 @@ describe('Blender 模拟任务服务', () => {
         ditchWidth: 20,
         ditchDepth: -1,
         outletCount: 99,
-        roadRaiseHeight: 3,
+      roadRaiseHeight: 3,
+        prompt: '请帮我在地图处建造一个古风样式的建筑',
       }),
     ).toEqual({
       scenario: '道路积水治理',
@@ -19,6 +20,8 @@ describe('Blender 模拟任务服务', () => {
       ditchDepth: 0.3,
       outletCount: 12,
       roadRaiseHeight: 1.2,
+      prompt: '请帮我在地图处建造一个古风样式的建筑',
+      buildingStyle: 'traditional-chinese',
     })
   })
 
