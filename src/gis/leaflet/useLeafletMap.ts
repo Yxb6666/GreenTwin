@@ -4,7 +4,6 @@ import { loadSuperMapLeaflet } from './loadSdk'
 import { buildArcGisTileUrl, getBaseMapOption, requiresArcGisAccessToken, type BaseMapMode } from './baseMaps'
 import {
   buildCountyBoundaryRings,
-  buildCountyInverseMaskRings,
   filterCountyBoundaryArtifacts,
   filterTownshipBoundaryArtifacts,
   getCountyOuterBoundaryRings,
@@ -126,17 +125,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   function addCountyFocusContext(instance: L.Map, features: Awaited<ReturnType<typeof loadTownshipFeatures>>) {
     const boundaryRings = filterCountyBoundaryArtifacts(buildCountyBoundaryRings(features))
     const outlineRings = getCountyOuterBoundaryRings(boundaryRings)
-    const maskRings = buildCountyInverseMaskRings(boundaryRings)
-    if (outlineRings.length === 0 || maskRings.length === 0) return false
-
-    L.polygon(maskRings, {
-      pane: 'countyMaskPane',
-      interactive: false,
-      stroke: false,
-      fillColor: '#031411',
-      fillOpacity: 0.4,
-      fillRule: 'evenodd',
-    }).addTo(instance)
+    if (outlineRings.length === 0) return false
 
     L.polyline(outlineRings, {
       pane: 'countyOutlinePane',
@@ -232,10 +221,6 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       baseMapPane.style.pointerEvents = 'none'
 
       if (interactionOptions.townshipFocus) instance.getContainer().classList.add('map--township-focus')
-
-      const countyMaskPane = instance.createPane('countyMaskPane')
-      countyMaskPane.style.zIndex = '350'
-      countyMaskPane.style.pointerEvents = 'none'
 
       const townshipPane = instance.createPane('townshipOverlayPane')
       townshipPane.style.zIndex = '410'
