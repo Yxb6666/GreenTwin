@@ -30,15 +30,15 @@ interface ModelPrimitive {
 
 interface SuperMapViewer {
   scene: {
-    globe: { depthTestAgainstTerrain: boolean }
+    globe: { depthTestAgainstTerrain: boolean; show: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
-    addVectorTilesMap: (options: Record<string, unknown>) => unknown
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
     }
   }
   imageryLayers: {
+    addImageryProvider: (provider: unknown) => unknown
     removeAll: (destroy?: boolean) => void
   }
   camera: {
@@ -61,6 +61,8 @@ interface CesiumRuntime {
       height: number,
     ) => unknown
   }
+  WebMercatorTilingScheme: new () => unknown
+  UrlTemplateImageryProvider: new (options: Record<string, unknown>) => unknown
   Model: {
     fromGltf: (options: {
       url: string
@@ -460,17 +462,16 @@ async function initializeViewer() {
       navigationHelpButton: false,
     })
     viewer.imageryLayers.removeAll(true)
-    viewer.scene.addVectorTilesMap({
-      url: '/api/arcgis/world-streets',
-      name: 'ArcGIS 世界街道图',
-      tileWidth: 512,
-      tileHeight: 512,
-      canvasWidth: 512,
-      minimumLevel: 0,
-      maximumLevel: 22,
-      labelDepthTestEnabled: false,
-      viewer,
-    })
+    engineStatus.value = '正在加载 ArcGIS 世界街道图'
+    viewer.imageryLayers.addImageryProvider(
+      new sdk.UrlTemplateImageryProvider({
+        url: '/api/arcgis/world-streets/raster/{z}/{x}/{y}.png',
+        tilingScheme: new sdk.WebMercatorTilingScheme(),
+        minimumLevel: 0,
+        maximumLevel: 19,
+      }),
+    )
+    viewer.scene.globe.show = true
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
@@ -480,11 +481,11 @@ async function initializeViewer() {
       ),
       orientation: {
         heading: 0,
-        pitch: sdk.Math.toRadians(-65),
+        pitch: sdk.Math.toRadians(-90),
         roll: 0,
       },
     })
-    engineStatus.value = 'ArcGIS 世界街道图矢量瓦片 · 徐场村精确点位待接入'
+    engineStatus.value = 'ArcGIS 世界街道图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'

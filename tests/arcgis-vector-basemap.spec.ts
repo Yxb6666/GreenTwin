@@ -28,6 +28,18 @@ describe('ArcGIS 世界街道图矢量瓦片适配', () => {
     })
   })
 
+  it('转换 ArcGIS 街道图兜底影像瓦片的列行顺序', () => {
+    expect(
+      resolveWorldStreetsResource(
+        '/api/arcgis/world-streets/raster/12/3371/1582.png',
+      ),
+    ).toEqual({
+      kind: 'binary',
+      upstream:
+        'https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/12/1582/3371',
+    })
+  })
+
   it('将字体和精灵资源保持在同源代理下', () => {
     const style = rewriteWorldStreetsStyle({ version: 8, layers: [] })
 

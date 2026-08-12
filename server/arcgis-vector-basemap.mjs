@@ -1,5 +1,7 @@
 const SERVICE_URL =
   'https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer'
+const RASTER_SERVICE_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer'
 
 const ROUTE_PREFIX = '/api/arcgis/world-streets'
 
@@ -41,6 +43,17 @@ export function resolveWorldStreetsResource(pathname) {
     return {
       kind: 'binary',
       upstream: `${SERVICE_URL}/tile/${level}/${row}/${column}.pbf`,
+    }
+  }
+
+  const rasterTile = pathname.match(
+    new RegExp(`^${ROUTE_PREFIX}/raster/(\\d+)/(\\d+)/(\\d+)\\.png$`),
+  )
+  if (rasterTile) {
+    const [, level, column, row] = rasterTile
+    return {
+      kind: 'binary',
+      upstream: `${RASTER_SERVICE_URL}/tile/${level}/${row}/${column}`,
     }
   }
 
