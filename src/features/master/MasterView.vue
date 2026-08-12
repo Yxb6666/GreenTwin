@@ -481,7 +481,7 @@ onMounted(async () => {
     <ScreenHeader title="兰考县和美乡村数字孪生决策平台" subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判" />
 
     <div class="master-layout">
-      <aside class="master-side">
+      <aside class="master-side master-side--overview">
         <PanelCard title="人口与密度特征" meta="2020—2025 / 县域统计">
           <div class="population-content">
             <div class="metric-grid">
@@ -730,6 +730,13 @@ onMounted(async () => {
 
 .master-side {
   grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+.master-side--overview {
+  grid-template-rows:
+    minmax(0, 1fr)
+    minmax(0, 0.9fr)
+    minmax(0, 1.15fr);
 }
 
 .master-center {

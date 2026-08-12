@@ -18,8 +18,8 @@ const dimensions: Array<{
   { key: "life", label: "生活", fullLabel: "生活空间" },
   { key: "production", label: "生产", fullLabel: "生产空间" },
 ];
-const center = { x: 126, y: 58 };
-const radius = 42;
+const center = { x: 126, y: 92 };
+const radius = 68;
 const displayedValues = ref(scoreValues(props.scores));
 const activeTooltip = ref<"current" | "reference" | null>(null);
 let animationFrame = 0;
@@ -101,11 +101,6 @@ const strongestDimension = computed(() => rankedDimensions.value[0]!);
 const weakestDimension = computed(
   () => rankedDimensions.value[rankedDimensions.value.length - 1]!,
 );
-const currentLegend = computed(() =>
-  props.scope === "township"
-    ? `当前乡镇（${props.areaName}）`
-    : `县域评价（${props.areaName}）`,
-);
 const tooltipScores = computed(() =>
   activeTooltip.value === "reference" && props.referenceScores
     ? props.referenceScores
@@ -120,7 +115,7 @@ const tooltipTitle = computed(() =>
   <div class="diagnostic-radar">
     <div class="diagnostic-radar__chart">
       <svg
-        viewBox="0 0 252 116"
+        viewBox="0 0 252 140"
         role="img"
         :aria-label="`${areaName}三生综合评价雷达图`"
       >
@@ -169,28 +164,21 @@ const tooltipTitle = computed(() =>
         />
 
         <g class="diagnostic-radar__label diagnostic-radar__label--top">
-          <text x="126" y="5">生态</text>
-          <text x="126" y="17" class="diagnostic-radar__score">
+          <text x="126" y="7">生态</text>
+          <text x="126" y="19" class="diagnostic-radar__score">
             {{ scores.ecology.toFixed(1) }}
           </text>
         </g>
         <g class="diagnostic-radar__label diagnostic-radar__label--left">
-          <text x="42" y="94">生产</text>
-          <text x="42" y="106" class="diagnostic-radar__score">
+          <text x="32" y="123">生产</text>
+          <text x="32" y="135" class="diagnostic-radar__score">
             {{ scores.production.toFixed(1) }}
           </text>
         </g>
         <g class="diagnostic-radar__label diagnostic-radar__label--right">
-          <text x="210" y="94">生活</text>
-          <text x="210" y="106" class="diagnostic-radar__score">
+          <text x="220" y="123">生活</text>
+          <text x="220" y="135" class="diagnostic-radar__score">
             {{ scores.life.toFixed(1) }}
-          </text>
-        </g>
-
-        <g class="diagnostic-radar__composite">
-          <text x="126" y="51">综合指数</text>
-          <text x="126" y="68" class="diagnostic-radar__composite-value">
-            {{ scores.composite.toFixed(1) }}
           </text>
         </g>
       </svg>
@@ -211,9 +199,12 @@ const tooltipTitle = computed(() =>
     </div>
 
     <div class="diagnostic-radar__footer">
-      <div class="diagnostic-radar__legend" aria-label="雷达图图例">
-        <span><i class="is-current" />{{ currentLegend }}</span>
-        <span v-if="referenceScores"><i class="is-reference" />县域参考</span>
+      <div class="diagnostic-radar__summary">
+        <span>{{ areaName }}综合评价</span>
+        <strong>{{ scores.composite.toFixed(1) }}</strong>
+        <small v-if="referenceScores">
+          <i />县域参考
+        </small>
       </div>
       <div class="diagnostic-radar__diagnosis">
         <span><em>优势</em>{{ strongestDimension.fullLabel }}</span>
@@ -225,6 +216,8 @@ const tooltipTitle = computed(() =>
 
 <style scoped>
 .diagnostic-radar {
+  container-name: sansheng-radar;
+  container-type: size;
   display: grid;
   height: 100%;
   min-height: 0;
@@ -234,14 +227,15 @@ const tooltipTitle = computed(() =>
 .diagnostic-radar__chart {
   position: relative;
   min-height: 0;
+  overflow: hidden;
 }
 
 .diagnostic-radar__chart svg {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 112px;
-  overflow: visible;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .diagnostic-radar__grid,
@@ -289,8 +283,7 @@ const tooltipTitle = computed(() =>
   vector-effect: non-scaling-stroke;
 }
 
-.diagnostic-radar__label text,
-.diagnostic-radar__composite text {
+.diagnostic-radar__label text {
   fill: #eef5ee;
   font: 9px var(--font-display);
   text-anchor: middle;
@@ -299,16 +292,6 @@ const tooltipTitle = computed(() =>
 .diagnostic-radar__label .diagnostic-radar__score {
   fill: #dcece7;
   font: 600 10px var(--font-data);
-}
-
-.diagnostic-radar__composite text {
-  fill: #95aaa3;
-  font-size: 7.5px;
-}
-
-.diagnostic-radar__composite .diagnostic-radar__composite-value {
-  fill: #42ded0;
-  font: 700 15px var(--font-data);
 }
 
 .diagnostic-radar__tooltip {
@@ -336,43 +319,51 @@ const tooltipTitle = computed(() =>
 
 .diagnostic-radar__footer {
   display: grid;
-  gap: 5px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(74, 126, 114, 0.18);
+  gap: 7px;
+  padding-top: 7px;
 }
 
-.diagnostic-radar__legend,
+.diagnostic-radar__summary,
 .diagnostic-radar__diagnosis {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 13px;
-  color: #95aaa3;
-  font-size: 8px;
+  color: #dce9e5;
+  font-size: 9px;
   white-space: nowrap;
 }
 
-.diagnostic-radar__legend span,
 .diagnostic-radar__diagnosis span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.diagnostic-radar__legend i {
-  display: inline-block;
-  width: 16px;
-  border-top: 2px solid #3dd6c4;
+.diagnostic-radar__summary strong {
+  color: #42ded0;
+  font: 700 14px var(--font-data);
 }
 
-.diagnostic-radar__legend i.is-reference {
+.diagnostic-radar__summary small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #95aaa3;
+  font-size: 8px;
+}
+
+.diagnostic-radar__summary small i {
+  display: inline-block;
+  width: 14px;
   border-top: 1px dashed #78928c;
 }
 
 .diagnostic-radar__diagnosis {
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 7px 8px 0;
   color: #dce9e5;
+  border-top: 1px solid rgba(74, 126, 114, 0.18);
 }
 
 .diagnostic-radar__diagnosis em {
@@ -382,6 +373,27 @@ const tooltipTitle = computed(() =>
 
 .diagnostic-radar__diagnosis span:last-child em {
   color: #d8df8a;
+}
+
+@container sansheng-radar (max-height: 190px) {
+  .diagnostic-radar__footer {
+    gap: 4px;
+    padding-top: 4px;
+  }
+
+  .diagnostic-radar__summary,
+  .diagnostic-radar__diagnosis {
+    gap: 9px;
+    font-size: 8px;
+  }
+
+  .diagnostic-radar__summary strong {
+    font-size: 12px;
+  }
+
+  .diagnostic-radar__diagnosis {
+    padding: 4px 6px 0;
+  }
 }
 
 .tooltip-fade-enter-active,
