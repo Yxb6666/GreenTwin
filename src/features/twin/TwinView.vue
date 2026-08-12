@@ -356,12 +356,12 @@ async function loadGeneratedModel(
   if (focus) viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
       placement.longitude,
-      placement.latitude,
-      260,
+      placement.latitude - 0.00028,
+      65,
     ),
     orientation: {
-      heading: sdk.Math.toRadians(8),
-      pitch: sdk.Math.toRadians(-88),
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
       roll: 0,
     },
   })
