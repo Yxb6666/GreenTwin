@@ -81,7 +81,7 @@ describe('行政区划要素解析', () => {
     ])
   })
 
-  it('保留服务返回的乡镇和类似乡级单位', () => {
+  it('保留服务返回的乡镇和类似乡级单位编码', () => {
     const result = parseTownshipFeatures({
       recordsets: [{ features: [feature('410225101'), feature('410225402')] }],
     })
@@ -190,6 +190,29 @@ describe('行政区划要素解析', () => {
     ])
   })
 
+  it('将类似乡级单位归并到相邻现行行政区名称', () => {
+    const result = parseTownshipFeatures({
+      recordsets: [
+        {
+          fields: ['ADCODE', 'NAME'],
+          features: [
+            { ...feature('410225401'), fieldValues: ['410225401', '仪封园艺场'] },
+            { ...feature('410225402'), fieldValues: ['410225402', '造纸林场'] },
+            { ...feature('410225403'), fieldValues: ['410225403', '柳林林场'] },
+            { ...feature('410225408'), fieldValues: ['410225408', '兰考林场'] },
+          ],
+        },
+      ],
+    })
+
+    expect(result.map(({ code, name }) => ({ code, name }))).toEqual([
+      { code: '410225401', name: '仪封镇' },
+      { code: '410225402', name: '谷营镇' },
+      { code: '410225403', name: '仪封镇' },
+      { code: '410225408', name: '考城镇' },
+    ])
+  })
+
   it('为不规则行政区生成落在面内的代表点', () => {
     const irregularFeature: TownshipFeature = {
       code: '410225002',
@@ -273,6 +296,6 @@ describe('行政区划要素解析', () => {
     expect(getTownshipLabel({ code: '410225001', name: '鍏伴槼琛楅亾' })).toBe('兰阳街道')
     expect(getTownshipLabel({ code: '410225108', name: '浠皝闀�' })).toBe('仪封镇')
     expect(getTownshipLabel({ code: '410225201', name: '涓変箟瀵ㄤ埂' })).toBe('三义寨乡')
-    expect(getTownshipLabel({ code: '410225402', name: '造纸林场' })).toBeNull()
+    expect(getTownshipLabel({ code: '410225402', name: '造纸林场' })).toBe('谷营镇')
   })
 })

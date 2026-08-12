@@ -52,6 +52,15 @@ describe('county focus geometry', () => {
     expect(filterCountyBoundaryArtifacts([countyRing, artifactRing])).toEqual([countyRing])
   })
 
+  it('剔除县界轮廓中面积极小的独立残片', () => {
+    const countyRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
+    const detachedArtifact = [[20, 20], [20.2, 20], [20.2, 20.2], [20, 20.2], [20, 20]] as Array<
+      [number, number]
+    >
+
+    expect(filterCountyBoundaryArtifacts([countyRing, detachedArtifact])).toEqual([countyRing])
+  })
+
   it('县界仅保留最外层轮廓并支持不相连的真实部件', () => {
     const countyRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
     const innerRing = [[2, 2], [4, 2], [4, 4], [2, 4], [2, 2]] as Array<[number, number]>
@@ -63,7 +72,7 @@ describe('county focus geometry', () => {
     ])
   })
 
-  it('只移除零面积退化环，保留任何面积大于零的真实部件', () => {
+  it('剔除零面积退化环和相对面积极小的拓扑残片', () => {
     const mainRing = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] as Array<[number, number]>
     const visiblePart = [[20, 20], [21, 20], [21, 21], [20, 21], [20, 20]] as Array<[number, number]>
     const tinyValidPart = [[2, 2], [2.0001, 2], [2.0001, 2.0001], [2, 2.0001], [2, 2]] as Array<[number, number]>
@@ -72,11 +81,10 @@ describe('county focus geometry', () => {
     expect(filterTownshipBoundaryArtifacts([mainRing, visiblePart, tinyValidPart, degenerateRing])).toEqual([
       mainRing,
       visiblePart,
-      tinyValidPart,
     ])
   })
 
-  it('合并历史要素时保留面积很小但有效的独立飞地', () => {
+  it('合并历史要素时剔除面积极小的独立残片', () => {
     const merged = mergeTownshipFeatures([
       {
         code: '410225201',
@@ -89,7 +97,7 @@ describe('county focus geometry', () => {
     ])
 
     expect(merged).toHaveLength(1)
-    expect(merged[0]?.rings).toHaveLength(2)
+    expect(merged[0]?.rings).toHaveLength(1)
   })
 
   it('按县域范围扩展反向遮罩外环并保留县界孔洞', () => {

@@ -12,7 +12,7 @@ interface BoundaryEdge {
 }
 
 const COORDINATE_PRECISION = 8
-const MIN_BOUNDARY_AREA_RATIO = 1e-6
+const MIN_VISIBLE_PART_AREA_RATIO = 0.005
 
 function pointKey(point: [number, number]) {
   return `${point[0].toFixed(COORDINATE_PRECISION)},${point[1].toFixed(COORDINATE_PRECISION)}`
@@ -145,21 +145,17 @@ function filterRingsByArea(rings: TownshipRing[], minimumAreaRatio: number) {
 }
 
 export function filterCountyBoundaryArtifacts(boundaryRings: TownshipRing[]) {
-  return filterRingsByArea(boundaryRings, MIN_BOUNDARY_AREA_RATIO)
+  return filterRingsByArea(boundaryRings, MIN_VISIBLE_PART_AREA_RATIO)
 }
 
-/**
- * Removes only degenerate township rings (zero-area geometry noise).
- * Valid detached parts, however small, are intentionally preserved.
- */
 export function filterTownshipBoundaryArtifacts(townshipRings: TownshipRing[]) {
-  return townshipRings.filter((ring) => getRingArea(ring) > 0)
+  return filterRingsByArea(townshipRings, MIN_VISIBLE_PART_AREA_RATIO)
 }
 
 /**
  * Merges historical source records into the 16 current township/street units.
- * Shared internal edges are dissolved while detached, meaningful parts remain
- * as independent rings of the same logical feature.
+ * Shared internal edges are dissolved. Tiny detached rings from source topology
+ * noise are dropped, while meaningful detached parts remain independent rings.
  */
 export function mergeTownshipFeatures(features: TownshipFeature[]): TownshipFeature[] {
   const groups = new Map<string, TownshipFeature[]>()

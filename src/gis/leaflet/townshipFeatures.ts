@@ -75,10 +75,14 @@ const OFFICIAL_TOWNSHIP_NAMES: Record<string, string> = {
   '410225208': '葡萄架乡',
   '410225209': '闫楼乡',
   '410225210': '仪封镇',
-  '410225401': '仪封园艺场',
-  '410225402': '造纸林场',
-  '410225403': '柳林林场',
-  '410225408': '兰考林场',
+  // Lankao_map_units also includes four historical "similar township-level"
+  // units. They are spatial holes inside the current 16 administrative
+  // regions, so normalize them to the adjoining current township before
+  // dissolving geometries for thematic rendering.
+  '410225401': '仪封镇',
+  '410225402': '谷营镇',
+  '410225403': '仪封镇',
+  '410225408': '考城镇',
 }
 
 export function getTownshipLabel(feature: Pick<TownshipFeature, 'code' | 'name'>): string | null {
