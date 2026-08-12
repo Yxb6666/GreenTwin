@@ -25,6 +25,7 @@ interface SceneLayer {
 
 interface ModelPrimitive {
   show: boolean
+  readyPromise?: Promise<ModelPrimitive>
 }
 
 interface SuperMapViewer {
@@ -76,6 +77,8 @@ interface CesiumRuntime {
       url: string
       modelMatrix: unknown
       scale?: number
+      minimumPixelSize?: number
+      maximumScale?: number
     }) => ModelPrimitive
   }
   Transforms: {
@@ -327,7 +330,11 @@ function toggleCompare() {
     : `已退出对比模式，当前查看：${currentPlan.value.label}`
 }
 
-function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement, focus = true) {
+async function loadGeneratedModel(
+  modelUrl: string,
+  placement: SimulationPlacement,
+  focus = true,
+) {
   if (!viewer) throw new Error('三维地图尚未初始化')
   const sdk = cesium()
   if (generatedModel) viewer.scene.primitives.remove(generatedModel)
@@ -341,17 +348,20 @@ function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement, fo
       url: modelUrl,
       modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
       scale: 1,
+      minimumPixelSize: 96,
+      maximumScale: 8,
     }),
   )
+  if (generatedModel.readyPromise) await generatedModel.readyPromise
   if (focus) viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
       placement.longitude,
       placement.latitude,
-      420,
+      260,
     ),
     orientation: {
-      heading: sdk.Math.toRadians(18),
-      pitch: sdk.Math.toRadians(-42),
+      heading: sdk.Math.toRadians(8),
+      pitch: sdk.Math.toRadians(-88),
       roll: 0,
     },
   })
@@ -365,7 +375,7 @@ async function playConstruction(job: SimulationJob) {
     constructionStage.value = Math.min(index + 1, 4)
     buildProgress.value = 72 + Math.round(((index + 1) / urls.length) * 28)
     engineStatus.value = `施工演示：${constructionStages[constructionStage.value]}`
-    loadGeneratedModel(urls[index]!, job.placement, index === 0)
+    await loadGeneratedModel(urls[index]!, job.placement, index === 0)
     await new Promise((resolve) => globalThis.setTimeout(resolve, 900))
   }
 }
