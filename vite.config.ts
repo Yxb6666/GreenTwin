@@ -6,6 +6,7 @@ import { createReportMiddleware } from './server/deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
 import { createDecisionAssistantMiddleware } from './server/decision-assistant.mjs'
 import { createSimulationMiddleware } from './server/simulation.mjs'
+import { createArcGisVectorBasemapMiddleware } from './server/arcgis-vector-basemap.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
   const middleware = createReportMiddleware({
@@ -83,6 +84,25 @@ function decisionAssistantApi(env: Record<string, string>): Plugin {
   }
 }
 
+function arcGisVectorBasemapApi(): Plugin {
+  const middleware = createArcGisVectorBasemapMiddleware()
+
+  return {
+    name: 'greentwin-arcgis-vector-basemap-api',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const pathname = new URL(request.url || '/', 'http://localhost')
+          .pathname
+        if (!pathname.startsWith('/api/arcgis/world-streets')) {
+          next()
+          return
+        }
+        void middleware(request, response, pathname)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
@@ -92,6 +112,7 @@ export default defineConfig(({ mode }) => {
       governanceAssistantApi(env),
       decisionAssistantApi(env),
       simulationApi(env),
+      arcGisVectorBasemapApi(),
       viteStaticCopy({
         targets: [
           {

@@ -32,6 +32,7 @@ interface SuperMapViewer {
   scene: {
     globe: { depthTestAgainstTerrain: boolean }
     layers?: { find?: (name: string) => SceneLayer | undefined }
+    addVectorTilesMap: (options: Record<string, unknown>) => unknown
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
@@ -39,7 +40,6 @@ interface SuperMapViewer {
   }
   imageryLayers: {
     removeAll: (destroy?: boolean) => void
-    addImageryProvider: (provider: unknown) => unknown
   }
   camera: {
     setView: (options: Record<string, unknown>) => void
@@ -54,17 +54,6 @@ interface CesiumRuntime {
     container: HTMLElement,
     options: Record<string, unknown>,
   ) => SuperMapViewer
-  UrlTemplateImageryProvider: new (options: {
-    url: string
-    minimumLevel?: number
-    maximumLevel?: number
-    tilingScheme?: unknown
-    customTags?: Record<
-      string,
-      (provider: unknown, x: number, y: number, level: number) => string
-    >
-  }) => unknown
-  WebMercatorTilingScheme: new () => unknown
   Cartesian3: {
     fromDegrees: (
       longitude: number,
@@ -471,19 +460,17 @@ async function initializeViewer() {
       navigationHelpButton: false,
     })
     viewer.imageryLayers.removeAll(true)
-    const baseMapUrl = config.supermap.mapServices.base.replace(/\/+$/, '')
-    viewer.imageryLayers.addImageryProvider(
-      new sdk.UrlTemplateImageryProvider({
-        url: `${baseMapUrl}/tileImage.png?scale={scale}&x={x}&y={y}&width=256&height=256&transparent=false&cacheEnabled=true`,
-        minimumLevel: 0,
-        maximumLevel: 18,
-        tilingScheme: new sdk.WebMercatorTilingScheme(),
-        customTags: {
-          scale: (_provider, _x, _y, level) =>
-            String(1.6901635716026553e-9 * 2 ** level),
-        },
-      }),
-    )
+    viewer.scene.addVectorTilesMap({
+      url: '/api/arcgis/world-streets',
+      name: 'ArcGIS 世界街道图',
+      tileWidth: 512,
+      tileHeight: 512,
+      canvasWidth: 512,
+      minimumLevel: 0,
+      maximumLevel: 22,
+      labelDepthTestEnabled: false,
+      viewer,
+    })
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
@@ -497,7 +484,7 @@ async function initializeViewer() {
         roll: 0,
       },
     })
-    engineStatus.value = '堌阳镇范围底图 · 徐场村精确点位待接入'
+    engineStatus.value = 'ArcGIS 世界街道图矢量瓦片 · 徐场村精确点位待接入'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
