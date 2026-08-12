@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DemSummary } from './demService'
+
+const DEFAULT_TERRAIN_HEIGHT = 430
+const MIN_TERRAIN_HEIGHT = 320
+const MAX_TERRAIN_HEIGHT = 600
+const MAX_TERRAIN_VIEWPORT_RATIO = 0.62
+const TERRAIN_HEIGHT_STORAGE_KEY = 'greentwin.master.terrain.height'
 
 const props = defineProps<{
   summary: DemSummary | null
@@ -9,6 +15,13 @@ const props = defineProps<{
 }>()
 
 const isTerrainExpanded = ref(false)
+const isTerrainResizing = ref(false)
+const terrainDrawerHeight = ref(DEFAULT_TERRAIN_HEIGHT)
+
+let resizeStartY = 0
+let resizeStartHeight = DEFAULT_TERRAIN_HEIGHT
+let resizePointerId: number | null = null
+let activeResizeHandle: HTMLElement | null = null
 
 const elevationDifference = computed(() => {
   const minimum = props.summary?.minimumElevationM
@@ -38,14 +51,134 @@ const sourceMeta = computed(() => {
 function toggleTerrain() {
   isTerrainExpanded.value = !isTerrainExpanded.value
 }
+
+function getMaxTerrainHeight() {
+  if (typeof window === 'undefined') return MAX_TERRAIN_HEIGHT
+  return Math.max(
+    MIN_TERRAIN_HEIGHT,
+    Math.min(MAX_TERRAIN_HEIGHT, Math.floor(window.innerHeight * MAX_TERRAIN_VIEWPORT_RATIO)),
+  )
+}
+
+function clampTerrainHeight(height: number) {
+  if (!Number.isFinite(height)) return DEFAULT_TERRAIN_HEIGHT
+  return Math.max(MIN_TERRAIN_HEIGHT, Math.min(Math.round(height), getMaxTerrainHeight()))
+}
+
+function saveTerrainHeight() {
+  try {
+    window.localStorage.setItem(TERRAIN_HEIGHT_STORAGE_KEY, String(terrainDrawerHeight.value))
+  } catch {
+    // Storage can be unavailable in restricted or private browsing contexts.
+  }
+}
+
+function restoreTerrainHeight() {
+  try {
+    const savedHeight = Number(window.localStorage.getItem(TERRAIN_HEIGHT_STORAGE_KEY))
+    terrainDrawerHeight.value = Number.isFinite(savedHeight) && savedHeight > 0
+      ? clampTerrainHeight(savedHeight)
+      : clampTerrainHeight(DEFAULT_TERRAIN_HEIGHT)
+  } catch {
+    terrainDrawerHeight.value = clampTerrainHeight(DEFAULT_TERRAIN_HEIGHT)
+  }
+}
+
+function startTerrainResize(event: PointerEvent) {
+  if (!isTerrainExpanded.value || isTerrainResizing.value || event.button !== 0) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  activeResizeHandle = event.currentTarget as HTMLElement
+  resizePointerId = event.pointerId
+  resizeStartY = event.clientY
+  resizeStartHeight = terrainDrawerHeight.value
+  activeResizeHandle.setPointerCapture(event.pointerId)
+  isTerrainResizing.value = true
+  document.body.classList.add('terrain-resizing')
+  window.addEventListener('pointermove', handleTerrainResize, { passive: false })
+  window.addEventListener('pointerup', stopTerrainResize)
+  window.addEventListener('pointercancel', stopTerrainResize)
+}
+
+function handleTerrainResize(event: PointerEvent) {
+  if (!isTerrainResizing.value || event.pointerId !== resizePointerId) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  terrainDrawerHeight.value = clampTerrainHeight(
+    resizeStartHeight - (event.clientY - resizeStartY),
+  )
+}
+
+function stopTerrainResize(event?: PointerEvent, persist = true) {
+  if (!isTerrainResizing.value) return
+  if (event && event.pointerId !== resizePointerId) return
+
+  event?.preventDefault()
+  event?.stopPropagation()
+  if (
+    activeResizeHandle
+    && resizePointerId != null
+    && activeResizeHandle.hasPointerCapture(resizePointerId)
+  ) {
+    activeResizeHandle.releasePointerCapture(resizePointerId)
+  }
+
+  isTerrainResizing.value = false
+  document.body.classList.remove('terrain-resizing')
+  window.removeEventListener('pointermove', handleTerrainResize)
+  window.removeEventListener('pointerup', stopTerrainResize)
+  window.removeEventListener('pointercancel', stopTerrainResize)
+  resizePointerId = null
+  activeResizeHandle = null
+  if (persist) saveTerrainHeight()
+}
+
+function resetTerrainDrawerHeight(event?: MouseEvent) {
+  event?.preventDefault()
+  event?.stopPropagation()
+  terrainDrawerHeight.value = clampTerrainHeight(DEFAULT_TERRAIN_HEIGHT)
+  saveTerrainHeight()
+}
+
+function handleViewportResize() {
+  terrainDrawerHeight.value = clampTerrainHeight(terrainDrawerHeight.value)
+}
+
+onMounted(() => {
+  restoreTerrainHeight()
+  window.addEventListener('resize', handleViewportResize)
+})
+
+onBeforeUnmount(() => {
+  stopTerrainResize(undefined, false)
+  document.body.classList.remove('terrain-resizing')
+  window.removeEventListener('resize', handleViewportResize)
+})
 </script>
 
 <template>
   <section
     class="terrain-drawer panel-frame"
-    :class="{ 'is-expanded': isTerrainExpanded }"
+    :class="{ 'is-expanded': isTerrainExpanded, 'is-resizing': isTerrainResizing }"
+    :style="{ '--terrain-drawer-height': `${terrainDrawerHeight}px` }"
     aria-label="兰考县地形分析"
   >
+    <div
+      v-if="isTerrainExpanded"
+      class="terrain-resize-handle"
+      :class="{ 'is-active': isTerrainResizing }"
+      role="separator"
+      aria-label="调整地形分析区域高度"
+      aria-orientation="horizontal"
+      title="上下拖动调整地形分析区域高度，双击恢复默认高度"
+      @pointerdown="startTerrainResize"
+      @dblclick="resetTerrainDrawerHeight"
+    >
+      <span aria-hidden="true" />
+    </div>
+
     <button
       class="terrain-drawer__summary"
       type="button"
@@ -102,6 +235,7 @@ function toggleTerrain() {
 
 <style scoped>
 .terrain-drawer {
+  position: relative;
   width: 100%;
   max-width: none;
   height: 48px;
@@ -114,7 +248,47 @@ function toggleTerrain() {
 }
 
 .terrain-drawer.is-expanded {
-  height: 430px;
+  height: var(--terrain-drawer-height, 430px);
+}
+
+.terrain-drawer.is-resizing {
+  transition: none;
+}
+
+.terrain-resize-handle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 12px;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.terrain-resize-handle span {
+  width: 58px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(93, 215, 197, 0.4);
+  opacity: 0.35;
+  transition: background 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+.terrain-resize-handle:hover span,
+.terrain-resize-handle:focus-visible span {
+  background: rgba(93, 215, 197, 0.85);
+  opacity: 0.85;
+}
+
+.terrain-resize-handle.is-active span {
+  background: #5dd7c5;
+  box-shadow: 0 0 8px rgba(61, 214, 196, 0.2);
+  opacity: 1;
 }
 
 .terrain-drawer__summary {
@@ -207,7 +381,7 @@ function toggleTerrain() {
 
 .terrain-drawer__content {
   display: grid;
-  height: 378px;
+  height: calc(var(--terrain-drawer-height, 430px) - 52px);
   min-height: 0;
   padding: 0 12px 8px;
   opacity: 0;
@@ -363,14 +537,6 @@ function toggleTerrain() {
 }
 
 @media (max-width: 1440px) {
-  .terrain-drawer.is-expanded {
-    height: 380px;
-  }
-
-  .terrain-drawer__content {
-    height: 328px;
-  }
-
   .terrain-drawer__body {
     gap: 10px;
     grid-template-columns: minmax(0, 65fr) minmax(220px, 35fr);
@@ -392,6 +558,12 @@ function toggleTerrain() {
   .terrain-stat-grid strong {
     font-size: 17px;
   }
+}
+
+:global(body.terrain-resizing),
+:global(body.terrain-resizing *) {
+  cursor: ns-resize !important;
+  user-select: none !important;
 }
 
 @media (max-width: 1050px) {
