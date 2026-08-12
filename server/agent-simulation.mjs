@@ -174,7 +174,7 @@ export async function generateAgentScript(
     '根据用户提示词生成 Python 函数 build_custom(config)，只调用提供的辅助函数与 bpy/math/mathutils。',
     '辅助函数：material(name,color,metallic,roughness)、add_box(name,location,dimensions,material,build_stage)、add_beveled_box(...)、add_cylinder(...)、add_beam_between(...)、add_roof_mesh(...)。',
     '材质颜色必须传 RGBA 四元组且取值在 0-1，例如 material("Stone", (0.5, 0.5, 0.5, 1.0))；禁止传三元组 RGB。',
-    '规则：不导入任何模块、不读写文件、不执行系统命令、不访问网络；坐标单位为米，建筑底平面中心放在 (0,0,0) 附近；每个几何体必须设置 build_stage（1-4，从地基到装饰）；控制对象数量在 200 个以内。',
+    '规则：build_custom 内部禁止写任何 import 语句，math、mathutils、bpy 已在全局可用；不读写文件、不执行系统命令、不访问网络；坐标单位为米，建筑底平面中心放在 (0,0,0) 附近；每个几何体必须设置 build_stage（1-4，从地基到装饰）；控制对象数量在 200 个以内。',
     '必须只输出 JSON：{"code":"<build_custom 函数完整源码>"}，不使用 Markdown 代码围栏。',
   ].join('\n')
   let response

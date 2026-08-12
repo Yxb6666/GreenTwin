@@ -101,4 +101,14 @@ describe('3D Agent 模拟任务服务', () => {
     expect(source).toContain('values.append(1.0)')
     expect(source).toContain('item / 255.0')
   })
+
+  it('Blender 沙箱只允许白名单模块导入', async () => {
+    const source = await readFile(
+      resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
+      'utf8',
+    )
+    expect(source).toContain('ALLOWED_IMPORT_MODULES = {"math", "mathutils", "bpy"}')
+    expect(source).toContain('"__import__": safe_import')
+    expect(source).toContain('不允许导入模块: %s')
+  })
 })

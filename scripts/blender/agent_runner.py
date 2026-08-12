@@ -112,6 +112,18 @@ def add_roof_mesh(name, vertices, faces, value, build_stage=3):
     return item
 
 
+ALLOWED_IMPORT_MODULES = {"math", "mathutils", "bpy"}
+
+
+def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level != 0:
+        raise ImportError("不允许相对导入")
+    module_name = str(name).split(".")[0]
+    if module_name not in ALLOWED_IMPORT_MODULES:
+        raise ImportError("不允许导入模块: %s" % name)
+    return __import__(name, globals, locals, fromlist, level)
+
+
 def clear_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
@@ -161,6 +173,7 @@ def export_stages(code_path, config_path, output_path):
         "tuple": tuple,
         "type": type,
         "zip": zip,
+        "__import__": safe_import,
     }
     safe_globals = {
         "__builtins__": safe_builtins,
