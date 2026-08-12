@@ -30,6 +30,13 @@ export function validateSimulationRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('请求参数必须是对象')
   }
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim().slice(0, 240) : ''
+  const requestedStyle = typeof payload.buildingStyle === 'string' ? payload.buildingStyle : ''
+  const buildingStyle = ['traditional-chinese', 'modern', 'rural'].includes(requestedStyle)
+    ? requestedStyle
+    : /古风|中式|传统|四合院|亭/.test(prompt)
+      ? 'traditional-chinese'
+      : 'rural'
   return {
     scenario: typeof payload.scenario === 'string' ? payload.scenario.slice(0, 40) : '道路积水治理',
     plan: typeof payload.plan === 'string' ? payload.plan.slice(0, 40) : '方案 A',
@@ -37,6 +44,8 @@ export function validateSimulationRequest(payload) {
     ditchDepth: clamp(payload.ditchDepth, 0.3, 2, 0.7),
     outletCount: Math.round(clamp(payload.outletCount, 1, 12, 4)),
     roadRaiseHeight: clamp(payload.roadRaiseHeight, 0, 1.2, 0.25),
+    prompt,
+    buildingStyle,
   }
 }
 
@@ -60,6 +69,12 @@ function publicJob(job, basePath) {
     modelUrl:
       job.status === 'completed'
         ? `${basePath}/models/${encodeURIComponent(job.id)}.glb`
+        : undefined,
+    stageUrls:
+      job.status === 'completed'
+        ? [1, 2, 3, 4].map(
+            (stage) => `${basePath}/models/${encodeURIComponent(job.id)}-stage-${stage}.glb`,
+          )
         : undefined,
     placement: job.placement,
     parameters: job.parameters,
@@ -179,10 +194,13 @@ export function createSimulationService(options = {}) {
     getJob(id) {
       return jobs.get(id)
     },
-    getModelPath(id) {
+    getModelPath(id, stage) {
       const job = jobs.get(id)
       if (!job || job.status !== 'completed') return undefined
-      const filePath = resolve(outputDirectory, `${basename(id)}.glb`)
+      const filePath = resolve(
+        outputDirectory,
+        stage ? `${basename(id)}-stage-${stage}.glb` : `${basename(id)}.glb`,
+      )
       return existsSync(filePath) ? filePath : undefined
     },
   }
@@ -211,9 +229,9 @@ export function createSimulationMiddleware(options = {}) {
         return
       }
 
-      const modelMatch = relativePath.match(/^\/models\/([a-f0-9-]+)\.glb$/i)
+      const modelMatch = relativePath.match(/^\/models\/([a-f0-9-]+)(-stage-([1-4]))?\.glb$/i)
       if ((request.method === 'GET' || request.method === 'HEAD') && modelMatch) {
-        const filePath = service.getModelPath(modelMatch[1])
+        const filePath = service.getModelPath(modelMatch[1], modelMatch[3])
         if (!filePath) {
           sendJson(response, 404, { message: '模型尚未生成' })
           return
