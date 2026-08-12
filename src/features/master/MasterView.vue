@@ -25,8 +25,8 @@ const populationTrendLabel = computed(() => getPopulationTrendLabel(populationCh
 const populationTrendChart = computed(() => {
   const width = 248
   const height = 118
-  const left = 8
-  const right = 8
+  const left = 26
+  const right = 26
   const top = 25
   const bottom = 22
   const values = populationTrend.map((item) => item.populationWan)
