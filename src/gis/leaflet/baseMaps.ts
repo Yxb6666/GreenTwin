@@ -20,6 +20,8 @@ export interface BaseMapOption {
   previewUrl?: string
 }
 
+export const DEFAULT_BASE_MAP_MODE: BaseMapMode = 'navigation'
+
 export const BASE_MAP_OPTIONS: readonly BaseMapOption[] = [
   {
     key: 'light-gray',

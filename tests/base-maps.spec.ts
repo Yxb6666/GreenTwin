@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { BASE_MAP_OPTIONS, buildArcGisTileUrl, getBaseMapOption } from '@/gis/leaflet/baseMaps'
+import {
+  BASE_MAP_OPTIONS,
+  buildArcGisTileUrl,
+  DEFAULT_BASE_MAP_MODE,
+  getBaseMapOption,
+} from '@/gis/leaflet/baseMaps'
 
 describe('ArcGIS 底图配置', () => {
+  it('默认使用 Navigation 底图', () => {
+    expect(DEFAULT_BASE_MAP_MODE).toBe('navigation')
+  })
+
   it('提供六种指定的 ArcGIS 底图', () => {
     expect(BASE_MAP_OPTIONS.map((option) => option.key)).toEqual([
       'light-gray',
