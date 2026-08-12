@@ -150,6 +150,256 @@ const selectedTownshipMetric = computed(() => {
   return index >= 0 ? (activeTownshipMetrics.value[index] ?? null) : null
 })
 const mapThemeStatus = computed(() => (townshipFeatures.value.length > 0 ? `${townshipFeatures.value.length} 个行政区` : '行政区划加载中'))
+const selectedAreaLabel = computed(() => (selectedThemeTownship.value ? townshipName(selectedThemeTownship.value) : (selectedTownship.value ?? '兰考县')))
+
+interface MasterDecisionInsight {
+  meta: string
+  theme: string
+  scope: string
+  primaryLabel: string
+  primaryValue: string
+  secondaryLabel: string
+  secondaryValue: string
+  assessment: string
+  recommendation: string
+  chips: string[]
+  note: string
+}
+
+function formatSignedPercent(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
+}
+
+function strongestBreakdown(metric: TownshipThemeMetric | null) {
+  return metric?.breakdown?.reduce((strongest, item) => (item.value > strongest.value ? item : strongest)) ?? null
+}
+
+function weakestSanshengDimension(scores: { ecology: number; life: number; production: number }) {
+  return [
+    { label: '生态', value: scores.ecology },
+    { label: '生活', value: scores.life },
+    { label: '生产', value: scores.production },
+  ].sort((first, second) => first.value - second.value)[0]!
+}
+
+function landUseRecommendation(name: string) {
+  if (name.includes('耕地')) return '叠加产业节点和治理问题，优先识别设施农业提升区与农田环境治理点。'
+  if (name.includes('林地')) return '结合生态廊道和水系边界，识别保育修复与景观连通空间。'
+  if (name.includes('村庄')) return '重点核查村庄建设边界，联动人口密度判断公共服务补短板优先级。'
+  if (name.includes('水域')) return '叠加人居环境问题，优先排查沟渠沿线治理和生态修复需求。'
+  return '作为弹性空间继续叠加专题数据，筛选可调整或需核查的用地单元。'
+}
+
+const decisionInsight = computed<MasterDecisionInsight>(() => {
+  const scope = selectedAreaLabel.value
+  const themeKey = activeMapTheme.value
+  const theme = activeMapThemeConfig.value.label
+  const selectedMetric = selectedTownshipMetric.value
+  const hasSelectedTownship = selectedThemeTownship.value !== null
+
+  if (themeKey === 'population') {
+    if (hasSelectedTownship && selectedMetric) {
+      const diff = selectedMetric.value - latestPopulationDensity
+      return {
+        meta: '随人口专题 / 乡镇选区联动',
+        theme,
+        scope,
+        primaryLabel: '人口密度',
+        primaryValue: selectedMetric.label,
+        secondaryLabel: '县域基准',
+        secondaryValue: `${latestPopulationDensity} 人/km²`,
+        assessment: `${scope}人口密度${diff >= 0 ? '高于' : '低于'}县域基准约 ${Math.abs(diff)} 人/km²，适合进一步判断公共服务承载和村庄建设压力。`,
+        recommendation: diff >= 0 ? '优先叠加 POI 与治理问题，识别服务覆盖不足和高频治理点。' : '重点关注产业、耕地和生态空间利用效率，避免简单按城区逻辑配置资源。',
+        chips: ['人口密度', '县域对比', '服务承载'],
+        note: selectedMetric.meta,
+      }
+    }
+
+    return {
+      meta: '随人口专题联动',
+      theme,
+      scope,
+      primaryLabel: `${latestPopulation.year} 年人口`,
+      primaryValue: `${latestPopulation.populationWan.toFixed(1)} 万`,
+      secondaryLabel: '人口趋势',
+      secondaryValue: `${formatSignedPercent(populationChangeRate.value)} · ${populationTrendLabel.value}`,
+      assessment: `兰考县人口规模总体${populationTrendLabel.value}，县域人口密度约 ${latestPopulationDensity} 人/km²。`,
+      recommendation: '点击具体乡镇，右侧会自动切换为该行政区的人口承载研判。',
+      chips: ['县域人口', '2020—2025', '趋势判断'],
+      note: '县域统计口径',
+    }
+  }
+
+  if (themeKey === 'gdp') {
+    const latestGdp = gdpTrend.at(-1)!
+    const firstGdp = gdpTrend[0]!
+    const gdpGrowth = ((latestGdp.gdpYiYuan - firstGdp.gdpYiYuan) / firstGdp.gdpYiYuan) * 100
+    if (hasSelectedTownship && selectedMetric) {
+      return {
+        meta: '随 GDP 专题 / 乡镇选区联动',
+        theme,
+        scope,
+        primaryLabel: '经济强度',
+        primaryValue: selectedMetric.label,
+        secondaryLabel: '县域 GDP',
+        secondaryValue: `${latestGdp.gdpYiYuan.toFixed(1)} 亿元`,
+        assessment: `${scope}当前经济强度为${selectedMetric.label}，可作为产业节点、交通廊道和公共服务配置的联动参考。`,
+        recommendation: selectedMetric.value >= 45 ? '优先叠加 POI，筛选产业服务集聚节点和招商承载空间。' : '建议结合人口密度与三生评价，判断产业补链还是生态保育更优先。',
+        chips: ['经济强度', '产业承载', '乡镇对比'],
+        note: selectedMetric.meta,
+      }
+    }
+
+    return {
+      meta: '随 GDP 专题联动',
+      theme,
+      scope,
+      primaryLabel: `${latestGdp.year} 年 GDP`,
+      primaryValue: `${latestGdp.gdpYiYuan.toFixed(1)} 亿元`,
+      secondaryLabel: '累计变化',
+      secondaryValue: formatSignedPercent(gdpGrowth),
+      assessment: '县域经济总量保持增长态势，适合与产业节点和交通骨架联动识别重点片区。',
+      recommendation: '点击乡镇后，可查看该区域经济强度并生成更具体的发展判断。',
+      chips: ['县域 GDP', '产业研判', '增长趋势'],
+      note: '县域统计口径',
+    }
+  }
+
+  if (themeKey === 'poi') {
+    if (hasSelectedTownship && selectedMetric) {
+      const strongest = strongestBreakdown(selectedMetric)
+      return {
+        meta: '随 POI 专题 / 乡镇选区联动',
+        theme,
+        scope,
+        primaryLabel: 'POI 聚合',
+        primaryValue: selectedMetric.label,
+        secondaryLabel: strongest?.label ?? '主导类型',
+        secondaryValue: strongest ? `${strongest.value} 个` : '暂无',
+        assessment: `${scope}公共服务、产业和文旅资源已聚合为专题点，当前主导项为${strongest?.label ?? '综合节点'}。`,
+        recommendation: strongest?.label === '产业节点' ? '建议叠加 GDP，筛选产业服务集聚与交通可达性更好的节点。' : '建议叠加人口密度，判断公共服务补点或文旅服务提升方向。',
+        chips: ['POI 聚合', '服务节点', '专题点位'],
+        note: selectedMetric.meta,
+      }
+    }
+
+    const poiTotals = buildPoiLegend()
+    const total = poiTotals.reduce((sum, item) => sum + (item.value ?? 0), 0)
+    const strongest = poiTotals.reduce((top, item) => ((item.value ?? 0) > (top.value ?? 0) ? item : top), poiTotals[0]!)
+    return {
+      meta: '随 POI 专题联动',
+      theme,
+      scope,
+      primaryLabel: '聚合总量',
+      primaryValue: `${total} 个`,
+      secondaryLabel: strongest.label,
+      secondaryValue: `${strongest.value ?? 0} 个`,
+      assessment: '当前按乡镇展示公共服务、产业节点和文旅资源聚合点，适合快速识别服务集聚区。',
+      recommendation: '点击地图聚合点，右侧会切换为对应乡镇的 POI 结构研判。',
+      chips: ['公共服务', '产业节点', '文旅资源'],
+      note: '由三生模型 POI 指标聚合展示',
+    }
+  }
+
+  if (themeKey === 'landuse') {
+    const dominant = activeLandUse.value ?? landUseSource.reduce((top, item) => (item.value > top.value ? item : top), landUseSource[0]!)
+    return {
+      meta: '随土地利用专题联动',
+      theme,
+      scope,
+      primaryLabel: dominant.name,
+      primaryValue: `${dominant.value}%`,
+      secondaryLabel: '图层状态',
+      secondaryValue: landUseClassificationReady.value ? '栅格分类已启用' : '分类色表待配置',
+      assessment: `当前土地利用关注${dominant.name}，全县结构以耕地与设施农业为主，适合叠加治理问题和 POI 判断空间冲突。`,
+      recommendation: landUseRecommendation(dominant.name),
+      chips: ['土地结构', 'Lankao-Land', '空间管控'],
+      note: landUseClassificationReady.value ? '真实栅格分类服务' : '真实栅格服务已接入，分类色表仍需现场配置',
+    }
+  }
+
+  if (themeKey === 'sansheng') {
+    const evaluation = sanshengEvaluation.value
+    const scores = evaluation.scores
+    if (!scores) {
+      return {
+        meta: '随三生评价 / 乡镇选区联动',
+        theme,
+        scope,
+        primaryLabel: '综合得分',
+        primaryValue: '暂无数据',
+        secondaryLabel: '匹配状态',
+        secondaryValue: '未匹配模型',
+        assessment: `${scope}暂未匹配到三生模型同名指标，当前不做分数推断。`,
+        recommendation: '建议先补齐该行政区三生指标，再参与专题比选和方案研判。',
+        chips: ['三生评价', '数据缺失', '不造数'],
+        note: evaluation.meta,
+      }
+    }
+    const weakest = weakestSanshengDimension(scores)
+    return {
+      meta: hasSelectedTownship ? '随三生评价 / 乡镇选区联动' : '随三生评价专题联动',
+      theme,
+      scope: evaluation.areaName,
+      primaryLabel: '综合得分',
+      primaryValue: `${scores.composite.toFixed(1)} 分`,
+      secondaryLabel: '相对短板',
+      secondaryValue: `${weakest.label} ${weakest.value.toFixed(1)}`,
+      assessment: `${evaluation.areaName}三生协同水平为 ${scores.composite.toFixed(1)} 分，当前相对短板集中在${weakest.label}维度。`,
+      recommendation: weakest.label === '生活' ? '优先联动人口密度、POI 和治理问题，补齐公共服务与人居环境短板。' : weakest.label === '生态' ? '优先叠加土地利用和水系空间，识别生态修复与管控边界。' : '优先叠加 GDP 与 POI，识别产业节点和生产空间提质方向。',
+      chips: ['生态', '生活', '生产'],
+      note: evaluation.meta,
+    }
+  }
+
+  if (themeKey === 'governance') {
+    if (hasSelectedTownship && selectedMetric) {
+      return {
+        meta: '随治理专题 / 乡镇选区联动',
+        theme,
+        scope,
+        primaryLabel: '问题数量',
+        primaryValue: selectedMetric.label,
+        secondaryLabel: '处置结构',
+        secondaryValue: selectedMetric.details?.join(' / ') ?? '暂无',
+        assessment: selectedMetric.value > 0 ? `${scope}已聚合 ${selectedMetric.label}治理问题，可继续拆解高紧急和处置中事项。` : `${scope}当前暂无已加载治理问题点位。`,
+        recommendation: selectedMetric.value >= 10 ? '建议优先生成治理清单，并叠加人口密度识别高影响片区。' : '建议继续结合土地利用和 POI，判断问题是否集中在村庄边界或服务薄弱点。',
+        chips: ['治理问题', '热点识别', '处置优先级'],
+        note: selectedMetric.meta,
+      }
+    }
+
+    const total = governanceIssues.value.length
+    const urgent = governanceIssues.value.filter((issue) => issue.urgency === '高').length
+    return {
+      meta: '随治理专题联动',
+      theme,
+      scope,
+      primaryLabel: '问题总量',
+      primaryValue: `${total} 处`,
+      secondaryLabel: '高紧急',
+      secondaryValue: `${urgent} 处`,
+      assessment: '当前治理问题以点位聚合方式叠加在地图上，适合快速识别热点和高紧急事件分布。',
+      recommendation: '点击某个乡镇聚合点，右侧会切换为该区域的治理处置研判。',
+      chips: ['点位聚合', '热点发现', '属性筛查'],
+      note: '治理事件 GeoJSON',
+    }
+  }
+
+  return {
+    meta: '随地图选区联动',
+    theme,
+    scope,
+    primaryLabel: '当前范围',
+    primaryValue: scope,
+    secondaryLabel: '地图状态',
+    secondaryValue: mapThemeStatus.value,
+    assessment: hasSelectedTownship ? `已定位到${scope}，可切换上方专题查看该区域的人口、产业、土地或治理研判。` : '当前为行政区划底图视图，适合先选择专题或点击乡镇定位关注区域。',
+    recommendation: '点击上方专题按钮或地图乡镇，右下角会自动生成对应的决策解读。',
+    chips: ['行政区划', '专题待选', '点击联动'],
+    note: '基础地图视图',
+  }
+})
 
 function pointOnCircle(angle: number, radius: number) {
   const radians = ((angle - 90) * Math.PI) / 180
@@ -694,18 +944,32 @@ onMounted(async () => {
           </div>
         </PanelCard>
 
-        <PanelCard title="决策方案辅助研判" meta="方案比选 / 展示输出">
-          <div class="plan-stack">
-            <article>
-              <strong>A / 生态廊道修复</strong>
-              <p>优先治理水系两侧问题点位，覆盖 12 个重点村。</p>
-            </article>
-            <article>
-              <strong>B / 产业节点集聚</strong>
-              <p>联动道路、POI 与 GDP 栅格，推荐 4 处融合节点。</p>
-            </article>
+        <PanelCard title="当前专题研判" :meta="decisionInsight.meta">
+          <div class="insight-panel">
+            <div class="insight-scope">
+              <span>{{ decisionInsight.theme }}</span>
+              <strong>{{ decisionInsight.scope }}</strong>
+            </div>
+            <div class="insight-metrics">
+              <article>
+                <span>{{ decisionInsight.primaryLabel }}</span>
+                <strong>{{ decisionInsight.primaryValue }}</strong>
+              </article>
+              <article>
+                <span>{{ decisionInsight.secondaryLabel }}</span>
+                <strong>{{ decisionInsight.secondaryValue }}</strong>
+              </article>
+            </div>
+            <p class="insight-assessment">{{ decisionInsight.assessment }}</p>
+            <p class="insight-recommendation">
+              <span>建议</span>
+              {{ decisionInsight.recommendation }}
+            </p>
+            <div class="insight-chips" aria-label="研判标签">
+              <span v-for="chip in decisionInsight.chips" :key="chip">{{ chip }}</span>
+            </div>
+            <small>{{ decisionInsight.note }}</small>
           </div>
-          <div class="decision-actions"><button type="button">导出图件</button><button type="button">生成报告</button><button type="button">方案推演</button></div>
         </PanelCard>
       </aside>
     </div>
@@ -1494,8 +1758,7 @@ onMounted(async () => {
   background: #7e9189;
 }
 
-.issue-stack,
-.plan-stack {
+.issue-stack {
   display: grid;
   gap: 7px;
 }
@@ -1525,38 +1788,104 @@ onMounted(async () => {
   font: normal 11px var(--font-data);
 }
 
-.plan-stack article {
-  padding: 8px;
-  border: 1px solid rgba(61, 214, 196, 0.12);
-  background: rgba(61, 214, 196, 0.035);
+.insight-panel {
+  display: grid;
+  gap: 8px;
 }
 
-.plan-stack strong {
-  color: var(--cyan);
-  font-size: 11px;
-}
-.plan-stack p {
-  margin: 5px 0 0;
-  color: var(--text-soft);
-  font-size: 9px;
-  line-height: 1.5;
-}
-
-.decision-actions {
+.insight-scope {
   display: flex;
-  gap: 5px;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(61, 214, 196, 0.12);
+  background:
+    linear-gradient(90deg, rgba(61, 214, 196, 0.1), transparent 58%),
+    rgba(255, 255, 255, 0.026);
 }
 
-.decision-actions button {
-  height: 26px;
-  flex: 1;
+.insight-scope span {
+  color: var(--cyan);
+  font-size: 10px;
+}
+
+.insight-scope strong {
+  overflow: hidden;
+  color: var(--text);
+  font: 600 13px var(--font-display);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-metrics {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.insight-metrics article {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(61, 214, 196, 0.1);
+  background: rgba(2, 24, 21, 0.58);
+}
+
+.insight-metrics span {
   color: var(--text-soft);
   font-size: 9px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  cursor: pointer;
+}
+
+.insight-metrics strong {
+  overflow: hidden;
+  color: var(--cyan);
+  font: 600 14px var(--font-data);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-assessment,
+.insight-recommendation {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.58;
+}
+
+.insight-recommendation {
+  padding: 7px 8px;
+  border-left: 2px solid var(--amber);
+  background: rgba(255, 194, 92, 0.045);
+}
+
+.insight-recommendation span {
+  margin-right: 6px;
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.insight-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.insight-chips span {
+  padding: 4px 7px;
+  color: var(--text);
+  border: 1px solid rgba(61, 214, 196, 0.15);
+  border-radius: 999px;
+  background: rgba(61, 214, 196, 0.055);
+  font-size: 9px;
+}
+
+.insight-panel small {
+  color: var(--text-soft);
+  font-size: 8px;
+  text-align: right;
 }
 
 @media (max-width: 1440px) {
