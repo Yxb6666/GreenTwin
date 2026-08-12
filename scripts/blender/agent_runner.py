@@ -147,7 +147,8 @@ def export_stages(code_path, config_path, output_path):
         "type": type,
         "zip": zip,
     }
-    namespace = {
+    safe_globals = {
+        "__builtins__": safe_builtins,
         "bpy": bpy,
         "math": math,
         "Vector": Vector,
@@ -159,12 +160,8 @@ def export_stages(code_path, config_path, output_path):
         "add_beam_between": add_beam_between,
         "add_roof_mesh": add_roof_mesh,
     }
-    exec(
-        compile(code, "<agent>", "exec"),
-        {"__builtins__": safe_builtins},
-        namespace,
-    )
-    build_custom = namespace.get("build_custom")
+    exec(compile(code, "<agent>", "exec"), safe_globals)
+    build_custom = safe_globals.get("build_custom")
     if not callable(build_custom):
         raise RuntimeError("生成的脚本未定义 build_custom 函数")
     build_custom(config)

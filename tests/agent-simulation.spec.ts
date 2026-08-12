@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   extractAgentCode,
@@ -76,5 +78,17 @@ describe('3D Agent 模拟任务服务', () => {
     expect(() =>
       validateAgentRequest({ prompt: '建'.repeat(601) }),
     ).toThrow('提示词长度')
+  })
+
+  it('Blender 执行器把辅助函数注入与生成代码相同的命名空间', async () => {
+    const source = await readFile(
+      resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
+      'utf8',
+    )
+    expect(source).toContain(
+      'exec(compile(code, "<agent>", "exec"), safe_globals)',
+    )
+    expect(source).toContain('"material": material')
+    expect(source).toContain('"add_box": add_box')
   })
 })
