@@ -97,7 +97,9 @@ describe('主控页面地形分析抽屉', () => {
 
     dispatchPointerEvent('pointermove', { clientY: 900, pointerId: 7 })
     await wrapper.vm.$nextTick()
-    expect(wrapper.attributes('style')).toContain('--terrain-drawer-height: 320px')
+    expect(wrapper.attributes('style')).toContain('--terrain-drawer-height: 120px')
+    expect(wrapper.classes()).toContain('is-compact')
+    expect(wrapper.get('.terrain-drawer__summary').attributes('aria-expanded')).toBe('true')
 
     dispatchPointerEvent('pointermove', { clientY: 0, pointerId: 7 })
     await wrapper.vm.$nextTick()
@@ -135,12 +137,33 @@ describe('主控页面地形分析抽屉', () => {
   })
 
   it('从 localStorage 恢复经过安全校验的用户高度', async () => {
-    window.localStorage.setItem('greentwin.master.terrain.height', '580')
+    window.localStorage.setItem('greentwin.master.terrain.height', '160')
     const wrapper = mount(TerrainAnalysisDrawer, {
       props: { summary, loading: false, error: '' },
     })
     await wrapper.vm.$nextTick()
-    expect(wrapper.attributes('style')).toContain('--terrain-drawer-height: 580px')
+    expect(wrapper.attributes('style')).toContain('--terrain-drawer-height: 160px')
+    expect(wrapper.classes()).not.toContain('is-compact')
+    await wrapper.get('.terrain-drawer__summary').trigger('click')
+    expect(wrapper.classes()).toContain('is-compact')
+    wrapper.unmount()
+  })
+
+  it('在内部滚动区域阻止滚轮事件传播到页面', async () => {
+    const wrapper = mount(TerrainAnalysisDrawer, {
+      props: { summary, loading: false, error: '' },
+      attachTo: document.body,
+    })
+    const pageWheelHandler = vi.fn()
+    window.addEventListener('wheel', pageWheelHandler)
+
+    await wrapper.get('.terrain-drawer__summary').trigger('click')
+    wrapper.get('.terrain-drawer__content').element.dispatchEvent(
+      new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 }),
+    )
+    expect(pageWheelHandler).not.toHaveBeenCalled()
+
+    window.removeEventListener('wheel', pageWheelHandler)
     wrapper.unmount()
   })
 })

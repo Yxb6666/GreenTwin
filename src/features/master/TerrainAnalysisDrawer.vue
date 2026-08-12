@@ -3,10 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DemSummary } from './demService'
 
 const DEFAULT_TERRAIN_HEIGHT = 430
-const MIN_TERRAIN_HEIGHT = 320
+const MIN_TERRAIN_HEIGHT = 120
 const MAX_TERRAIN_HEIGHT = 600
 const MAX_TERRAIN_VIEWPORT_RATIO = 0.62
 const TERRAIN_HEIGHT_STORAGE_KEY = 'greentwin.master.terrain.height'
+const COMPACT_TERRAIN_HEIGHT = 230
 
 const props = defineProps<{
   summary: DemSummary | null
@@ -17,6 +18,7 @@ const props = defineProps<{
 const isTerrainExpanded = ref(false)
 const isTerrainResizing = ref(false)
 const terrainDrawerHeight = ref(DEFAULT_TERRAIN_HEIGHT)
+const isTerrainCompact = computed(() => terrainDrawerHeight.value < COMPACT_TERRAIN_HEIGHT)
 
 let resizeStartY = 0
 let resizeStartHeight = DEFAULT_TERRAIN_HEIGHT
@@ -161,7 +163,11 @@ onBeforeUnmount(() => {
 <template>
   <section
     class="terrain-drawer panel-frame"
-    :class="{ 'is-expanded': isTerrainExpanded, 'is-resizing': isTerrainResizing }"
+    :class="{
+      'is-expanded': isTerrainExpanded,
+      'is-resizing': isTerrainResizing,
+      'is-compact': isTerrainExpanded && isTerrainCompact,
+    }"
     :style="{ '--terrain-drawer-height': `${terrainDrawerHeight}px` }"
     aria-label="兰考县地形分析"
   >
@@ -199,36 +205,44 @@ onBeforeUnmount(() => {
       <span class="terrain-drawer__action">{{ isTerrainExpanded ? '收起' : '展开' }} <i aria-hidden="true">{{ isTerrainExpanded ? '↓' : '↑' }}</i></span>
     </button>
 
-    <div id="terrain-drawer-content" class="terrain-drawer__content" :aria-hidden="!isTerrainExpanded">
-      <div class="terrain-drawer__body">
-        <div class="terrain-dem-panel">
-          <figure class="terrain-preview">
-            <img v-if="summary?.thumbnailUrl" :src="summary.thumbnailUrl" alt="兰考县 DEM 灰度地形数据预览" />
-            <div v-else class="terrain-state">
-              {{ loading ? '正在读取 DEM 栅格…' : error || '暂无 DEM 预览' }}
+    <div
+      id="terrain-drawer-content"
+      class="terrain-drawer__content"
+      :aria-hidden="!isTerrainExpanded"
+      @wheel.stop
+      @touchmove.stop
+    >
+      <div class="terrain-drawer__content-inner">
+        <div class="terrain-drawer__body">
+          <div class="terrain-dem-panel">
+            <figure class="terrain-preview">
+              <img v-if="summary?.thumbnailUrl" :src="summary.thumbnailUrl" alt="兰考县 DEM 灰度地形数据预览" />
+              <div v-else class="terrain-state">
+                {{ loading ? '正在读取 DEM 栅格…' : error || '暂无 DEM 预览' }}
+              </div>
+            </figure>
+            <div v-if="summary" class="terrain-dem-legend" aria-label="DEM 灰度高程图例">
+              <span>{{ summary.minimumElevationM ?? '—' }}m</span>
+              <i />
+              <span>{{ summary.maximumElevationM ?? '—' }}m</span>
             </div>
-          </figure>
-          <div v-if="summary" class="terrain-dem-legend" aria-label="DEM 灰度高程图例">
-            <span>{{ summary.minimumElevationM ?? '—' }}m</span>
-            <i />
-            <span>{{ summary.maximumElevationM ?? '—' }}m</span>
           </div>
+
+          <aside class="terrain-indicators" aria-label="DEM 地形指标">
+            <div class="terrain-stat-grid">
+              <article><span>抽样平均高程</span><strong>{{ averageElevation }}</strong></article>
+              <article><span>抽样高程范围</span><strong>{{ elevationRange }}</strong></article>
+              <article><span>抽样最大高差</span><strong>{{ differenceLabel }}</strong></article>
+              <article><span>像元分辨率</span><strong>{{ summary ? `${summary.pixelSizeDegrees.toFixed(6)}°` : '—' }}</strong></article>
+            </div>
+            <p>当前统计基于 <b>{{ summary?.validSampleCount ?? 0 }}</b> 个有效抽样点，不代表全量 DEM 像元统计。</p>
+          </aside>
         </div>
 
-        <aside class="terrain-indicators" aria-label="DEM 地形指标">
-          <div class="terrain-stat-grid">
-            <article><span>抽样平均高程</span><strong>{{ averageElevation }}</strong></article>
-            <article><span>抽样高程范围</span><strong>{{ elevationRange }}</strong></article>
-            <article><span>抽样最大高差</span><strong>{{ differenceLabel }}</strong></article>
-            <article><span>像元分辨率</span><strong>{{ summary ? `${summary.pixelSizeDegrees.toFixed(6)}°` : '—' }}</strong></article>
-          </div>
-          <p>当前统计基于 <b>{{ summary?.validSampleCount ?? 0 }}</b> 个有效抽样点，不代表全量 DEM 像元统计。</p>
-        </aside>
+        <footer class="terrain-drawer__source">
+          <span>数据源</span><strong>{{ sourceMeta }}</strong>
+        </footer>
       </div>
-
-      <footer class="terrain-drawer__source">
-        <span>数据源</span><strong>{{ sourceMeta }}</strong>
-      </footer>
     </div>
   </section>
 </template>
@@ -236,10 +250,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .terrain-drawer {
   position: relative;
+  display: flex;
   width: 100%;
   max-width: none;
-  height: 48px;
+  height: 76px;
   min-width: 0;
+  flex-direction: column;
   overflow: hidden;
   border-color: rgba(61, 214, 196, 0.25);
   background: rgba(5, 32, 29, 0.96);
@@ -262,7 +278,7 @@ onBeforeUnmount(() => {
   right: 0;
   left: 0;
   display: flex;
-  height: 12px;
+  height: 14px;
   align-items: flex-start;
   justify-content: center;
   padding-top: 2px;
@@ -271,8 +287,8 @@ onBeforeUnmount(() => {
 }
 
 .terrain-resize-handle span {
-  width: 58px;
-  height: 3px;
+  width: 90px;
+  height: 4px;
   border-radius: 999px;
   background: rgba(93, 215, 197, 0.4);
   opacity: 0.35;
@@ -294,7 +310,9 @@ onBeforeUnmount(() => {
 .terrain-drawer__summary {
   display: grid;
   width: 100%;
-  height: 52px;
+  height: 76px;
+  min-height: 76px;
+  flex: 0 0 76px;
   align-items: center;
   gap: 16px;
   padding: 0 14px;
@@ -307,6 +325,9 @@ onBeforeUnmount(() => {
 }
 
 .is-expanded .terrain-drawer__summary {
+  height: 64px;
+  min-height: 64px;
+  flex-basis: 64px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -335,12 +356,12 @@ onBeforeUnmount(() => {
 }
 
 .terrain-drawer__title strong {
-  font: 600 13px var(--font-display);
+  font: 600 16px var(--font-display);
 }
 
 .terrain-drawer__title small {
   color: #78938b;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .terrain-drawer__metrics {
@@ -348,7 +369,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   overflow: hidden;
   color: #8fa69f;
-  font-size: 9px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -364,13 +385,13 @@ onBeforeUnmount(() => {
 
 .terrain-drawer__metrics b {
   color: #3dd6c4;
-  font: 600 10px var(--font-data);
+  font: 700 17px var(--font-data);
 }
 
 .terrain-drawer__action {
   gap: 5px;
   color: #b6cbc4;
-  font-size: 10px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -380,20 +401,50 @@ onBeforeUnmount(() => {
 }
 
 .terrain-drawer__content {
-  display: grid;
-  height: calc(var(--terrain-drawer-height, 430px) - 52px);
+  height: auto;
   min-height: 0;
-  padding: 0 12px 8px;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
   opacity: 0;
+  overscroll-behavior: contain;
   pointer-events: none;
-  grid-template-rows: minmax(0, 1fr) 28px;
+  scrollbar-color: rgba(61, 214, 196, 0.38) rgba(5, 30, 27, 0.42);
+  scrollbar-width: thin;
+  touch-action: pan-y;
   transition: opacity 140ms ease;
+  -webkit-overflow-scrolling: touch;
 }
 
 .is-expanded .terrain-drawer__content {
   opacity: 1;
   pointer-events: auto;
   transition-delay: 80ms;
+}
+
+.terrain-drawer__content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.terrain-drawer__content::-webkit-scrollbar-track {
+  background: rgba(5, 30, 27, 0.42);
+}
+
+.terrain-drawer__content::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(61, 214, 196, 0.3);
+}
+
+.terrain-drawer__content::-webkit-scrollbar-thumb:hover,
+.is-compact .terrain-drawer__content::-webkit-scrollbar-thumb {
+  background: rgba(61, 214, 196, 0.55);
+}
+
+.terrain-drawer__content-inner {
+  display: grid;
+  height: max(360px, 100%);
+  padding: 0 12px 8px;
+  grid-template-rows: minmax(0, 1fr) 28px;
 }
 
 .terrain-drawer__body {
@@ -492,15 +543,16 @@ onBeforeUnmount(() => {
 }
 
 .terrain-stat-grid span {
-  color: #8fa69f;
-  font-size: 12px;
+  color: #aabeb8;
+  font-size: 16px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .terrain-stat-grid strong {
   overflow: hidden;
   color: #3dd6c4;
-  font: 600 24px var(--font-data);
+  font: 700 28px var(--font-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -552,11 +604,11 @@ onBeforeUnmount(() => {
   }
 
   .terrain-stat-grid span {
-    font-size: 10px;
+    font-size: 13px;
   }
 
   .terrain-stat-grid strong {
-    font-size: 17px;
+    font-size: 22px;
   }
 }
 
@@ -567,13 +619,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1050px) {
-  .terrain-drawer__metrics span:nth-child(2) {
+  .terrain-drawer__metrics span:nth-child(3) {
     display: none;
   }
 
   .terrain-drawer__body {
     grid-template-columns: minmax(0, 1fr) 220px;
   }
+}
+
+.terrain-drawer.is-compact .terrain-drawer__content-inner {
+  padding-right: 8px;
+  padding-left: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
