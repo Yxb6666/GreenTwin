@@ -8,6 +8,17 @@ import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
 import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
+import AiBuilderAssistant, {
+  type AiBuilderStyle,
+} from './AiBuilderAssistant.vue'
+import {
+  clampModelScale,
+  formatPointLabel,
+  normalizeHeading,
+  normalizePoint,
+  toSimulationPlacement,
+  type PickedPoint,
+} from './modelPlacement'
 import {
   createSimulationJob,
   waitForSimulationJob,
@@ -27,16 +38,38 @@ interface SceneLayer {
 interface ModelPrimitive {
   show: boolean
   readyPromise?: Promise<ModelPrimitive>
+  modelMatrix?: unknown
+}
+
+interface CesiumMovement {
+  position?: { x: number; y: number }
+  endPosition?: { x: number; y: number }
+}
+
+interface CesiumEventHandler {
+  setInputAction: (action: (movement: CesiumMovement) => void, type: number) => void
+  destroy: () => void
 }
 
 interface SuperMapViewer {
+  entities: {
+    add: (options: Record<string, unknown>) => unknown
+    remove: (entity: unknown) => boolean
+  }
   scene: {
-    globe: { depthTestAgainstTerrain: boolean; show: boolean }
+    canvas: HTMLElement
+    globe: {
+      depthTestAgainstTerrain: boolean
+      show: boolean
+      pick: (ray: unknown, scene: SuperMapViewer['scene']) => unknown
+    }
     layers?: { find?: (name: string) => SceneLayer | undefined }
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
     }
+    pick: (windowPosition: { x: number; y: number }) => unknown
+    pickPosition: (windowPosition: { x: number; y: number }) => unknown
   }
   imageryLayers: {
     addImageryProvider: (provider: unknown) => unknown
@@ -45,6 +78,11 @@ interface SuperMapViewer {
   camera: {
     setView: (options: Record<string, unknown>) => void
     flyTo: (options: Record<string, unknown>) => void
+    getPickRay: (position: { x: number; y: number }) => unknown
+    pickEllipsoid: (
+      position: { x: number; y: number },
+      ellipsoid?: unknown,
+    ) => unknown
   }
   destroy: () => void
   isDestroyed?: () => boolean
@@ -62,6 +100,21 @@ interface CesiumRuntime {
       height: number,
     ) => unknown
   }
+  Cartesian2: new (x: number, y: number) => unknown
+  Cartographic: {
+    fromCartesian: (cartesian: unknown) => {
+      longitude: number
+      latitude: number
+      height: number
+    }
+  }
+  ScreenSpaceEventHandler: new (canvas?: HTMLElement) => CesiumEventHandler
+  ScreenSpaceEventType: {
+    LEFT_CLICK: number
+    LEFT_DOWN: number
+    LEFT_UP: number
+    MOUSE_MOVE: number
+  }
   WebMercatorTilingScheme: new () => unknown
   UrlTemplateImageryProvider: new (options: Record<string, unknown>) => unknown
   Model: {
@@ -75,8 +128,26 @@ interface CesiumRuntime {
   }
   Transforms: {
     eastNorthUpToFixedFrame: (origin: unknown) => unknown
+    headingPitchRollToFixedFrame: (
+      origin: unknown,
+      headingPitchRoll: unknown,
+      ellipsoid?: unknown,
+      fixedFrameTransform?: unknown,
+    ) => unknown
   }
-  Math: { toRadians: (degrees: number) => number }
+  Matrix4: (new () => unknown) & {
+    multiplyByUniformScale: (
+      matrix: unknown,
+      scale: number,
+      result?: unknown,
+    ) => unknown
+  }
+  HeadingPitchRoll: new (heading: number, pitch: number, roll: number) => unknown
+  Ellipsoid: { WGS84: unknown }
+  Math: {
+    toRadians: (degrees: number) => number
+    toDegrees: (radians: number) => number
+  }
 }
 
 const config = useRuntimeConfig()
@@ -88,13 +159,15 @@ const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
 const generatedJob = ref<SimulationJob | null>(null)
-const buildInstruction = ref('帮我在地图处建造一个古风样式的建筑')
-const conversation = ref([
-  { role: 'assistant', text: '请描述想在地图中建造的内容，我会生成方案并演示施工过程。' },
-])
 const constructionStage = ref(0)
-const isComparing = ref(false)
-const operationMessage = ref('调整治理参数后点击“重新生成”，启动本机 Blender 建模任务')
+const builderOpen = ref(false)
+const pickMode = ref(false)
+const isDraggingModel = ref(false)
+const modelSelected = ref(false)
+const modelScale = ref(1)
+const modelHeading = ref(0)
+const selectedPoint = ref<PickedPoint | null>(null)
+const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -111,6 +184,9 @@ const parameters = ref({
 let viewer: SuperMapViewer | null = null
 let generatedModel: ModelPrimitive | null = null
 let constructionRun = 0
+let markerEntity: unknown = null
+let eventHandler: CesiumEventHandler | null = null
+let suppressClickAfterDrag = false
 
 const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
 
@@ -250,12 +326,6 @@ const currentScenario = computed(
 )
 const currentPlan = computed(() => planData[activePlan.value])
 const isGenerating = computed(() => buildState.value === 'running')
-const builderStatus = computed(() => {
-  if (buildState.value === 'running') return '正在真实构建'
-  if (buildState.value === 'ready') return '模型已加载'
-  if (buildState.value === 'error') return '构建失败'
-  return '等待首次构建'
-})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
   scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
@@ -284,7 +354,7 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     selectedMeasure:
       measures.find((item) => item.key === activeMeasure.value)?.label ?? '',
     buildProgress: buildProgress.value,
-    compareMode: isComparing.value,
+    compareMode: false,
   },
 }))
 const assistantPrompts = [
@@ -305,7 +375,6 @@ function selectScenario(key: ScenarioKey) {
 
 function selectPlan(key: PlanKey) {
   activePlan.value = key
-  isComparing.value = false
   operationMessage.value = `当前查看：${planData[key].label}`
 }
 
@@ -313,13 +382,6 @@ function selectMeasure(key: MeasureKey) {
   activeMeasure.value = key
   const measure = measures.find((item) => item.key === key)
   operationMessage.value = `正在配置治理措施：${measure?.label ?? ''}`
-}
-
-function toggleCompare() {
-  isComparing.value = !isComparing.value
-  operationMessage.value = isComparing.value
-    ? '已进入双方案对比模式：左侧方案 A，右侧方案 B'
-    : `已退出对比模式，当前查看：${currentPlan.value.label}`
 }
 
 async function loadGeneratedModel(
@@ -330,6 +392,16 @@ async function loadGeneratedModel(
   if (!viewer) throw new Error('三维地图尚未初始化')
   const sdk = cesium()
   if (generatedModel) viewer.scene.primitives.remove(generatedModel)
+  selectedPoint.value = normalizePoint(
+    placement.longitude,
+    placement.latitude,
+    placement.height,
+    placement.heading,
+    placement.label,
+  )
+  modelScale.value = 1
+  modelHeading.value = placement.heading
+  modelSelected.value = true
   const origin = sdk.Cartesian3.fromDegrees(
     placement.longitude,
     placement.latitude,
@@ -345,6 +417,8 @@ async function loadGeneratedModel(
     }),
   )
   if (generatedModel.readyPromise) await generatedModel.readyPromise
+  applyModelTransform()
+  upsertMarker(selectedPoint.value)
   if (focus) viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
       placement.longitude,
@@ -372,33 +446,202 @@ async function playConstruction(job: SimulationJob) {
   }
 }
 
-async function generatePlan() {
-  const instruction = buildInstruction.value.trim()
-  if (!instruction) return
-  conversation.value.push({ role: 'user', text: instruction })
-  const buildingStyle = inferBuildingStyle(instruction)
+function upsertMarker(point: PickedPoint | null) {
+  if (!viewer || !point) return
+  const sdk = cesium()
+  const position = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height,
+  )
+  if (markerEntity) viewer.entities.remove(markerEntity)
+  markerEntity = viewer.entities.add({
+    position,
+    point: {
+      pixelSize: modelSelected.value ? 18 : 12,
+      color: modelSelected.value ? '#3dd6c4' : '#ef7b6e',
+      outlineColor: '#ffffff',
+      outlineWidth: 2,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: point.label,
+      font: '10px sans-serif',
+      fillColor: '#eafffb',
+      showBackground: true,
+      backgroundColor: '#051011',
+      backgroundPadding: { x: 7, y: 4 },
+      pixelOffset: new sdk.Cartesian2(0, -26),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+}
+
+function applyModelTransform() {
+  if (!viewer || !generatedModel || !selectedPoint.value) return
+  const sdk = cesium()
+  const point = selectedPoint.value
+  const origin = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height,
+  )
+  const headingPitchRoll = new sdk.HeadingPitchRoll(
+    sdk.Math.toRadians(modelHeading.value),
+    0,
+    0,
+  )
+  const frame = sdk.Transforms.headingPitchRollToFixedFrame(
+    origin,
+    headingPitchRoll,
+    sdk.Ellipsoid.WGS84,
+    sdk.Transforms.eastNorthUpToFixedFrame,
+  )
+  generatedModel.modelMatrix = sdk.Matrix4.multiplyByUniformScale(
+    frame,
+    modelScale.value,
+    new sdk.Matrix4(),
+  )
+}
+
+function pickGroundPoint(position: { x: number; y: number }) {
+  if (!viewer) return null
+  const sdk = cesium()
+  const ray = viewer.camera.getPickRay(position)
+  const cartesian =
+    (ray ? viewer.scene.globe.pick(ray, viewer.scene) : undefined) ??
+    viewer.scene.pickPosition(position) ??
+    viewer.camera.pickEllipsoid(position, sdk.Ellipsoid.WGS84)
+  if (!cartesian) return null
+  const cartographic = sdk.Cartographic.fromCartesian(cartesian)
+  const longitude = sdk.Math.toDegrees(cartographic.longitude)
+  const latitude = sdk.Math.toDegrees(cartographic.latitude)
+  return normalizePoint(
+    longitude,
+    latitude,
+    cartographic.height,
+    modelHeading.value,
+    formatPointLabel(longitude, latitude),
+  )
+}
+
+function togglePointPicking() {
+  if (pickMode.value) {
+    pickMode.value = false
+    operationMessage.value = '已取消选点'
+    return
+  }
+  pickMode.value = true
+  operationMessage.value = '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
+}
+
+function cancelPointPicking() {
+  pickMode.value = false
+}
+
+function handleSceneClick(position: { x: number; y: number }) {
+  const point = pickGroundPoint(position)
+  if (!point) {
+    operationMessage.value = '未拾取到地图表面，请点击有地形或底图的位置'
+    return
+  }
+  pickMode.value = false
+  modelSelected.value = false
+  selectedPoint.value = point
+  upsertMarker(point)
+  operationMessage.value = `已确定建造位置：${point.label}，请在 AI 建造对话框中输入提示词`
+}
+
+function selectModel() {
+  if (!generatedModel) return
+  modelSelected.value = true
+  if (selectedPoint.value) upsertMarker(selectedPoint.value)
+  operationMessage.value = '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
+}
+
+function startModelDrag(movement: CesiumMovement) {
+  if (!viewer || pickMode.value || !movement.position) return
+  const picked = viewer.scene.pick(movement.position) as {
+    primitive?: unknown
+    id?: unknown
+  }
+  const hitModel =
+    picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+  if (!hitModel) return
+  isDraggingModel.value = true
+  suppressClickAfterDrag = true
+  modelSelected.value = true
+}
+
+function moveModelDrag(movement: CesiumMovement) {
+  if (!isDraggingModel.value || !movement.endPosition) return
+  const point = pickGroundPoint(movement.endPosition)
+  if (!point) return
+  selectedPoint.value = point
+  upsertMarker(point)
+  applyModelTransform()
+}
+
+function endModelDrag() {
+  isDraggingModel.value = false
+}
+
+function setupSceneInteractions() {
+  if (!viewer || eventHandler) return
+  const sdk = cesium()
+  eventHandler = new sdk.ScreenSpaceEventHandler(viewer.scene.canvas)
+  eventHandler.setInputAction((movement) => {
+    if (!movement.position) return
+    if (suppressClickAfterDrag) {
+      suppressClickAfterDrag = false
+      return
+    }
+    if (pickMode.value) {
+      handleSceneClick(movement.position)
+      return
+    }
+    const picked = viewer?.scene.pick(movement.position) as {
+      primitive?: unknown
+      id?: unknown
+    }
+    const hitModel =
+      picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+    if (hitModel) selectModel()
+    else if (!isDraggingModel.value && selectedPoint.value) {
+      modelSelected.value = false
+      upsertMarker(selectedPoint.value)
+    }
+  }, sdk.ScreenSpaceEventType.LEFT_CLICK)
+  eventHandler.setInputAction(startModelDrag, sdk.ScreenSpaceEventType.LEFT_DOWN)
+  eventHandler.setInputAction(moveModelDrag, sdk.ScreenSpaceEventType.MOUSE_MOVE)
+  eventHandler.setInputAction(endModelDrag, sdk.ScreenSpaceEventType.LEFT_UP)
+}
+
+async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
+  const point = selectedPoint.value
+  if (!point || !prompt.trim() || isGenerating.value) return
+  const buildingStyle =
+    requestedStyle === 'auto' ? inferBuildingStyle(prompt) : requestedStyle
   const styleLabel = {
     'traditional-chinese': '传统中式',
     modern: '现代',
     rural: '乡村通用',
   }[buildingStyle]
-  conversation.value.push({
-    role: 'assistant',
-    text: `已解析建造需求，当前采用“${styleLabel}”生成方案，正在准备施工演示。`,
-  })
   constructionStage.value = 0
   buildState.value = 'running'
   buildProgress.value = 5
   generatedJob.value = null
-  engineStatus.value = '正在向本机 Blender 提交参数化建模任务'
-  operationMessage.value = '后端将生成道路、排水沟、积水面与示意建筑 GLB'
+  modelSelected.value = false
+  engineStatus.value = `正在向本机 Blender 提交“${styleLabel}”建模任务`
+  operationMessage.value = `将在 ${point.label} 生成“${styleLabel}”建筑模型`
   try {
     const initialJob = await createSimulationJob(config.apiBaseUrl, {
       scenario: currentScenario.value.label,
       plan: currentPlan.value.label,
       ...parameters.value,
-      prompt: instruction,
+      prompt,
       buildingStyle,
+      placement: toSimulationPlacement(point),
     })
     const completedJob = await waitForSimulationJob(
       config.apiBaseUrl,
@@ -415,18 +658,61 @@ async function generatePlan() {
     generatedJob.value = completedJob
     buildState.value = 'ready'
     buildProgress.value = 100
+    modelSelected.value = true
     engineStatus.value = `${completedJob.placement.label} · Blender GLB 已加载`
-    operationMessage.value = '真实 Blender 建模任务已完成；当前为镇域测试定位，不代表徐场村精确落点'
-    conversation.value.push({
-      role: 'assistant',
-      text: `${styleLabel}建筑已完成，可在地图中旋转、缩放并查看最终效果。`,
-    })
+    operationMessage.value =
+      '真实 Blender 建模任务已完成；点击模型可选中，拖拽移动，或用面板滑杆缩放和旋转'
   } catch (error) {
     buildState.value = 'error'
-    engineStatus.value = error instanceof Error ? error.message : 'Blender 场景构建失败'
+    engineStatus.value =
+      error instanceof Error ? error.message : 'Blender 场景构建失败'
     operationMessage.value = '请检查 Blender 路径、后端服务和模型输出日志'
-    conversation.value.push({ role: 'assistant', text: `建造失败：${engineStatus.value}` })
   }
+}
+
+function updateModelScale(value: number) {
+  modelScale.value = clampModelScale(value)
+  applyModelTransform()
+  selectModel()
+}
+
+function updateModelHeading(value: number) {
+  modelHeading.value = normalizeHeading(value)
+  applyModelTransform()
+  selectModel()
+}
+
+function focusGeneratedModel() {
+  if (!viewer || !selectedPoint.value) return
+  const sdk = cesium()
+  const point = selectedPoint.value
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      point.longitude,
+      point.latitude - 0.00014,
+      Math.max(55, point.height + 42),
+    ),
+    orientation: {
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
+      roll: 0,
+    },
+  })
+}
+
+function removeGeneratedModel() {
+  if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
+  generatedModel = null
+  generatedJob.value = null
+  buildState.value = 'idle'
+  buildProgress.value = 0
+  modelSelected.value = false
+  if (selectedPoint.value) upsertMarker(selectedPoint.value)
+  engineStatus.value = '模型已移除，可重新选点并输入提示词建造'
+}
+
+function openBuilder() {
+  builderOpen.value = true
 }
 
 function saveDraft() {
@@ -486,6 +772,7 @@ async function initializeViewer() {
         roll: 0,
       },
     })
+    setupSceneInteractions()
     engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =
@@ -497,6 +784,8 @@ onMounted(initializeViewer)
 
 onBeforeUnmount(() => {
   constructionRun += 1
+  eventHandler?.destroy()
+  eventHandler = null
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -530,9 +819,9 @@ onBeforeUnmount(() => {
           type="button"
           class="action-button"
           :disabled="isGenerating"
-          @click="generatePlan"
+          @click="openBuilder"
         >
-          {{ isGenerating ? '构建中…' : '重新生成' }}
+          {{ isGenerating ? '构建中…' : 'AI 建造' }}
         </button>
         <button
           type="button"
@@ -641,96 +930,18 @@ onBeforeUnmount(() => {
         </PanelCard>
       </aside>
 
-      <section
-        class="twin-scene panel-frame"
-        :class="{ comparing: isComparing }"
-      >
-        <div ref="cesiumContainer" class="cesium-container" />
-
-        <form class="build-dialog" @submit.prevent="generatePlan">
-          <header>
-            <span><i />AI 建造助手</span>
-            <small>{{ isGenerating ? constructionStages[constructionStage] : '自然语言驱动建模' }}</small>
-          </header>
-          <div class="build-conversation" aria-live="polite">
-            <p
-              v-for="(message, index) in conversation.slice(-3)"
-              :key="`${message.role}-${index}`"
-              :class="message.role"
-            >
-              {{ message.text }}
-            </p>
-          </div>
-          <div v-if="isGenerating" class="construction-steps">
-            <span
-              v-for="(stage, index) in constructionStages.slice(1)"
-              :key="stage"
-              :class="{ active: constructionStage >= index + 1 }"
-            >{{ stage }}</span>
-          </div>
-          <label>
-            <textarea
-              v-model="buildInstruction"
-              :disabled="isGenerating"
-              rows="2"
-              aria-label="建筑建造指令"
-              placeholder="例如：在这里建造一座两层中式古风建筑"
-              @keydown.ctrl.enter="generatePlan"
-            />
-            <button type="submit" :disabled="isGenerating || !buildInstruction.trim()">
-              {{ isGenerating ? `${buildProgress}%` : '开始建造' }}
-            </button>
-          </label>
-        </form>
-
-        <div class="map-toolbar simulation-toolbar">
-          <button
-            v-for="(plan, key) in planData"
-            :key="key"
-            class="layer-button"
-            :class="{ active: activePlan === key && !isComparing }"
-            type="button"
-            @click="selectPlan(key as PlanKey)"
-          >
-            {{ plan.stage }} {{ plan.label.split(' · ')[0] }}
-          </button>
-          <button
-            class="layer-button compare-button"
-            :class="{ active: isComparing }"
-            type="button"
-            @click="toggleCompare"
-          >
-            A/B 对比
-          </button>
-        </div>
-
-        <div class="builder-badge">
-          <span>Blender 4.5 LTS</span>
-          <strong>{{ builderStatus }}</strong>
-        </div>
-        <div class="scene-status"><i />{{ engineStatus }}</div>
-
-        <div v-if="!generatedJob" class="location-notice">
-          <strong>当前显示堌阳镇范围</strong>
-          <span>点击“重新生成”，由本机 Blender 构建参数化测试场景并加载到地图</span>
-        </div>
-
-        <div v-if="isComparing" class="compare-divider">
-          <span>方案 A</span><i /><span>方案 B</span>
-        </div>
-
-        <div class="version-timeline">
-          <button
-            v-for="(plan, key) in planData"
-            :key="key"
-            type="button"
-            :class="{ active: activePlan === key }"
-            @click="selectPlan(key as PlanKey)"
-          >
-            <i />
-            <span>{{ plan.stage }}</span>
-            <small>{{ plan.label }}</small>
-          </button>
+      <section class="twin-scene panel-frame">
+        <div
+          ref="cesiumContainer"
+          class="cesium-container"
+          :class="{
+            'is-picking': pickMode,
+            'is-dragging-model': isDraggingModel,
+          }"
+        />
+        <div v-if="pickMode" class="pick-mode-hint">
+          <span>请在地图上点击确定建造位置</span>
+          <button type="button" @click="cancelPointPicking">取消</button>
         </div>
       </section>
 
@@ -814,6 +1025,25 @@ onBeforeUnmount(() => {
     :timeout-ms="config.reportTimeoutMs"
     :context="assistantContext"
     :prompts="assistantPrompts"
+  />
+  <AiBuilderAssistant
+    v-model:open="builderOpen"
+    :point-ready="selectedPoint !== null"
+    :point-label="selectedPoint?.label ?? ''"
+    :picking="pickMode"
+    :is-building="isGenerating"
+    :build-progress="buildProgress"
+    :build-message="engineStatus"
+    :model-ready="buildState === 'ready' && generatedJob !== null"
+    :model-scale="modelScale"
+    :model-heading="modelHeading"
+    @toggle-pick="togglePointPicking"
+    @cancel-pick="cancelPointPicking"
+    @build="buildFromPrompt"
+    @update-scale="updateModelScale"
+    @update-heading="updateModelHeading"
+    @remove-model="removeGeneratedModel"
+    @focus-model="focusGeneratedModel"
   />
 </template>
 
@@ -1105,185 +1335,55 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
 }
-.build-dialog {
-  position: absolute;
-  z-index: 35;
-  right: 14px;
-  bottom: 68px;
-  display: grid;
-  width: min(360px, calc(100% - 28px));
-  padding: 12px;
-  gap: 9px;
-  border: 1px solid rgba(61, 214, 196, 0.32);
-  border-radius: 10px;
-  background: rgba(4, 17, 18, 0.94);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(12px);
+.cesium-container.is-picking {
+  cursor: crosshair;
 }
-.build-dialog header,
-.build-dialog label {
+.cesium-container.is-dragging-model {
+  cursor: grabbing;
+}
+.pick-mode-hint {
+  position: absolute;
+  z-index: 100;
+  top: 12px;
+  left: 50%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  min-width: 300px;
+  padding: 8px 12px;
+  gap: 12px;
+  color: var(--amber);
+  border: 1px solid rgba(240, 184, 92, 0.5);
+  border-radius: 6px;
+  background: rgba(5, 16, 17, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 10px;
+  transform: translateX(-50%);
 }
-.build-dialog header span {
-  color: var(--cyan);
-  font-size: 11px;
-  font-weight: 700;
-}
-.build-dialog header small {
-  margin-left: auto;
-  color: var(--text-soft);
-  font-size: 8px;
-}
-.build-conversation {
-  display: grid;
-  max-height: 112px;
-  overflow: auto;
-  gap: 6px;
-}
-.build-conversation p {
-  width: fit-content;
-  max-width: 88%;
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: 7px;
-  color: var(--text-soft);
-  background: rgba(255, 255, 255, 0.055);
-  font-size: 9px;
-  line-height: 1.55;
-}
-.build-conversation p.user {
-  margin-left: auto;
-  color: #d9fffa;
-  background: rgba(61, 214, 196, 0.14);
-}
-.construction-steps {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
-}
-.construction-steps span {
-  padding-top: 4px;
-  color: rgba(205, 231, 225, 0.35);
-  border-top: 2px solid rgba(205, 231, 225, 0.12);
-  font-size: 7px;
-  text-align: center;
-}
-.construction-steps span.active {
-  color: var(--cyan);
-  border-color: var(--cyan);
-}
-.build-dialog textarea {
+.pick-mode-hint span {
   flex: 1;
-  min-width: 0;
-  resize: none;
-  padding: 8px;
-  color: var(--text-main);
-  border: 1px solid rgba(122, 203, 190, 0.2);
-  border-radius: 6px;
-  outline: none;
-  background: rgba(0, 0, 0, 0.24);
-  font: 10px/1.45 inherit;
 }
-.build-dialog textarea:focus { border-color: var(--cyan); }
-.build-dialog button {
-  align-self: stretch;
-  padding: 0 12px;
-  color: #052321;
-  border: 0;
-  border-radius: 6px;
-  background: var(--cyan);
-  font-size: 9px;
-  font-weight: 700;
+.pick-mode-hint button {
+  min-height: 24px;
+  padding: 0 10px;
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 8px;
   cursor: pointer;
 }
-.build-dialog button:disabled { opacity: 0.5; cursor: wait; }
-.simulation-toolbar {
-  right: auto;
-  left: 10px;
-}
-.compare-button {
-  margin-left: 4px;
-  color: var(--amber);
-  border-color: rgba(240, 184, 92, 0.35);
-}
-
-.scene-status,
-.builder-badge,
 .scene-legend,
-.version-timeline,
-.simulation-pin,
-.location-notice,
-.compare-divider {
+.simulation-pin {
   position: absolute;
   z-index: 100;
 }
 
-.scene-status,
-.builder-badge,
 .scene-legend {
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: rgba(5, 16, 17, 0.86);
   backdrop-filter: blur(8px);
-}
-
-.scene-status {
-  top: 10px;
-  right: 10px;
-  color: var(--text-soft);
-  font-size: 9px;
-}
-.scene-status i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 8px var(--cyan);
-}
-.builder-badge {
-  top: 48px;
-  right: 10px;
-  display: grid;
-  text-align: right;
-  gap: 2px;
-}
-.builder-badge span {
-  color: var(--text-soft);
-  font: 8px var(--font-data);
-}
-.builder-badge strong {
-  color: var(--cyan);
-  font-size: 9px;
-}
-
-.location-notice {
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: min(360px, calc(100% - 40px));
-  padding: 14px 18px;
-  color: var(--text-soft);
-  text-align: center;
-  border: 1px solid rgba(240, 184, 92, 0.42);
-  border-radius: 7px;
-  background: rgba(5, 16, 17, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
-  transform: translate(-50%, -50%);
-  gap: 5px;
-  backdrop-filter: blur(8px);
-}
-.location-notice strong {
-  color: var(--amber);
-  font-size: 12px;
-}
-.location-notice span {
-  font-size: 9px;
-  line-height: 1.6;
 }
 
 .simulation-pin {
@@ -1380,90 +1480,6 @@ onBeforeUnmount(() => {
 }
 .legend-benefit {
   background: var(--amber);
-}
-
-.version-timeline {
-  right: 12px;
-  bottom: 12px;
-  left: 12px;
-  display: grid;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(5, 16, 17, 0.9);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  backdrop-filter: blur(8px);
-}
-.version-timeline::before {
-  position: absolute;
-  top: 15px;
-  right: 17%;
-  left: 17%;
-  height: 1px;
-  content: '';
-  background: rgba(122, 203, 190, 0.2);
-}
-.version-timeline button {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  color: var(--text-soft);
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  gap: 2px;
-}
-.version-timeline button i {
-  width: 8px;
-  height: 8px;
-  border: 2px solid #486561;
-  border-radius: 50%;
-  background: #0a1918;
-}
-.version-timeline button span {
-  margin-top: 2px;
-  font: 8px var(--font-data);
-}
-.version-timeline button small {
-  font-size: 7px;
-}
-.version-timeline button.active {
-  color: var(--cyan);
-}
-.version-timeline button.active i {
-  border-color: var(--cyan);
-  background: var(--cyan);
-  box-shadow: 0 0 8px var(--cyan);
-}
-
-.compare-divider {
-  top: 90px;
-  bottom: 74px;
-  left: 50%;
-  display: grid;
-  justify-items: center;
-  color: var(--text);
-  font-size: 9px;
-  grid-template-rows: auto 1fr auto;
-  transform: translateX(-50%);
-}
-.compare-divider i {
-  width: 1px;
-  margin: 5px 0;
-  background: linear-gradient(transparent, var(--cyan), transparent);
-  box-shadow: 0 0 8px var(--cyan);
-}
-.twin-scene.comparing::before {
-  position: absolute;
-  z-index: 15;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 50%;
-  pointer-events: none;
-  content: '';
-  background: rgba(240, 184, 92, 0.045);
 }
 
 .impact-layout {

@@ -26,6 +26,39 @@ function clamp(value, minimum, maximum, fallback) {
     : fallback
 }
 
+function validatePlacement(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('落点参数必须是对象')
+  }
+  const longitude = Number(value.longitude)
+  const latitude = Number(value.latitude)
+  const height = Number(value.height ?? 0)
+  const heading = Number(value.heading ?? 0)
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new Error('落点经度无效')
+  }
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new Error('落点纬度无效')
+  }
+  if (!Number.isFinite(height) || height < -1000 || height > 10000) {
+    throw new Error('落点高度无效')
+  }
+  if (!Number.isFinite(heading)) {
+    throw new Error('落点朝向无效')
+  }
+  return {
+    longitude: Number(longitude.toFixed(6)),
+    latitude: Number(latitude.toFixed(6)),
+    height: Number(height.toFixed(2)),
+    heading: Number(heading.toFixed(2)),
+    label:
+      typeof value.label === 'string' && value.label.trim()
+        ? value.label.trim().slice(0, 80)
+        : '地图自定义落点',
+    accuracy: 'user-picked',
+  }
+}
+
 export function validateSimulationRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('请求参数必须是对象')
@@ -37,7 +70,7 @@ export function validateSimulationRequest(payload) {
     : /古风|中式|传统|四合院|亭/.test(prompt)
       ? 'traditional-chinese'
       : 'rural'
-  return {
+  const result = {
     scenario: typeof payload.scenario === 'string' ? payload.scenario.slice(0, 40) : '道路积水治理',
     plan: typeof payload.plan === 'string' ? payload.plan.slice(0, 40) : '方案 A',
     ditchWidth: clamp(payload.ditchWidth, 0.3, 1.5, 0.5),
@@ -47,6 +80,8 @@ export function validateSimulationRequest(payload) {
     prompt,
     buildingStyle,
   }
+  if (payload.placement != null) result.placement = validatePlacement(payload.placement)
+  return result
 }
 
 function findBlenderExecutable(configuredPath) {
@@ -166,6 +201,14 @@ export function createSimulationService(options = {}) {
   function createJob(payload) {
     const parameters = validateSimulationRequest(payload)
     const id = randomUUID()
+    const placement = parameters.placement ?? {
+      longitude: 114.964285,
+      latitude: 34.9511,
+      height: 0,
+      heading: 0,
+      label: '堌阳镇范围参数化测试场景',
+      accuracy: 'township-demo',
+    }
     const job = {
       id,
       status: 'queued',
@@ -174,14 +217,7 @@ export function createSimulationService(options = {}) {
       createdAt: new Date().toISOString(),
       completedAt: undefined,
       parameters,
-      placement: {
-        longitude: 114.964285,
-        latitude: 34.9511,
-        height: 0,
-        heading: 0,
-        label: '堌阳镇范围参数化测试场景',
-        accuracy: 'township-demo',
-      },
+      placement,
     }
     jobs.set(id, job)
     queue.push(job)

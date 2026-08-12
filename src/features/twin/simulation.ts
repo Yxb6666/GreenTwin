@@ -7,6 +7,7 @@ export interface SimulationParameters {
   roadRaiseHeight: number
   prompt?: string
   buildingStyle?: 'traditional-chinese' | 'modern' | 'rural'
+  placement?: SimulationPlacement
 }
 
 export interface SimulationPlacement {
@@ -15,7 +16,7 @@ export interface SimulationPlacement {
   height: number
   heading: number
   label: string
-  accuracy: 'township-demo'
+  accuracy: 'township-demo' | 'user-picked'
 }
 
 export interface SimulationJob {

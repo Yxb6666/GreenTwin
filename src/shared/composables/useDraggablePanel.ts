@@ -188,7 +188,13 @@ function releasePointer(event: PointerEvent) {
     target.releasePointerCapture(event.pointerId)
 }
 
-export function useDraggablePanel(isOpen: Ref<boolean>) {
+export function useDraggablePanel(
+  isOpen: Ref<boolean>,
+  options?: { storagePrefix?: string },
+) {
+  const storagePrefix = options?.storagePrefix ?? 'greentwin.ai'
+  const launcherKey = `${storagePrefix}.launcher.v1`
+  const panelKey = `${storagePrefix}.panel.v1`
   const launcherRef = ref<HTMLButtonElement | null>(null)
   const panelRef = ref<HTMLElement | null>(null)
   const launcherPosition = ref<FloatingPosition | null>(null)
@@ -275,13 +281,13 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
   function restoreLauncherPosition() {
     const size = launcherSize()
     if (!size) return
-    const stored = readStoredPosition(AI_ASSISTANT_LAUNCHER_KEY)
+    const stored = readStoredPosition(launcherKey)
     if (!stored) {
-      removeStoredValue(AI_ASSISTANT_LAUNCHER_KEY)
+      removeStoredValue(launcherKey)
       return
     }
     launcherPosition.value = clampPanelPosition(stored, size, currentViewport())
-    writeStoredValue(AI_ASSISTANT_LAUNCHER_KEY, launcherPosition.value)
+    writeStoredValue(launcherKey, launcherPosition.value)
   }
 
   function restorePanelRect() {
@@ -292,10 +298,10 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
       return
     }
 
-    const stored = readStoredPanelRect(AI_ASSISTANT_PANEL_KEY)
+    const stored = readStoredPanelRect(panelKey)
     if (stored) {
       panelRect.value = clampPanelRect(stored, currentViewport())
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
       return
     }
 
@@ -303,9 +309,9 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
     panelRect.value = legacyPosition
       ? clampPanelRect({ ...defaultRect, ...legacyPosition }, currentViewport())
       : defaultRect
-    removeStoredValue(AI_ASSISTANT_PANEL_KEY)
+    removeStoredValue(panelKey)
     if (legacyPosition)
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
     removeStoredValue(LEGACY_PANEL_POSITION_KEY)
   }
 
@@ -366,7 +372,7 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
   function finishLauncherPointer(event: PointerEvent, cancelled = false) {
     if (event.pointerId !== launcherPointerId) return
     if (isLauncherDragging.value && launcherPosition.value) {
-      writeStoredValue(AI_ASSISTANT_LAUNCHER_KEY, launcherPosition.value)
+      writeStoredValue(launcherKey, launcherPosition.value)
       suppressLauncherClick = !cancelled
       if (suppressClickTimer !== null) window.clearTimeout(suppressClickTimer)
       suppressClickTimer = window.setTimeout(() => {
@@ -428,7 +434,7 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
   function finishPanelDrag(event: PointerEvent) {
     if (!isDragging.value || event.pointerId !== panelPointerId) return
     if (panelRect.value)
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
     releasePointer(event)
     panelPointerId = null
     panelStart = null
@@ -481,7 +487,7 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
   function finishResize(event: PointerEvent) {
     if (!isResizing.value || event.pointerId !== panelPointerId) return
     if (panelRect.value)
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
     releasePointer(event)
     panelPointerId = null
     panelStart = null
@@ -492,7 +498,7 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
   }
 
   async function resetPosition() {
-    removeStoredValue(AI_ASSISTANT_PANEL_KEY)
+    removeStoredValue(panelKey)
     removeStoredValue(LEGACY_PANEL_POSITION_KEY)
     panelRect.value = null
     await nextTick()
@@ -507,11 +513,11 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
         launcherDimensions,
         currentViewport(),
       )
-      writeStoredValue(AI_ASSISTANT_LAUNCHER_KEY, launcherPosition.value)
+      writeStoredValue(launcherKey, launcherPosition.value)
     }
     if (panelRect.value) {
       panelRect.value = clampPanelRect(panelRect.value, currentViewport())
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
     }
   }
 
@@ -523,9 +529,9 @@ export function useDraggablePanel(isOpen: Ref<boolean>) {
 
   function onWindowBlur() {
     if (isLauncherDragging.value && launcherPosition.value)
-      writeStoredValue(AI_ASSISTANT_LAUNCHER_KEY, launcherPosition.value)
+      writeStoredValue(launcherKey, launcherPosition.value)
     if ((isDragging.value || isResizing.value) && panelRect.value)
-      writeStoredValue(AI_ASSISTANT_PANEL_KEY, panelRect.value)
+      writeStoredValue(panelKey, panelRect.value)
     launcherPointerId = null
     panelPointerId = null
     panelStart = null
