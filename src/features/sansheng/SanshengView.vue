@@ -8,26 +8,57 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import { DEFAULT_DIMENSION_WEIGHTS, dimensionMeta, scoreTown, towns, type DimensionKey } from './model'
-import { buildSanshengReportRequest, requestSanshengReport, type ReportMeta, type SanshengReport } from './report'
+import {
+  DEFAULT_DIMENSION_WEIGHTS,
+  dimensionMeta,
+  scoreTown,
+  towns,
+  type DimensionKey,
+} from './model'
+import {
+  buildSanshengReportRequest,
+  requestSanshengReport,
+  type ReportMeta,
+  type SanshengReport,
+} from './report'
 import { createReportDocxBlob, createReportDocxFileName } from './reportDocx'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const activeDimension = ref<DimensionKey>('ecology')
-const selectedTownId = ref('yifeng')
+const selectedTownId = ref('410225108')
 const report = ref<SanshengReport | null>(null)
 const reportMeta = ref<ReportMeta | null>(null)
 const reportError = ref('')
 const reportOpen = ref(false)
 const isGeneratingReport = ref(false)
 const isExportingReport = ref(false)
-const weights = ref<Record<DimensionKey, number>>({ ...DEFAULT_DIMENSION_WEIGHTS })
-const { map, focusBounds, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap } = useLeafletMap(mapContainer)
+const weights = ref<Record<DimensionKey, number>>({
+  ...DEFAULT_DIMENSION_WEIGHTS,
+})
+const {
+  map,
+  focusBounds,
+  activeBaseMap,
+  arcgisAvailable,
+  error: mapError,
+  initialize,
+  setBaseMap,
+} = useLeafletMap(mapContainer)
 
-const scoredTowns = computed(() => towns.map((town) => ({ ...town, scores: scoreTown(town, weights.value) })).sort((a, b) => b.scores.composite - a.scores.composite))
-const selectedTown = computed(() => scoredTowns.value.find((town) => town.id === selectedTownId.value) ?? scoredTowns.value[0]!)
-const currentIndicators = computed(() => dimensionMeta[activeDimension.value].indicators)
+const scoredTowns = computed(() =>
+  towns
+    .map((town) => ({ ...town, scores: scoreTown(town, weights.value) }))
+    .sort((a, b) => b.scores.composite - a.scores.composite),
+)
+const selectedTown = computed(
+  () =>
+    scoredTowns.value.find((town) => town.id === selectedTownId.value) ??
+    scoredTowns.value[0]!,
+)
+const currentIndicators = computed(
+  () => dimensionMeta[activeDimension.value].indicators,
+)
 const countyScores = computed(() => {
   const total = scoredTowns.value.reduce(
     (sum, town) => ({
@@ -39,9 +70,18 @@ const countyScores = computed(() => {
     { ecology: 0, life: 0, production: 0, composite: 0 },
   )
   const count = scoredTowns.value.length
-  return Object.fromEntries(Object.entries(total).map(([key, value]) => [key, Number((value / count).toFixed(1))])) as Record<DimensionKey | 'composite', number>
+  return Object.fromEntries(
+    Object.entries(total).map(([key, value]) => [
+      key,
+      Number((value / count).toFixed(1)),
+    ]),
+  ) as Record<DimensionKey | 'composite', number>
 })
-const selectedTownRank = computed(() => scoredTowns.value.findIndex((item) => item.id === selectedTown.value.id) + 1)
+const selectedTownRank = computed(
+  () =>
+    scoredTowns.value.findIndex((item) => item.id === selectedTown.value.id) +
+    1,
+)
 const diagnosisSummary = computed(() => {
   const scores = selectedTown.value.scores
   const entries = [
@@ -65,11 +105,20 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     countyRank: `${selectedTownRank.value}/${scoredTowns.value.length}`,
     weights: weights.value,
     diagnosis: diagnosisSummary.value,
-    townRanking: scoredTowns.value.map((town, index) => `${index + 1}.${town.name}:${town.scores.composite}`),
-    currentIndicators: currentIndicators.value.map((indicator) => `${indicator.name}:${indicator.weight * 100}%`),
+    townRanking: scoredTowns.value.map(
+      (town, index) => `${index + 1}.${town.name}:${town.scores.composite}`,
+    ),
+    currentIndicators: currentIndicators.value.map(
+      (indicator) => `${indicator.name}:${indicator.weight * 100}%`,
+    ),
   },
 }))
-const assistantPrompts = ['分析当前乡镇的优势与短板', '当前权重配置对排名有什么影响？', '与全县平均水平相比表现如何？', '给出三生协同提升的优先建议']
+const assistantPrompts = [
+  '分析当前乡镇的优势与短板',
+  '当前权重配置对排名有什么影响？',
+  '与全县平均水平相比表现如何？',
+  '给出三生协同提升的优先建议',
+]
 
 function resetWeights() {
   weights.value = { ...DEFAULT_DIMENSION_WEIGHTS }
@@ -80,13 +129,25 @@ async function generateReport() {
   reportError.value = ''
   try {
     const town = selectedTown.value
-    const payload = buildSanshengReportRequest(town, town.scores, weights.value, countyScores.value.composite, selectedTownRank.value, scoredTowns.value.length)
-    const result = await requestSanshengReport(config.apiBaseUrl, config.reportTimeoutMs, payload)
+    const payload = buildSanshengReportRequest(
+      town,
+      town.scores,
+      weights.value,
+      countyScores.value.composite,
+      selectedTownRank.value,
+      scoredTowns.value.length,
+    )
+    const result = await requestSanshengReport(
+      config.apiBaseUrl,
+      config.reportTimeoutMs,
+      payload,
+    )
     report.value = result.report
     reportMeta.value = result.meta
     reportOpen.value = true
   } catch (error) {
-    reportError.value = error instanceof Error ? error.message : '报告生成失败，请稍后重试'
+    reportError.value =
+      error instanceof Error ? error.message : '报告生成失败，请稍后重试'
   } finally {
     isGeneratingReport.value = false
   }
@@ -106,7 +167,10 @@ async function exportReport() {
     anchor.click()
     URL.revokeObjectURL(url)
   } catch (error) {
-    reportError.value = error instanceof Error ? `Word 报告导出失败：${error.message}` : 'Word 报告导出失败'
+    reportError.value =
+      error instanceof Error
+        ? `Word 报告导出失败：${error.message}`
+        : 'Word 报告导出失败'
   } finally {
     isExportingReport.value = false
   }
@@ -124,51 +188,114 @@ watch(
 )
 
 onMounted(async () => {
-  await initialize(config.supermap.leafletSdkUrl, config.supermap.mapServices.base, config.map.center, config.map.zoom, config.map.crs, [config.supermap.mapServices.township], config.arcgis.accessToken)
+  await initialize(
+    config.supermap.leafletSdkUrl,
+    config.supermap.mapServices.base,
+    config.map.center,
+    config.map.zoom,
+    config.map.crs,
+    [config.supermap.mapServices.township],
+    config.arcgis.accessToken,
+  )
 })
 </script>
 
 <template>
   <main class="screen-page sansheng-page">
-    <ScreenHeader title="三生空间综合分析模块" subtitle="指标建模 / 权重推演 / 空间评价 / 优势短板识别" />
+    <ScreenHeader
+      title="三生空间综合分析模块"
+      subtitle="指标建模 / 权重推演 / 空间评价 / 优势短板识别"
+    />
 
     <div class="sansheng-layout">
       <aside class="sansheng-left">
-        <PanelCard title="三生指标体系" meta="15 项指标">
+        <PanelCard title="三生指标体系" meta="乡镇实算 / 15 项">
           <div class="dimension-tabs segmented">
-            <button v-for="(meta, key) in dimensionMeta" :key="key" :class="{ active: activeDimension === key }" type="button" @click="activeDimension = key">
+            <button
+              v-for="(meta, key) in dimensionMeta"
+              :key="key"
+              :class="{ active: activeDimension === key }"
+              type="button"
+              @click="activeDimension = key"
+            >
               {{ meta.label }}
             </button>
           </div>
           <div class="indicator-list">
-            <article v-for="indicator in currentIndicators" :key="indicator.key">
-              <span>{{ indicator.name }}</span>
-              <em>{{ indicator.direction === 'positive' ? '正向' : indicator.direction === 'negative' ? '负向' : '适中' }}</em>
+            <article
+              v-for="indicator in currentIndicators"
+              :key="indicator.key"
+            >
+              <span :title="indicator.note">{{ indicator.name }}</span>
+              <small :class="`source-${indicator.sourceType}`">
+                {{
+                  indicator.sourceType === 'direct'
+                    ? '直接'
+                    : indicator.sourceType === 'proxy'
+                      ? '代理'
+                      : '替代'
+                }}
+              </small>
+              <em>{{
+                indicator.direction === 'positive'
+                  ? '正向'
+                  : indicator.direction === 'negative'
+                    ? '负向'
+                    : '适中'
+              }}</em>
               <b>{{ indicator.weight * 100 }}%</b>
             </article>
           </div>
+          <p class="indicator-source-note">
+            直接：按目标口径计算 · 代理：相关数据近似 ·
+            替代：改用可计算的供给指标
+          </p>
         </PanelCard>
 
         <PanelCard title="权重配置" meta="自动归一化">
           <div class="weight-list">
             <label v-for="(meta, key) in dimensionMeta" :key="key">
               <span>{{ meta.label }}</span>
-              <input v-model.number="weights[key]" type="range" min="0" max="100" />
+              <input
+                v-model.number="weights[key]"
+                type="range"
+                min="0"
+                max="100"
+              />
               <b>{{ weights[key] }}%</b>
             </label>
           </div>
           <div class="weight-total">
             原始权重合计
-            <strong>{{ weights.ecology + weights.life + weights.production }}%</strong>
+            <strong
+              >{{
+                weights.ecology + weights.life + weights.production
+              }}%</strong
+            >
           </div>
-          <button class="action-button full-button" type="button" @click="resetWeights">恢复默认权重</button>
+          <button
+            class="action-button full-button"
+            type="button"
+            @click="resetWeights"
+          >
+            恢复默认权重
+          </button>
         </PanelCard>
       </aside>
 
       <section class="sansheng-center">
         <section class="map-shell panel-frame sansheng-map">
           <div ref="mapContainer" class="map-container" />
-          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" export-name="兰考县三生空间评价地图" />
+          <MapToolbox
+            :map="map"
+            :focus-bounds="focusBounds"
+            :initial-center="config.map.center"
+            :initial-zoom="config.map.zoom"
+            :active-base-map="activeBaseMap"
+            :arcgis-available="arcgisAvailable"
+            :change-base-map="setBaseMap"
+            export-name="兰考县三生空间评价地图"
+          />
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
@@ -179,6 +306,7 @@ onMounted(async () => {
                 <th>指标维度</th>
                 <th>指标名称</th>
                 <th>原始值</th>
+                <th>数据口径</th>
                 <th>评价方向</th>
               </tr>
             </thead>
@@ -187,11 +315,24 @@ onMounted(async () => {
                 <td>{{ dimensionMeta[activeDimension].label }}</td>
                 <td>{{ indicator.name }}</td>
                 <td>
-                  {{ selectedTown[activeDimension][indicator.key] }}
-                  {{ indicator.unit }}
+                  {{ selectedTown[activeDimension][indicator.key] ?? '—' }}
+                  {{
+                    selectedTown[activeDimension][indicator.key] == null
+                      ? ''
+                      : indicator.unit
+                  }}
                 </td>
                 <td>
-                  {{ indicator.direction === 'positive' ? '正向' : indicator.direction === 'negative' ? '负向' : '适中最优' }}
+                  <span class="indicator-note">{{ indicator.note }}</span>
+                </td>
+                <td>
+                  {{
+                    indicator.direction === 'positive'
+                      ? '正向'
+                      : indicator.direction === 'negative'
+                        ? '负向'
+                        : '适中最优'
+                  }}
                 </td>
               </tr>
             </tbody>
@@ -206,16 +347,29 @@ onMounted(async () => {
               <strong>{{ selectedTown.scores.composite }}</strong
               ><span>综合指数</span>
             </div>
-            <RadarChart :labels="['生态', '生活', '生产']" :values="[selectedTown.scores.ecology, selectedTown.scores.life, selectedTown.scores.production]" />
+            <RadarChart
+              :labels="['生态', '生活', '生产']"
+              :values="[
+                selectedTown.scores.ecology,
+                selectedTown.scores.life,
+                selectedTown.scores.production,
+              ]"
+            />
           </div>
           <div class="county-strip">
-            <span>县域均值</span><b>{{ countyScores.composite }}</b> <span>当前排名</span><b>{{ selectedTownRank }}</b>
+            <span>县域均值</span><b>{{ countyScores.composite }}</b>
+            <span>当前排名</span><b>{{ selectedTownRank }}</b>
           </div>
         </PanelCard>
 
         <PanelCard title="乡镇综合排名" meta="点击切换乡镇">
           <ol class="ranking-list">
-            <li v-for="(town, index) in scoredTowns" :key="town.id" :class="{ active: selectedTownId === town.id }" @click="selectedTownId = town.id">
+            <li
+              v-for="(town, index) in scoredTowns"
+              :key="town.id"
+              :class="{ active: selectedTownId === town.id }"
+              @click="selectedTownId = town.id"
+            >
               <i>{{ String(index + 1).padStart(2, '0') }}</i
               ><span>{{ town.name }}</span
               ><b>{{ town.scores.composite }}</b>
@@ -226,12 +380,24 @@ onMounted(async () => {
         <PanelCard title="优势短板识别" meta="研判输出">
           <div class="diagnosis">
             <p>{{ report?.executiveSummary || diagnosisSummary }}</p>
-            <span v-if="reportError" class="report-error" role="alert">{{ reportError }}</span>
+            <span v-if="reportError" class="report-error" role="alert">{{
+              reportError
+            }}</span>
             <div>
-              <button class="action-button" type="button" :disabled="isGeneratingReport || isExportingReport" @click="generateReport">
+              <button
+                class="action-button"
+                type="button"
+                :disabled="isGeneratingReport || isExportingReport"
+                @click="generateReport"
+              >
                 {{ isGeneratingReport ? 'DeepSeek 生成中…' : '生成详细报告' }}
               </button>
-              <button class="action-button" type="button" :disabled="isGeneratingReport || isExportingReport" @click="exportReport">
+              <button
+                class="action-button"
+                type="button"
+                :disabled="isGeneratingReport || isExportingReport"
+                @click="exportReport"
+              >
                 {{ isExportingReport ? 'Word 生成中…' : '导出 Word' }}
               </button>
             </div>
@@ -241,14 +407,29 @@ onMounted(async () => {
     </div>
 
     <Teleport to="body">
-      <div v-if="reportOpen && report && reportMeta" class="report-overlay" @click.self="reportOpen = false">
-        <section class="report-dialog" role="dialog" aria-modal="true" :aria-label="report.title">
+      <div
+        v-if="reportOpen && report && reportMeta"
+        class="report-overlay"
+        @click.self="reportOpen = false"
+      >
+        <section
+          class="report-dialog"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="report.title"
+        >
           <header class="report-dialog__header">
             <div>
               <span>DEEPSEEK 智能研判</span>
               <h2>{{ report.title }}</h2>
             </div>
-            <button type="button" aria-label="关闭报告" @click="reportOpen = false">×</button>
+            <button
+              type="button"
+              aria-label="关闭报告"
+              @click="reportOpen = false"
+            >
+              ×
+            </button>
           </header>
           <div class="report-dialog__meta">
             <span>模型 {{ reportMeta.model }}</span>
@@ -260,7 +441,9 @@ onMounted(async () => {
                 })
               }}</span
             >
-            <span v-if="reportMeta.usage">Token {{ reportMeta.usage.totalTokens }}</span>
+            <span v-if="reportMeta.usage"
+              >Token {{ reportMeta.usage.totalTokens }}</span
+            >
           </div>
           <div class="report-dialog__body">
             <section class="report-lead">
@@ -274,7 +457,10 @@ onMounted(async () => {
             <section>
               <h3>分维度分析</h3>
               <div class="dimension-report-grid">
-                <article v-for="item in report.dimensionAnalysis" :key="item.dimension">
+                <article
+                  v-for="item in report.dimensionAnalysis"
+                  :key="item.dimension"
+                >
                   <header>
                     <strong>{{ item.dimension }}</strong
                     ><b>{{ item.score }}</b>
@@ -309,9 +495,14 @@ onMounted(async () => {
             <section>
               <h3>行动建议</h3>
               <ol class="recommendation-list">
-                <li v-for="item in report.recommendations" :key="`${item.priority}-${item.action}`">
+                <li
+                  v-for="item in report.recommendations"
+                  :key="`${item.priority}-${item.action}`"
+                >
                   <header>
-                    <em :class="`priority-${item.priority}`">{{ item.priority }}优先级</em><strong>{{ item.action }}</strong
+                    <em :class="`priority-${item.priority}`"
+                      >{{ item.priority }}优先级</em
+                    ><strong>{{ item.action }}</strong
                     ><span>{{ item.timeframe }}</span>
                   </header>
                   <p><b>数据依据：</b>{{ item.basis }}</p>
@@ -334,7 +525,12 @@ onMounted(async () => {
           </div>
           <footer class="report-dialog__footer">
             <span>AI 报告仅供辅助研判，不替代法定规划与实地调查。</span>
-            <button class="action-button" type="button" :disabled="isExportingReport" @click="exportReport">
+            <button
+              class="action-button"
+              type="button"
+              :disabled="isExportingReport"
+              @click="exportReport"
+            >
               {{ isExportingReport ? 'Word 生成中…' : '导出 Word 文档' }}
             </button>
           </footer>
@@ -342,7 +538,12 @@ onMounted(async () => {
       </div>
     </Teleport>
   </main>
-  <DecisionAssistant :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`" :timeout-ms="config.reportTimeoutMs" :context="assistantContext" :prompts="assistantPrompts" />
+  <DecisionAssistant
+    :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
+    :timeout-ms="config.reportTimeoutMs"
+    :context="assistantContext"
+    :prompts="assistantPrompts"
+  />
 </template>
 
 <style scoped>
@@ -389,11 +590,31 @@ onMounted(async () => {
   padding: 7px 8px;
   border-left: 2px solid var(--cyan);
   background: rgba(255, 255, 255, 0.025);
-  grid-template-columns: 1fr 34px 34px;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 28px 28px 32px;
 }
 
 .indicator-list span {
+  overflow: hidden;
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.indicator-list small {
+  padding: 2px 3px;
+  font-size: 8px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  text-align: center;
+}
+.indicator-list small.source-direct {
+  color: var(--cyan);
+}
+.indicator-list small.source-proxy {
+  color: var(--amber);
+}
+.indicator-list small.source-substitute {
+  color: #9cb8ff;
 }
 .indicator-list em {
   color: var(--text-soft);
@@ -404,6 +625,13 @@ onMounted(async () => {
   color: var(--cyan);
   font: 11px var(--font-data);
   text-align: right;
+}
+
+.indicator-source-note {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 8px;
+  line-height: 1.5;
 }
 
 .weight-list {
@@ -469,6 +697,14 @@ onMounted(async () => {
 .indicator-table td:nth-child(3) {
   color: var(--cyan);
   font-family: var(--font-data);
+}
+.indicator-table th:nth-child(4),
+.indicator-table td:nth-child(4) {
+  width: 42%;
+}
+.indicator-note {
+  color: var(--text-soft);
+  line-height: 1.45;
 }
 
 .score-summary {

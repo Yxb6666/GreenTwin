@@ -19,19 +19,23 @@ describe('主控页面行政区三生评价联动', () => {
     })
   })
 
-  it.each(['仪封镇', '堌阳镇'])('精确匹配 %s 并复用三生模型评分', (name) => {
-    const town = towns.find((item) => item.name === name)!
-    const expected = scoreTown(town, DEFAULT_DIMENSION_WEIGHTS)
+  it.each(['仪封镇', '堌阳镇', '兰阳街道', '许河镇'])(
+    '精确匹配 %s 并复用三生模型评分',
+    (name) => {
+      const town = towns.find((item) => item.name === name)!
+      const expected = scoreTown(town, DEFAULT_DIMENSION_WEIGHTS)
 
-    expect(resolveMasterSanshengEvaluation(` ${name} `)).toEqual({
-      areaName: name,
-      meta: `${name} / 行政区评价`,
-      scope: 'township',
-      scores: expected,
-    })
-  })
+      expect(resolveMasterSanshengEvaluation(` ${name} `)).toEqual({
+        areaName: name,
+        meta: `${name} / 行政区评价`,
+        scope: 'township',
+        scores: expected,
+      })
+    },
+  )
 
-  it.each(['兰阳街道', '许河镇'])('不猜测映射，%s 缺失时返回空状态', (name) => {
+  it('不猜测映射，数据中不存在的名称返回空状态', () => {
+    const name = '不存在乡镇'
     expect(resolveMasterSanshengEvaluation(name)).toEqual({
       areaName: name,
       meta: `${name} / 行政区评价`,
