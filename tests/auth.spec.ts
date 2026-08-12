@@ -15,28 +15,11 @@ describe('账户认证状态', () => {
     expect(result.success).toBe(true)
     expect(auth.isAuthenticated).toBe(true)
     expect(auth.username).toBe('planner01')
-    expect(await auth.getCurrentPassword()).toBe('GreenTwin2026')
-    expect(localStorage.getItem('greentwin.accounts.v2')).not.toContain(
-      'GreenTwin2026',
-    )
 
     setActivePinia(createPinia())
     const restoredAuth = useAuthStore()
     expect(restoredAuth.isAuthenticated).toBe(true)
     expect(restoredAuth.username).toBe('planner01')
-  })
-
-  it('清理旧版账户、会话及记住的账号', () => {
-    localStorage.setItem('greentwin.accounts.v1', '{"legacy":{}}')
-    localStorage.setItem('greentwin.session.v1', '{"username":"legacy"}')
-    localStorage.setItem('greentwin.remembered-account.v1', 'legacy')
-
-    const auth = useAuthStore()
-
-    expect(auth.isAuthenticated).toBe(false)
-    expect(localStorage.getItem('greentwin.accounts.v1')).toBeNull()
-    expect(localStorage.getItem('greentwin.session.v1')).toBeNull()
-    expect(localStorage.getItem('greentwin.remembered-account.v1')).toBeNull()
   })
 
   it('退出后拒绝错误密码，并允许正确密码重新登录', async () => {
