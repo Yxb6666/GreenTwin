@@ -26,6 +26,7 @@ const props = defineProps<{
   modelReady: boolean
   modelScale: number
   modelHeading: number
+  buildSummary: string
 }>()
 
 const emit = defineEmits<{
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   'toggle-pick': []
   'cancel-pick': []
   build: [prompt: string, style: AiBuilderStyle]
+  'build-agent': [prompt: string]
   'update-scale': [value: number]
   'update-heading': [value: number]
   'remove-model': []
@@ -68,6 +70,8 @@ const {
 
 const draft = ref('')
 const style = ref<AiBuilderStyle>('auto')
+const mode = ref<'template' | 'agent'>('template')
+const lastMode = ref<'template' | 'agent'>('template')
 const messageId = ref(1)
 const messageList = ref<HTMLElement | null>(null)
 const statusMessageId = ref<number | null>(null)
@@ -102,6 +106,7 @@ async function scrollToLatest() {
 function send() {
   const content = draft.value.trim()
   if (!canSend.value || !content) return
+  lastMode.value = mode.value
   messages.value.push({ id: messageId.value++, role: 'user', content })
   statusMessageId.value = messageId.value++
   messages.value.push({
@@ -110,8 +115,22 @@ function send() {
     content: `已收到建造指令，正在 ${props.pointLabel} 准备 Blender 建模任务…`,
   })
   draft.value = ''
-  emit('build', content, style.value)
+  if (mode.value === 'agent') emit('build-agent', content)
+  else emit('build', content, style.value)
   void scrollToLatest()
+}
+
+function selectMode(value: 'template' | 'agent') {
+  if (props.isBuilding) return
+  mode.value = value
+  if (value === 'agent') {
+    messages.value.push({
+      id: messageId.value++,
+      role: 'assistant',
+      content:
+        '已切换到 3D Agent 模式：我会把提示词交给 DeepSeek 生成 Blender 脚本，直接构建更贴近描述的模型。',
+    })
+  }
 }
 
 function onComposerKeydown(event: KeyboardEvent) {
@@ -163,7 +182,10 @@ watch(
     messages.value.push({
       id: messageId.value++,
       role: 'assistant',
-      content: `模型已在 ${props.pointLabel} 生成完成。点击模型可选中，在地图上拖拽可移动，使用面板滑杆可缩放与旋转。`,
+      content:
+        lastMode.value === 'agent'
+          ? `3D Agent 已在 ${props.pointLabel} 生成完成。点击模型可选中，在地图上拖拽可移动，使用面板滑杆可缩放与旋转。`
+          : `模型已在 ${props.pointLabel} 生成完成（${props.buildSummary || '参数模板'}）。点击模型可选中，在地图上拖拽可移动，使用面板滑杆可缩放与旋转。`,
     })
     statusMessageId.value = null
     void scrollToLatest()
@@ -336,7 +358,25 @@ watch(
         </section>
 
         <section class="builder-composer">
-          <div class="builder-style-chips">
+          <div class="builder-mode-tabs">
+            <button
+              type="button"
+              data-no-drag
+              :class="{ active: mode === 'template' }"
+              @click="selectMode('template')"
+            >
+              模板生成
+            </button>
+            <button
+              type="button"
+              data-no-drag
+              :class="{ active: mode === 'agent' }"
+              @click="selectMode('agent')"
+            >
+              3D Agent
+            </button>
+          </div>
+          <div v-if="mode === 'template'" class="builder-style-chips">
             <button
               v-for="option in styleOptions"
               :key="option.value"
@@ -352,7 +392,11 @@ watch(
             v-model="draft"
             rows="2"
             maxlength="240"
-            placeholder="例如：帮我在地图处建造一座古风亭子，带坡屋顶和围栏"
+            :placeholder="
+              mode === 'agent'
+                ? '例如：建一座三层八角攒尖顶楼阁，带柱廊、斗拱、围栏和灯笼，尺寸 14×12 米，要精致'
+                : '例如：帮我在地图处建造一座古风亭子，带坡屋顶和围栏'
+            "
             :disabled="isBuilding"
             @keydown="onComposerKeydown"
           />
@@ -367,7 +411,12 @@ watch(
         </section>
 
         <p class="builder-notice">
-          Blender 当前按“古风 / 现代 / 乡村”参数模板生成；更复杂的任意提示词建模需要接入专用 3D Agent。
+          <template v-if="mode === 'agent'">
+            3D Agent 由 DeepSeek 实时生成受限 Blender 脚本，可表达更复杂的提示词；需配置 DEEPSEEK_API_KEY。
+          </template>
+          <template v-else>
+            模板模式按“古风 / 现代 / 乡村”参数模板生成，支持层数、屋顶、柱廊、围栏等特征解析。
+          </template>
         </p>
 
         <span
@@ -817,6 +866,29 @@ watch(
   border: 1px solid rgba(122, 203, 190, 0.22);
   border-radius: 8px;
   background: rgba(3, 13, 14, 0.7);
+}
+
+.builder-mode-tabs {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.builder-mode-tabs button {
+  min-height: 26px;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.15);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.builder-mode-tabs button.active {
+  color: #04201d;
+  border-color: var(--cyan);
+  background: var(--cyan);
+  font-weight: 700;
 }
 
 .builder-style-chips {

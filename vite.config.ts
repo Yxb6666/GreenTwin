@@ -6,6 +6,7 @@ import { createReportMiddleware } from './server/deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
 import { createDecisionAssistantMiddleware } from './server/decision-assistant.mjs'
 import { createSimulationMiddleware } from './server/simulation.mjs'
+import { createAgentSimulationMiddleware } from './server/agent-simulation.mjs'
 import { createArcGisVectorBasemapMiddleware } from './server/arcgis-vector-basemap.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
@@ -53,6 +54,24 @@ function simulationApi(env: Record<string, string>): Plugin {
     name: 'greentwin-blender-simulation-api',
     configureServer(server) {
       server.middlewares.use('/api/simulation', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
+function agentSimulationApi(env: Record<string, string>): Plugin {
+  const middleware = createAgentSimulationMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    blenderExecutable: env.BLENDER_EXECUTABLE,
+  })
+
+  return {
+    name: 'greentwin-3d-agent-api',
+    configureServer(server) {
+      server.middlewares.use('/api/agent-simulation', (request, response) => {
         void middleware(request, response)
       })
     },
@@ -112,6 +131,7 @@ export default defineConfig(({ mode }) => {
       governanceAssistantApi(env),
       decisionAssistantApi(env),
       simulationApi(env),
+      agentSimulationApi(env),
       arcGisVectorBasemapApi(),
       viteStaticCopy({
         targets: [

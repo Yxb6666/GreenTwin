@@ -7,6 +7,7 @@ export interface SimulationParameters {
   roadRaiseHeight: number
   prompt?: string
   buildingStyle?: 'traditional-chinese' | 'modern' | 'rural'
+  building?: Record<string, unknown>
   placement?: SimulationPlacement
 }
 

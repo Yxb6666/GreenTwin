@@ -26,6 +26,11 @@ import {
   type SimulationParameters,
   type SimulationPlacement,
 } from './simulation'
+import {
+  createAgentJob,
+  waitForAgentJob,
+  type AgentJob,
+} from './agentSimulation'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -158,7 +163,7 @@ const activePlan = ref<PlanKey>('planA')
 const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
-const generatedJob = ref<SimulationJob | null>(null)
+const generatedJob = ref<SimulationJob | AgentJob | null>(null)
 const constructionStage = ref(0)
 const builderOpen = ref(false)
 const pickMode = ref(false)
@@ -433,7 +438,9 @@ async function loadGeneratedModel(
   })
 }
 
-async function playConstruction(job: SimulationJob) {
+async function playConstruction(
+  job: Pick<SimulationJob, 'modelUrl' | 'stageUrls' | 'placement'>,
+) {
   const urls = job.stageUrls?.length ? job.stageUrls : [job.modelUrl!]
   const run = ++constructionRun
   for (let index = 0; index < urls.length; index += 1) {
@@ -669,6 +676,77 @@ async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
     operationMessage.value = '请检查 Blender 路径、后端服务和模型输出日志'
   }
 }
+
+async function buildWithAgent(prompt: string) {
+  const point = selectedPoint.value
+  if (!point || !prompt.trim() || isGenerating.value) return
+  constructionStage.value = 0
+  buildState.value = 'running'
+  buildProgress.value = 5
+  generatedJob.value = null
+  modelSelected.value = false
+  engineStatus.value = '正在调用 3D Agent 生成 Blender 脚本'
+  operationMessage.value = `3D Agent 将根据提示词在 ${point.label} 生成更精细的模型`
+  try {
+    const initialJob = await createAgentJob(config.apiBaseUrl, {
+      prompt,
+      placement: toSimulationPlacement(point),
+      buildingStyle: inferBuildingStyle(prompt),
+    })
+    const completedJob = await waitForAgentJob(
+      config.apiBaseUrl,
+      initialJob,
+      {
+        timeoutMs: config.reportTimeoutMs,
+        onProgress: (job) => {
+          buildProgress.value = job.progress
+          engineStatus.value = job.message
+        },
+      },
+    )
+    await playConstruction(completedJob)
+    generatedJob.value = completedJob
+    buildState.value = 'ready'
+    buildProgress.value = 100
+    modelSelected.value = true
+    engineStatus.value = `${completedJob.placement.label} · 3D Agent GLB 已加载`
+    operationMessage.value =
+      '3D Agent 已完成智能建模；点击模型可选中，拖拽移动，或用面板滑杆缩放和旋转'
+  } catch (error) {
+    buildState.value = 'error'
+    engineStatus.value =
+      error instanceof Error ? error.message : '3D Agent 建模失败'
+    operationMessage.value =
+      '可切换为“模板生成”模式，或检查 DeepSeek API Key 与本机 Blender 路径'
+  }
+}
+
+const roofLabels: Record<string, string> = {
+  hipped: '歇山顶',
+  pyramidal: '攒尖顶',
+  gable: '双坡顶',
+  flat: '平屋顶',
+}
+
+const buildSummary = computed(() => {
+  const building = generatedJob.value?.parameters?.building
+  if (!building) return ''
+  const parts: string[] = []
+  if (building.typeLabel) parts.push(String(building.typeLabel))
+  if (building.floors) parts.push(`${Number(building.floors)} 层`)
+  if (building.roof) parts.push(roofLabels[String(building.roof)] ?? '')
+  if (building.columns) parts.push('柱廊')
+  if (building.railings) parts.push('围栏')
+  if (building.steps) parts.push('台阶')
+  if (building.courtyard) parts.push('庭院')
+  if (building.plaque) parts.push('牌匾')
+  if (building.lanterns) parts.push('灯笼')
+  if (building.dougong) parts.push('斗拱')
+  if (building.balcony) parts.push('阳台')
+  if (building.ornamentLevel === 3) parts.push('高精细')
+  else if (building.ornamentLevel === 1) parts.push('简洁')
+  return parts.filter(Boolean).join(' · ')
+})
 
 function updateModelScale(value: number) {
   modelScale.value = clampModelScale(value)
@@ -1037,9 +1115,11 @@ onBeforeUnmount(() => {
     :model-ready="buildState === 'ready' && generatedJob !== null"
     :model-scale="modelScale"
     :model-heading="modelHeading"
+    :build-summary="buildSummary"
     @toggle-pick="togglePointPicking"
     @cancel-pick="cancelPointPicking"
     @build="buildFromPrompt"
+    @build-agent="buildWithAgent"
     @update-scale="updateModelScale"
     @update-heading="updateModelHeading"
     @remove-model="removeGeneratedModel"

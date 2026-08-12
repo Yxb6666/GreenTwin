@@ -22,6 +22,26 @@ describe('Blender 模拟任务服务', () => {
       roadRaiseHeight: 1.2,
       prompt: '请帮我在地图处建造一个古风样式的建筑',
       buildingStyle: 'traditional-chinese',
+      building: {
+        style: 'traditional-chinese',
+        buildingType: 'house',
+        typeLabel: '宅院',
+        floors: 1,
+        roof: 'hipped',
+        width: 15,
+        depth: 10,
+        columns: false,
+        railings: false,
+        steps: false,
+        courtyard: false,
+        plaque: false,
+        lanterns: false,
+        dougong: false,
+        balcony: false,
+        canopy: false,
+        glass: false,
+        ornamentLevel: 2,
+      },
     })
   })
 

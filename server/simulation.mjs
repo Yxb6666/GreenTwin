@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, resolve } from 'node:path'
+import { parseBuildingPrompt } from './simulation-prompt.mjs'
 
 const projectRoot = resolve(process.cwd())
 const defaultOutputDirectory = resolve(projectRoot, 'tmp', 'simulation-models')
@@ -79,6 +80,7 @@ export function validateSimulationRequest(payload) {
     roadRaiseHeight: clamp(payload.roadRaiseHeight, 0, 1.2, 0.25),
     prompt,
     buildingStyle,
+    building: parseBuildingPrompt(prompt, buildingStyle),
   }
   if (payload.placement != null) result.placement = validatePlacement(payload.placement)
   return result
