@@ -15,11 +15,20 @@ export interface RuntimeConfig {
   }
   supermap: {
     leafletSdkUrl: string
-    mapServices: Record<'base' | 'township' | 'population' | 'gdp' | 'landuse', string>
+    mapServices: Record<
+      'base' | 'township' | 'population' | 'gdp' | 'landuse' | 'poi' | 'roadNetwork' | 'water',
+      string
+    >
     dem: {
       serviceUrl: string
       collectionId: string
       itemId: string
+    }
+    landuseRaster: {
+      serviceUrl: string
+      collectionId: string
+      opacity: number
+      rendererType: 'STRETCHED' | 'UNIQUE_VALUES'
     }
     webglSdkUrl: string
     webglWidgetsCssUrl: string
@@ -43,14 +52,7 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (!config.arcgis || typeof config.arcgis.accessToken !== 'string') {
     throw new Error('缺少 ArcGIS accessToken 运行时配置')
   }
-  if (
-    !config.supermap?.leafletSdkUrl ||
-    !config.supermap.mapServices?.base ||
-    !config.supermap.mapServices.township ||
-    !config.supermap.dem?.serviceUrl ||
-    !config.supermap.dem.collectionId ||
-    !config.supermap.dem.itemId
-  ) {
+  if (!config.supermap?.leafletSdkUrl || !config.supermap.mapServices?.base || !config.supermap.mapServices.township || !config.supermap.dem?.serviceUrl || !config.supermap.dem.collectionId || !config.supermap.dem.itemId || !config.supermap.landuseRaster?.serviceUrl || !config.supermap.landuseRaster.collectionId) {
     throw new Error('缺少 SuperMap SDK、二维地图或 DEM 影像服务配置')
   }
 }

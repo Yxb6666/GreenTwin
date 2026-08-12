@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
+import { useDraggablePanel } from '@/shared/composables/useDraggablePanel'
 import {
+  prepareDecisionAssistantImage,
   requestDecisionAssistant,
   type DecisionAssistantContext,
+  type DecisionAssistantImage,
   type DecisionAssistantResponse,
 } from './assistant'
 
@@ -12,6 +15,7 @@ interface Message {
   content: string
   result?: DecisionAssistantResponse
   error?: boolean
+  imageName?: string
 }
 
 const props = defineProps<{
@@ -26,6 +30,9 @@ const isLoading = ref(false)
 const draft = ref('')
 const messageId = ref(1)
 const messageList = ref<HTMLElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
+const attachedImage = ref<DecisionAssistantImage | null>(null)
+const attachmentError = ref('')
 const messages = ref<Message[]>([
   {
     id: messageId.value++,
@@ -33,6 +40,28 @@ const messages = ref<Message[]>([
     content: `我是${props.context.module} AI 决策助手。我会依据当前页面的实时指标和操作状态进行分析，并明确列出数据依据。`,
   },
 ])
+const {
+  isDragging,
+  isLauncherDragging,
+  isResizing,
+  launcherRef,
+  launcherStyle,
+  onHeaderPointerDown,
+  onHeaderPointerEnd,
+  onHeaderPointerMove,
+  onLauncherClick,
+  onLauncherPointerCancel,
+  onLauncherPointerDown,
+  onLauncherPointerEnd,
+  onLauncherPointerMove,
+  onResizePointerEnd,
+  onResizePointerMove,
+  panelRef,
+  panelStyle,
+  resetPosition,
+  resizeDirections,
+  startResize,
+} = useDraggablePanel(isOpen)
 
 async function scrollToLatest() {
   await nextTick()
@@ -49,8 +78,16 @@ async function sendQuestion(question = draft.value) {
     .filter((message) => message.id !== 1 && !message.error)
     .slice(-8)
     .map((message) => ({ role: message.role, content: message.content }))
-  messages.value.push({ id: messageId.value++, role: 'user', content })
+  const image = attachedImage.value
+  messages.value.push({
+    id: messageId.value++,
+    role: 'user',
+    content,
+    imageName: image?.name,
+  })
   draft.value = ''
+  attachedImage.value = null
+  attachmentError.value = ''
   isOpen.value = true
   isLoading.value = true
   await scrollToLatest()
@@ -63,6 +100,7 @@ async function sendQuestion(question = draft.value) {
         question: content,
         history,
         context: props.context,
+        image: image ?? undefined,
       },
     )
     messages.value.push({
@@ -85,6 +123,21 @@ async function sendQuestion(question = draft.value) {
   }
 }
 
+async function selectImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  attachmentError.value = ''
+  try {
+    attachedImage.value = await prepareDecisionAssistantImage(file)
+  } catch (error) {
+    attachedImage.value = null
+    attachmentError.value =
+      error instanceof Error ? error.message : '图片处理失败'
+  }
+}
+
 function onComposerKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.shiftKey) return
   event.preventDefault()
@@ -95,12 +148,22 @@ function onComposerKeydown(event: KeyboardEvent) {
 <template>
   <Teleport to="body">
     <button
+      ref="launcherRef"
       class="assistant-launcher"
-      :class="{ 'is-open': isOpen }"
+      :class="{
+        'is-open': isOpen,
+        'is-dragging': isLauncherDragging,
+      }"
+      :style="launcherStyle"
       type="button"
       :aria-expanded="isOpen"
       aria-controls="module-ai-panel"
-      @click="isOpen = !isOpen"
+      @click="onLauncherClick"
+      @lostpointercapture="onLauncherPointerEnd"
+      @pointercancel="onLauncherPointerCancel"
+      @pointerdown="onLauncherPointerDown"
+      @pointermove="onLauncherPointerMove"
+      @pointerup="onLauncherPointerEnd"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path
@@ -113,11 +176,26 @@ function onComposerKeydown(event: KeyboardEvent) {
     <Transition name="assistant-panel">
       <section
         v-if="isOpen"
+        ref="panelRef"
         id="module-ai-panel"
         class="assistant-panel"
+        :class="{
+          'is-dragging': isDragging,
+          'is-resizing': isResizing,
+        }"
+        :style="panelStyle"
         :aria-label="`${context.module} AI 决策助手`"
       >
-        <header class="assistant-header">
+        <header
+          class="assistant-header"
+          title="拖动标题栏可移动，双击恢复默认位置"
+          @dblclick="resetPosition"
+          @lostpointercapture="onHeaderPointerEnd"
+          @pointercancel="onHeaderPointerEnd"
+          @pointerdown="onHeaderPointerDown"
+          @pointermove="onHeaderPointerMove"
+          @pointerup="onHeaderPointerEnd"
+        >
           <div class="assistant-identity">
             <span class="assistant-mark">AI</span>
             <div>
@@ -127,6 +205,7 @@ function onComposerKeydown(event: KeyboardEvent) {
           </div>
           <button
             type="button"
+            data-no-drag
             aria-label="关闭 AI 助手"
             @click="isOpen = false"
           >
@@ -155,6 +234,9 @@ function onComposerKeydown(event: KeyboardEvent) {
             }}</span>
             <div class="assistant-message__body">
               <p>{{ message.content }}</p>
+              <small v-if="message.imageName" class="assistant-image-reference">
+                已附加图片 · {{ message.imageName }}
+              </small>
               <template v-if="message.result">
                 <ul
                   v-if="message.result.evidence.length"
@@ -183,7 +265,12 @@ function onComposerKeydown(event: KeyboardEvent) {
                 </div>
                 <footer>
                   <span>{{ message.result.scopeLabel }}</span>
-                  <span>{{ message.result.meta.model }}</span>
+                  <span>
+                    {{ message.result.meta.model }}
+                    <template v-if="message.result.meta.visionModel">
+                      · Vision {{ message.result.meta.visionModel }}
+                    </template>
+                  </span>
                 </footer>
                 <small class="assistant-disclaimer">{{
                   message.result.disclaimer
@@ -213,6 +300,23 @@ function onComposerKeydown(event: KeyboardEvent) {
         </div>
 
         <div class="assistant-composer">
+          <input
+            ref="imageInput"
+            class="assistant-image-input"
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            @change="selectImage"
+          />
+          <button
+            class="assistant-attach-button"
+            type="button"
+            :disabled="isLoading"
+            aria-label="添加图片"
+            title="添加图片，由 Claude Vision 识别后交给 DeepSeek 研判"
+            @click="imageInput?.click()"
+          >
+            ＋图
+          </button>
           <textarea
             v-model="draft"
             rows="2"
@@ -232,9 +336,36 @@ function onComposerKeydown(event: KeyboardEvent) {
             </svg>
           </button>
         </div>
+        <div
+          v-if="attachedImage || attachmentError"
+          class="assistant-attachment-status"
+        >
+          <span v-if="attachedImage">图片已就绪：{{ attachedImage.name }}</span>
+          <span v-else class="is-error">{{ attachmentError }}</span>
+          <button
+            v-if="attachedImage"
+            type="button"
+            aria-label="移除图片"
+            @click="attachedImage = null"
+          >
+            移除
+          </button>
+        </div>
         <p class="assistant-notice">
           AI 结论仅供辅助研判，请结合专业规范与现场情况核实。
         </p>
+        <span
+          v-for="direction in resizeDirections"
+          :key="direction"
+          class="assistant-resize-handle"
+          :class="`is-${direction}`"
+          aria-hidden="true"
+          @lostpointercapture="onResizePointerEnd"
+          @pointercancel="onResizePointerEnd"
+          @pointerdown="startResize(direction, $event)"
+          @pointermove="onResizePointerMove"
+          @pointerup="onResizePointerEnd"
+        />
       </section>
     </Transition>
   </Teleport>
@@ -263,7 +394,9 @@ function onComposerKeydown(event: KeyboardEvent) {
     0 12px 34px rgba(0, 0, 0, 0.38),
     0 0 24px rgba(61, 214, 196, 0.15);
   font-size: 11px;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .assistant-launcher svg,
@@ -282,6 +415,14 @@ function onComposerKeydown(event: KeyboardEvent) {
   pointer-events: none;
 }
 
+.assistant-launcher.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.02);
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.46),
+    0 0 28px rgba(61, 214, 196, 0.2);
+}
+
 .assistant-panel {
   position: fixed;
   z-index: 3500;
@@ -289,7 +430,7 @@ function onComposerKeydown(event: KeyboardEvent) {
   bottom: 18px;
   display: grid;
   overflow: hidden;
-  width: min(410px, calc(100vw - 28px));
+  width: min(410px, calc(100vw - 32px));
   height: min(720px, calc(100vh - 88px));
   color: var(--text);
   border: 1px solid rgba(61, 214, 196, 0.38);
@@ -306,6 +447,102 @@ function onComposerKeydown(event: KeyboardEvent) {
   backdrop-filter: blur(18px);
 }
 
+.assistant-panel.is-dragging,
+.assistant-panel.is-resizing {
+  border-color: rgba(61, 214, 196, 0.58);
+  box-shadow:
+    0 28px 76px rgba(0, 0, 0, 0.65),
+    0 0 38px rgba(61, 214, 196, 0.12);
+}
+
+.assistant-resize-handle {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  user-select: none;
+}
+
+.assistant-resize-handle.is-n,
+.assistant-resize-handle.is-s {
+  right: 12px;
+  left: 12px;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.assistant-resize-handle.is-n {
+  top: 0;
+}
+
+.assistant-resize-handle.is-s {
+  bottom: 0;
+}
+
+.assistant-resize-handle.is-e,
+.assistant-resize-handle.is-w {
+  top: 12px;
+  bottom: 12px;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.assistant-resize-handle.is-e {
+  right: 0;
+}
+
+.assistant-resize-handle.is-w {
+  left: 0;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-sw,
+.assistant-resize-handle.is-nw {
+  width: 14px;
+  height: 14px;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-sw {
+  cursor: nesw-resize;
+}
+
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-nw {
+  cursor: nwse-resize;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-nw {
+  top: 0;
+}
+
+.assistant-resize-handle.is-se,
+.assistant-resize-handle.is-sw {
+  bottom: 0;
+}
+
+.assistant-resize-handle.is-ne,
+.assistant-resize-handle.is-se {
+  right: 0;
+}
+
+.assistant-resize-handle.is-nw,
+.assistant-resize-handle.is-sw {
+  left: 0;
+}
+
+.assistant-resize-handle.is-se::after {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid rgba(61, 214, 196, 0.52);
+  border-bottom: 1px solid rgba(61, 214, 196, 0.52);
+  content: '';
+}
+
 .assistant-header {
   display: flex;
   align-items: center;
@@ -314,6 +551,13 @@ function onComposerKeydown(event: KeyboardEvent) {
   padding: 10px 13px;
   border-bottom: 1px solid rgba(122, 203, 190, 0.15);
   background: rgba(61, 214, 196, 0.035);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.assistant-panel.is-dragging .assistant-header {
+  cursor: grabbing;
 }
 
 .assistant-identity {
@@ -499,6 +743,13 @@ function onComposerKeydown(event: KeyboardEvent) {
   font-size: 7px;
 }
 
+.assistant-image-reference {
+  display: block;
+  margin-top: 6px;
+  color: var(--cyan);
+  font-size: 8px;
+}
+
 .assistant-thinking {
   display: flex;
   align-items: center;
@@ -552,7 +803,11 @@ function onComposerKeydown(event: KeyboardEvent) {
   border: 1px solid rgba(122, 203, 190, 0.22);
   border-radius: 8px;
   background: rgba(3, 13, 14, 0.7);
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+}
+
+.assistant-image-input {
+  display: none;
 }
 
 .assistant-composer textarea {
@@ -577,6 +832,39 @@ function onComposerKeydown(event: KeyboardEvent) {
   border: 1px solid rgba(61, 214, 196, 0.52);
   border-radius: 7px;
   background: linear-gradient(145deg, #1caa97, #197a70);
+  cursor: pointer;
+}
+
+.assistant-composer > .assistant-attach-button {
+  align-self: end;
+  width: 38px;
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.24);
+  background: rgba(61, 214, 196, 0.06);
+  font-size: 8px;
+}
+
+.assistant-attachment-status {
+  display: flex;
+  align-items: center;
+  margin: 5px 12px 0;
+  gap: 8px;
+  color: var(--cyan);
+  font-size: 8px;
+}
+
+.assistant-attachment-status .is-error {
+  color: var(--amber);
+}
+
+.assistant-attachment-status button {
+  margin-left: auto;
+  padding: 2px 7px;
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 7px;
   cursor: pointer;
 }
 
@@ -623,9 +911,9 @@ function onComposerKeydown(event: KeyboardEvent) {
 
 @media (max-width: 600px) {
   .assistant-panel {
-    right: 8px;
-    bottom: 8px;
-    width: calc(100vw - 16px);
+    right: 16px;
+    bottom: 16px;
+    width: calc(100vw - 32px);
     height: calc(100vh - 76px);
   }
   .assistant-launcher {

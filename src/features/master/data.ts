@@ -49,6 +49,19 @@ export const latestPopulationDensity = Math.round(
   (latestDensityRecord.populationWan * 10000) / latestDensityRecord.areaKm2!,
 )
 
+export function calculatePopulationChangeRate(records: readonly PopulationRecord[]) {
+  const first = records.at(0)?.populationWan
+  const last = records.at(-1)?.populationWan
+  if (first === undefined || last === undefined || first === 0) return 0
+  return Number((((last - first) / first) * 100).toFixed(1))
+}
+
+export function getPopulationTrendLabel(changeRate: number) {
+  if (Math.abs(changeRate) < 3) return '总体稳定'
+  if (changeRate > 0) return changeRate < 10 ? '小幅增长' : '整体增长'
+  return changeRate > -10 ? '小幅下降' : '整体下降'
+}
+
 const maximumPopulation = Math.max(
   ...populationRecords.map((record) => record.populationWan),
 )

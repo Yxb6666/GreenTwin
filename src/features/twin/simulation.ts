@@ -5,6 +5,10 @@ export interface SimulationParameters {
   ditchDepth: number
   outletCount: number
   roadRaiseHeight: number
+  prompt?: string
+  buildingStyle?: 'traditional-chinese' | 'modern' | 'rural'
+  building?: Record<string, unknown>
+  placement?: SimulationPlacement
 }
 
 export interface SimulationPlacement {
@@ -13,7 +17,7 @@ export interface SimulationPlacement {
   height: number
   heading: number
   label: string
-  accuracy: 'township-demo'
+  accuracy: 'township-demo' | 'user-picked'
 }
 
 export interface SimulationJob {
@@ -22,6 +26,7 @@ export interface SimulationJob {
   progress: number
   message: string
   modelUrl?: string
+  stageUrls?: string[]
   placement: SimulationPlacement
   parameters: SimulationParameters
 }

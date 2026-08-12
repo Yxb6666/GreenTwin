@@ -1,28 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
-import { createGovernanceIssuesMiddleware } from './server/governance-issues.mjs'
 import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
+import { createDecisionAssistantMiddleware } from './server/decision-assistant.mjs'
 import { createSimulationMiddleware } from './server/simulation.mjs'
-
-function localHttpsOptions() {
-  const certificatePath = fileURLToPath(
-    new URL('./.cert/greentwin-dev.pem', import.meta.url),
-  )
-  const keyPath = fileURLToPath(
-    new URL('./.cert/greentwin-dev-key.pem', import.meta.url),
-  )
-
-  if (!existsSync(certificatePath) || !existsSync(keyPath)) return undefined
-
-  return {
-    cert: readFileSync(certificatePath),
-    key: readFileSync(keyPath),
-  }
-}
+import { createAgentSimulationMiddleware } from './server/agent-simulation.mjs'
+import { createArcGisVectorBasemapMiddleware } from './server/arcgis-vector-basemap.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
   const middleware = createReportMiddleware({
@@ -37,26 +22,6 @@ function deepseekReportApi(env: Record<string, string>): Plugin {
     configureServer(server) {
       server.middlewares.use('/api/reports/sansheng', (request, response) => {
         void middleware(request, response)
-      })
-    },
-  }
-}
-
-function governanceIssuesMockApi(): Plugin {
-  return {
-    name: 'greentwin-governance-issues-mock-api',
-    apply: 'serve',
-    configureServer(server) {
-      const middleware = createGovernanceIssuesMiddleware({
-        dataPath: fileURLToPath(
-          new URL(
-            './public/data/governance/governance-issues.geojson',
-            import.meta.url,
-          ),
-        ),
-      })
-      server.middlewares.use((request, response, next) => {
-        void middleware(request, response, next)
       })
     },
   }
@@ -95,22 +60,79 @@ function simulationApi(env: Record<string, string>): Plugin {
   }
 }
 
+function agentSimulationApi(env: Record<string, string>): Plugin {
+  const middleware = createAgentSimulationMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    blenderExecutable: env.BLENDER_EXECUTABLE,
+  })
+
+  return {
+    name: 'greentwin-3d-agent-api',
+    configureServer(server) {
+      server.middlewares.use('/api/agent-simulation', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
+function decisionAssistantApi(env: Record<string, string>): Plugin {
+  const middleware = createDecisionAssistantMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    timeoutMs: Number(env.DEEPSEEK_TIMEOUT_MS) || 90000,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    anthropicBaseUrl: env.ANTHROPIC_API_BASE_URL,
+    anthropicModel: env.ANTHROPIC_MODEL,
+    visionApiKey: env.VISION_API_KEY,
+    visionBaseUrl: env.VISION_API_BASE_URL,
+    visionModel: env.VISION_MODEL,
+    visionProtocol: env.VISION_API_PROTOCOL,
+  })
+
+  return {
+    name: 'greentwin-decision-assistant-api',
+    configureServer(server) {
+      server.middlewares.use('/api/assistant/decision', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
+function arcGisVectorBasemapApi(): Plugin {
+  const middleware = createArcGisVectorBasemapMiddleware()
+
+  return {
+    name: 'greentwin-arcgis-vector-basemap-api',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const pathname = new URL(request.url || '/', 'http://localhost')
+          .pathname
+        if (!pathname.startsWith('/api/arcgis/world-streets')) {
+          next()
+          return
+        }
+        void middleware(request, response, pathname)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const mobileDevelopment = mode === 'mobile'
   return {
-    server: {
-      host: '0.0.0.0',
-      port: mobileDevelopment ? 5174 : 5173,
-      strictPort: true,
-      https: mobileDevelopment ? localHttpsOptions() : undefined,
-    },
     plugins: [
       vue(),
       deepseekReportApi(env),
-      governanceIssuesMockApi(),
       governanceAssistantApi(env),
+      decisionAssistantApi(env),
       simulationApi(env),
+      agentSimulationApi(env),
+      arcGisVectorBasemapApi(),
       viteStaticCopy({
         targets: [
           {

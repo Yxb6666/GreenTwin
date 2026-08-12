@@ -13,9 +13,7 @@ const modules = [
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const showPlatformChrome = computed(
-  () => route.name !== 'login' && !route.meta.standalone,
-)
+const showPlatformChrome = computed(() => route.name !== 'login')
 
 async function logout() {
   auth.logout()
@@ -52,9 +50,9 @@ async function logout() {
         </svg>
       </button>
     </div>
-    <RouterView v-slot="{ Component }">
+    <RouterView v-slot="{ Component, route: currentRoute }">
       <Transition name="module" mode="out-in">
-        <div :key="route.fullPath" class="route-view">
+        <div :key="currentRoute.path" class="module-view">
           <component :is="Component" />
         </div>
       </Transition>

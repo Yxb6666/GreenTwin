@@ -1,6 +1,6 @@
 import {
   dimensionMeta,
-  normalizeIndicator,
+  normalizeTownIndicator,
   normalizeWeights,
   type DimensionKey,
   type Direction,
@@ -87,16 +87,25 @@ export function buildSanshengReportRequest(
     countyAverage,
     scores,
     weights: Object.fromEntries(
-      dimensionKeys.map((key) => [key, Number((normalizedWeights[key] * 100).toFixed(1))]),
+      dimensionKeys.map((key) => [
+        key,
+        Number((normalizedWeights[key] * 100).toFixed(1)),
+      ]),
     ) as Record<DimensionKey, number>,
     indicators: dimensionKeys.flatMap((dimension) =>
-      dimensionMeta[dimension].indicators.map((indicator) => {
-        const rawValue = town[dimension][indicator.key] ?? 0
+      dimensionMeta[dimension].indicators.flatMap((indicator) => {
+        const rawValue = town[dimension][indicator.key]
+        const normalizedScore = normalizeTownIndicator(
+          town,
+          dimension,
+          indicator,
+        )
+        if (rawValue == null || normalizedScore == null) return []
         return {
           dimension,
           name: indicator.name,
           rawValue,
-          normalizedScore: normalizeIndicator(rawValue, indicator.direction),
+          normalizedScore,
           unit: indicator.unit,
           direction: indicator.direction,
         }
@@ -139,7 +148,10 @@ export async function requestSanshengReport(
     const result: unknown = await response.json().catch(() => null)
     if (!response.ok) {
       const message =
-        result && typeof result === 'object' && 'message' in result && typeof result.message === 'string'
+        result &&
+        typeof result === 'object' &&
+        'message' in result &&
+        typeof result.message === 'string'
           ? result.message
           : `报告请求失败（HTTP ${response.status}）`
       throw new Error(message)
@@ -172,14 +184,19 @@ export function formatReportAsText(report: SanshengReport, meta: ReportMeta) {
   ]
 
   report.dimensionAnalysis.forEach((item, index) => {
-    lines.push(`${index + 1}. ${item.dimension}（${item.score}分）`, item.assessment)
+    lines.push(
+      `${index + 1}. ${item.dimension}（${item.score}分）`,
+      item.assessment,
+    )
     item.evidence.forEach((evidence) => lines.push(`   - ${evidence}`))
   })
 
   lines.push('', '四、主要优势')
   report.strengths.forEach((item, index) => lines.push(`${index + 1}. ${item}`))
   lines.push('', '五、关键短板')
-  report.weaknesses.forEach((item, index) => lines.push(`${index + 1}. ${item}`))
+  report.weaknesses.forEach((item, index) =>
+    lines.push(`${index + 1}. ${item}`),
+  )
   lines.push('', '六、行动建议')
   report.recommendations.forEach((item, index) => {
     lines.push(
@@ -191,6 +208,12 @@ export function formatReportAsText(report: SanshengReport, meta: ReportMeta) {
   })
   lines.push('', '七、风险与限制')
   report.risks.forEach((item, index) => lines.push(`${index + 1}. ${item}`))
-  lines.push('', '八、结论', report.conclusion, '', '说明：本报告由 AI 基于当前页面指标生成，仅供辅助研判。')
+  lines.push(
+    '',
+    '八、结论',
+    report.conclusion,
+    '',
+    '说明：本报告由 AI 基于当前页面指标生成，仅供辅助研判。',
+  )
   return lines.join('\n')
 }

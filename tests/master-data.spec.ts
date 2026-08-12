@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calculatePopulationChangeRate,
   gdpTrend,
+  getPopulationTrendLabel,
   latestDensityRecord,
   latestPopulation,
   latestPopulationDensity,
@@ -23,6 +25,13 @@ describe('主控大屏人口与 GDP 数据', () => {
     expect(populationTrend.map((item) => item.populationWan)).toEqual([
       78, 76, 76, 76, 76, 76,
     ])
+  })
+
+  it('根据县域历史数据计算变化率与趋势标签', () => {
+    expect(calculatePopulationChangeRate(populationTrend)).toBe(-2.6)
+    expect(getPopulationTrendLabel(-2.6)).toBe('总体稳定')
+    expect(getPopulationTrendLabel(4)).toBe('小幅增长')
+    expect(getPopulationTrendLabel(-4)).toBe('小幅下降')
   })
 
   it('将 Excel 中以万元计的 GDP 转换为亿元并按最大值绘图', () => {

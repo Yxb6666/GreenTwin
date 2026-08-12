@@ -9,7 +9,7 @@ export interface SimulationServiceOptions {
 
 export function validateSimulationRequest(
   value: unknown,
-): Record<string, string | number>
+): Record<string, unknown>
 export function createSimulationService(
   options?: SimulationServiceOptions,
 ): Record<string, unknown>

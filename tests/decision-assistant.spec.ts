@@ -1,7 +1,37 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import { requestDecisionAssistant } from '@/shared/assistant/assistant'
+import {
+  AI_ASSISTANT_LAUNCHER_KEY,
+  AI_ASSISTANT_PANEL_KEY,
+  clampPanelPosition,
+  clampPanelRect,
+  resizePanelRect,
+} from '@/shared/composables/useDraggablePanel'
+
+function pointerEvent(
+  type: string,
+  { clientX, clientY, pointerId = 1 }: PointerEventInit,
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    button: 0,
+    clientX,
+    clientY,
+  })
+  Object.defineProperties(event, {
+    isPrimary: { value: true },
+    pointerId: { value: pointerId },
+    pointerType: { value: 'mouse' },
+  })
+  return event
+}
+
+afterEach(() => {
+  localStorage.clear()
+  vi.restoreAllMocks()
+})
 
 describe('通用 AI 决策助手前端请求', () => {
   it('发送模块上下文并解析结构化回答', async () => {
@@ -70,6 +100,235 @@ describe('通用 AI 决策助手前端请求', () => {
     await wrapper.vm.$nextTick()
     expect(document.body.textContent).toContain('三生模拟决策助手')
     expect(document.body.textContent).toContain('道路积水治理 · 方案 A')
+    wrapper.unmount()
+  })
+
+  it('将拖拽位置限制在带安全边距的可视区域内', () => {
+    expect(
+      clampPanelPosition(
+        { x: 2000, y: -100 },
+        { width: 410, height: 600 },
+        { width: 1024, height: 768 },
+      ),
+    ).toEqual({ x: 598, y: 16 })
+    expect(
+      clampPanelRect(
+        { x: -20, y: -20, width: 360, height: 420 },
+        { width: 320, height: 400 },
+      ),
+    ).toEqual({ x: 16, y: 16, width: 288, height: 368 })
+  })
+
+  it('从不同方向缩放时保持对边固定并遵守最小尺寸', () => {
+    const start = { x: 100, y: 100, width: 410, height: 500 }
+    const viewport = { width: 1024, height: 768 }
+
+    expect(resizePanelRect(start, 'e', { x: 100, y: 0 }, viewport)).toEqual({
+      ...start,
+      width: 510,
+    })
+    expect(resizePanelRect(start, 'w', { x: 200, y: 0 }, viewport)).toEqual({
+      x: 150,
+      y: 100,
+      width: 360,
+      height: 500,
+    })
+    expect(resizePanelRect(start, 'n', { x: 0, y: 300 }, viewport)).toEqual({
+      x: 100,
+      y: 180,
+      width: 410,
+      height: 420,
+    })
+    expect(
+      resizePanelRect(start, 'se', { x: 2000, y: 2000 }, viewport),
+    ).toEqual({ x: 100, y: 100, width: 908, height: 652 })
+  })
+
+  it('区分入口按钮点击和拖动，并记忆受边界限制的位置', async () => {
+    const wrapper = mount(DecisionAssistant, {
+      attachTo: document.body,
+      props: {
+        endpoint: '/api/assistant/decision',
+        timeoutMs: 1000,
+        context: {
+          module: '三生模拟',
+          scopeLabel: '方案 A',
+          updatedAt: '2026-08-11T00:00:00Z',
+          data: { composite: 82.3 },
+        },
+        prompts: ['评估当前方案'],
+      },
+    })
+    const launcher = document.body.querySelector<HTMLButtonElement>(
+      '.assistant-launcher',
+    )!
+    Object.defineProperties(launcher, {
+      offsetHeight: { configurable: true, value: 42 },
+      offsetLeft: { configurable: true, value: 800 },
+      offsetTop: { configurable: true, value: 680 },
+      offsetWidth: { configurable: true, value: 120 },
+    })
+
+    launcher.dispatchEvent(
+      pointerEvent('pointerdown', { clientX: 850, clientY: 700 }),
+    )
+    launcher.dispatchEvent(
+      pointerEvent('pointermove', { clientX: 853, clientY: 704 }),
+    )
+    launcher.dispatchEvent(
+      pointerEvent('pointerup', { clientX: 853, clientY: 704 }),
+    )
+    launcher.click()
+    await wrapper.vm.$nextTick()
+    expect(document.body.querySelector('.assistant-panel')).not.toBeNull()
+
+    document.body
+      .querySelector<HTMLButtonElement>('[aria-label="关闭 AI 助手"]')
+      ?.click()
+    await wrapper.vm.$nextTick()
+
+    launcher.dispatchEvent(
+      pointerEvent('pointerdown', { clientX: 850, clientY: 700 }),
+    )
+    launcher.dispatchEvent(
+      pointerEvent('pointermove', { clientX: -100, clientY: -100 }),
+    )
+    launcher.dispatchEvent(
+      pointerEvent('pointerup', { clientX: -100, clientY: -100 }),
+    )
+    launcher.click()
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.querySelector('.assistant-panel')).toBeNull()
+    expect(launcher.style.left).toBe('16px')
+    expect(launcher.style.top).toBe('16px')
+    expect(
+      JSON.parse(localStorage.getItem(AI_ASSISTANT_LAUNCHER_KEY)!),
+    ).toEqual({ x: 16, y: 16 })
+
+    launcher.click()
+    await wrapper.vm.$nextTick()
+    expect(document.body.querySelector('.assistant-panel')).not.toBeNull()
+    wrapper.unmount()
+  })
+
+  it('通过标题栏拖动并记忆位置，交互按钮不会触发拖动', async () => {
+    localStorage.setItem(
+      AI_ASSISTANT_PANEL_KEY,
+      JSON.stringify({ x: 100, y: 100, width: 410, height: 600 }),
+    )
+    const wrapper = mount(DecisionAssistant, {
+      attachTo: document.body,
+      props: {
+        endpoint: '/api/assistant/decision',
+        timeoutMs: 1000,
+        context: {
+          module: '三生模拟',
+          scopeLabel: '方案 A',
+          updatedAt: '2026-08-11T00:00:00Z',
+          data: { composite: 82.3 },
+        },
+        prompts: ['评估当前方案'],
+      },
+    })
+    document.body
+      .querySelector<HTMLButtonElement>('.assistant-launcher')
+      ?.click()
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    const panel = document.body.querySelector<HTMLElement>('.assistant-panel')
+    const header = document.body.querySelector<HTMLElement>('.assistant-header')
+    const closeButton = header?.querySelector<HTMLButtonElement>('button')
+    await vi.waitFor(() => expect(panel?.style.left).toBe('100px'))
+    expect(panel?.style.top).toBe('100px')
+    expect(panel).not.toBeNull()
+    expect(header).not.toBeNull()
+
+    closeButton?.dispatchEvent(
+      pointerEvent('pointerdown', { clientX: 120, clientY: 120 }),
+    )
+    expect(panel?.classList.contains('is-dragging')).toBe(false)
+
+    header?.dispatchEvent(
+      pointerEvent('pointerdown', { clientX: 120, clientY: 120 }),
+    )
+    header?.dispatchEvent(
+      pointerEvent('pointermove', { clientX: 2000, clientY: 2000 }),
+    )
+    header?.dispatchEvent(
+      pointerEvent('pointerup', { clientX: 2000, clientY: 2000 }),
+    )
+    await wrapper.vm.$nextTick()
+
+    expect(panel?.style.left).toBe(`${window.innerWidth - 426}px`)
+    expect(panel?.style.top).toBe(`${window.innerHeight - 616}px`)
+    expect(JSON.parse(localStorage.getItem(AI_ASSISTANT_PANEL_KEY)!)).toEqual({
+      x: window.innerWidth - 426,
+      y: window.innerHeight - 616,
+      width: 410,
+      height: 600,
+    })
+
+    header?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(localStorage.getItem(AI_ASSISTANT_PANEL_KEY)).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('通过缩放热区调整并记忆面板尺寸', async () => {
+    localStorage.setItem(
+      AI_ASSISTANT_PANEL_KEY,
+      JSON.stringify({ x: 100, y: 100, width: 410, height: 500 }),
+    )
+    const wrapper = mount(DecisionAssistant, {
+      attachTo: document.body,
+      props: {
+        endpoint: '/api/assistant/decision',
+        timeoutMs: 1000,
+        context: {
+          module: '三生模拟',
+          scopeLabel: '方案 A',
+          updatedAt: '2026-08-11T00:00:00Z',
+          data: { composite: 82.3 },
+        },
+        prompts: ['评估当前方案'],
+      },
+    })
+    document.body
+      .querySelector<HTMLButtonElement>('.assistant-launcher')
+      ?.click()
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    const panel = document.body.querySelector<HTMLElement>('.assistant-panel')!
+    const southeastHandle = panel.querySelector<HTMLElement>(
+      '.assistant-resize-handle.is-se',
+    )!
+    expect(panel.querySelectorAll('.assistant-resize-handle')).toHaveLength(8)
+
+    southeastHandle.dispatchEvent(
+      pointerEvent('pointerdown', { clientX: 510, clientY: 600 }),
+    )
+    southeastHandle.dispatchEvent(
+      pointerEvent('pointermove', { clientX: 2000, clientY: 2000 }),
+    )
+    window.dispatchEvent(
+      pointerEvent('pointerup', { clientX: 2000, clientY: 2000 }),
+    )
+    await wrapper.vm.$nextTick()
+
+    expect(document.body.style.userSelect).toBe('')
+    expect(panel.style.width).toBe(`${window.innerWidth - 116}px`)
+    expect(panel.style.height).toBe(`${window.innerHeight - 116}px`)
+    expect(JSON.parse(localStorage.getItem(AI_ASSISTANT_PANEL_KEY)!)).toEqual({
+      x: 100,
+      y: 100,
+      width: window.innerWidth - 116,
+      height: window.innerHeight - 116,
+    })
+
     wrapper.unmount()
   })
 })

@@ -7,12 +7,43 @@ import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
 import { loadSuperMapWebgl } from '@/gis/supermap3d/loadSdk'
+import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
+import AiBuilderAssistant, {
+  type AiBuilderStyle,
+} from './AiBuilderAssistant.vue'
+import SceneToolbox, {
+  type SceneMeasureType,
+} from './SceneToolbox.vue'
+import {
+  clampModelScale,
+  formatPointLabel,
+  normalizeHeading,
+  normalizePoint,
+  toSimulationPlacement,
+  type PickedPoint,
+} from './modelPlacement'
+import {
+  calculateGeodesicArea,
+  formatArea,
+  formatDistance,
+} from '@/gis/leaflet/measurement'
+import {
+  buildWgs84BoundsFilter,
+  fetchIServerFeatures,
+  type ParsedLayerFeature,
+} from './iserverLayers'
 import {
   createSimulationJob,
   waitForSimulationJob,
   type SimulationJob,
+  type SimulationParameters,
   type SimulationPlacement,
 } from './simulation'
+import {
+  createAgentJob,
+  waitForAgentJob,
+  type AgentJob,
+} from './agentSimulation'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -24,24 +55,57 @@ interface SceneLayer {
 
 interface ModelPrimitive {
   show: boolean
+  readyPromise?: Promise<ModelPrimitive>
+  modelMatrix?: unknown
+}
+
+interface CesiumMovement {
+  position?: { x: number; y: number }
+  endPosition?: { x: number; y: number }
+}
+
+interface CesiumEventHandler {
+  setInputAction: (action: (movement: CesiumMovement) => void, type: number) => void
+  destroy: () => void
 }
 
 interface SuperMapViewer {
+  entities: {
+    add: (options: Record<string, unknown>) => unknown
+    remove: (entity: unknown) => boolean
+  }
   scene: {
-    globe: { depthTestAgainstTerrain: boolean }
+    canvas: HTMLElement
+    globe: {
+      depthTestAgainstTerrain: boolean
+      show: boolean
+      pick: (ray: unknown, scene: SuperMapViewer['scene']) => unknown
+    }
     layers?: { find?: (name: string) => SceneLayer | undefined }
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
     }
+    pick: (windowPosition: { x: number; y: number }) => unknown
+    pickPosition: (windowPosition: { x: number; y: number }) => unknown
+    render?: () => void
+    requestRender?: () => void
   }
   imageryLayers: {
-    removeAll: (destroy?: boolean) => void
     addImageryProvider: (provider: unknown) => unknown
+    removeAll: (destroy?: boolean) => void
   }
   camera: {
     setView: (options: Record<string, unknown>) => void
     flyTo: (options: Record<string, unknown>) => void
+    getPickRay: (position: { x: number; y: number }) => unknown
+    pickEllipsoid: (
+      position: { x: number; y: number },
+      ellipsoid?: unknown,
+    ) => unknown
+    positionCartographic?: { height: number }
+    zoomIn: (amount: number) => void
+    zoomOut: (amount: number) => void
   }
   destroy: () => void
   isDestroyed?: () => boolean
@@ -52,35 +116,64 @@ interface CesiumRuntime {
     container: HTMLElement,
     options: Record<string, unknown>,
   ) => SuperMapViewer
-  UrlTemplateImageryProvider: new (options: {
-    url: string
-    minimumLevel?: number
-    maximumLevel?: number
-    tilingScheme?: unknown
-    customTags?: Record<
-      string,
-      (provider: unknown, x: number, y: number, level: number) => string
-    >
-  }) => unknown
-  WebMercatorTilingScheme: new () => unknown
   Cartesian3: {
     fromDegrees: (
       longitude: number,
       latitude: number,
       height: number,
     ) => unknown
+    distance: (left: unknown, right: unknown) => number
   }
+  Cartesian2: new (x: number, y: number) => unknown
+  Cartographic: {
+    fromCartesian: (cartesian: unknown) => {
+      longitude: number
+      latitude: number
+      height: number
+    }
+  }
+  ScreenSpaceEventHandler: new (canvas?: HTMLElement) => CesiumEventHandler
+  ScreenSpaceEventType: {
+    LEFT_CLICK: number
+    LEFT_DOWN: number
+    LEFT_UP: number
+    MOUSE_MOVE: number
+    LEFT_DOUBLE_CLICK: number
+    RIGHT_CLICK: number
+  }
+  WebMercatorTilingScheme: new () => unknown
+  UrlTemplateImageryProvider: new (options: Record<string, unknown>) => unknown
   Model: {
     fromGltf: (options: {
       url: string
       modelMatrix: unknown
       scale?: number
+      minimumPixelSize?: number
+      maximumScale?: number
     }) => ModelPrimitive
   }
   Transforms: {
     eastNorthUpToFixedFrame: (origin: unknown) => unknown
+    headingPitchRollToFixedFrame: (
+      origin: unknown,
+      headingPitchRoll: unknown,
+      ellipsoid?: unknown,
+      fixedFrameTransform?: unknown,
+    ) => unknown
   }
-  Math: { toRadians: (degrees: number) => number }
+  Matrix4: (new () => unknown) & {
+    multiplyByUniformScale: (
+      matrix: unknown,
+      scale: number,
+      result?: unknown,
+    ) => unknown
+  }
+  HeadingPitchRoll: new (heading: number, pitch: number, roll: number) => unknown
+  Ellipsoid: { WGS84: unknown }
+  Math: {
+    toRadians: (degrees: number) => number
+    toDegrees: (radians: number) => number
+  }
 }
 
 const config = useRuntimeConfig()
@@ -91,14 +184,26 @@ const activePlan = ref<PlanKey>('planA')
 const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
-const generatedJob = ref<SimulationJob | null>(null)
-const isComparing = ref(false)
-const operationMessage = ref('调整治理参数后点击“重新生成”，启动本机 Blender 建模任务')
+const generatedJob = ref<SimulationJob | AgentJob | null>(null)
+const constructionStage = ref(0)
+const builderOpen = ref(false)
+const pickMode = ref(false)
+const isDraggingModel = ref(false)
+const modelSelected = ref(false)
+const modelScale = ref(1)
+const modelHeading = ref(0)
+const selectedPoint = ref<PickedPoint | null>(null)
+const measurementMode = ref<SceneMeasureType | null>(null)
+const toolFeedback = ref('')
+const measurePoints = ref<PickedPoint[]>([])
+const dataLayerEntities = ref<Record<string, unknown[]>>({})
+const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
   waterLayer: true,
   issueLayer: true,
+  poiLayer: true,
 })
 const parameters = ref({
   ditchWidth: 0.5,
@@ -109,6 +214,23 @@ const parameters = ref({
 
 let viewer: SuperMapViewer | null = null
 let generatedModel: ModelPrimitive | null = null
+let constructionRun = 0
+let markerEntity: unknown = null
+let eventHandler: CesiumEventHandler | null = null
+let suppressClickAfterDrag = false
+let measurementEntities: unknown[] = []
+let previewEntity: unknown = null
+let feedbackTimer: number | undefined
+
+const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
+
+function inferBuildingStyle(
+  instruction: string,
+): NonNullable<SimulationParameters['buildingStyle']> {
+  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction)) return 'traditional-chinese'
+  if (/现代|办公|商业|玻璃|公寓|高层|科技/.test(instruction)) return 'modern'
+  return 'rural'
+}
 
 // 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
 const simulationFocus = {
@@ -176,6 +298,7 @@ const layers = [
   { key: 'roadLayer', label: '道路' },
   { key: 'waterLayer', label: '水系' },
   { key: 'issueLayer', label: '问题点' },
+  { key: 'poiLayer', label: 'POI' },
 ] as const
 
 const planData: Record<
@@ -238,12 +361,6 @@ const currentScenario = computed(
 )
 const currentPlan = computed(() => planData[activePlan.value])
 const isGenerating = computed(() => buildState.value === 'running')
-const builderStatus = computed(() => {
-  if (buildState.value === 'running') return '正在真实构建'
-  if (buildState.value === 'ready') return '模型已加载'
-  if (buildState.value === 'error') return '构建失败'
-  return '等待首次构建'
-})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
   scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
@@ -272,7 +389,7 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     selectedMeasure:
       measures.find((item) => item.key === activeMeasure.value)?.label ?? '',
     buildProgress: buildProgress.value,
-    compareMode: isComparing.value,
+    compareMode: false,
   },
 }))
 const assistantPrompts = [
@@ -293,7 +410,6 @@ function selectScenario(key: ScenarioKey) {
 
 function selectPlan(key: PlanKey) {
   activePlan.value = key
-  isComparing.value = false
   operationMessage.value = `当前查看：${planData[key].label}`
 }
 
@@ -303,17 +419,24 @@ function selectMeasure(key: MeasureKey) {
   operationMessage.value = `正在配置治理措施：${measure?.label ?? ''}`
 }
 
-function toggleCompare() {
-  isComparing.value = !isComparing.value
-  operationMessage.value = isComparing.value
-    ? '已进入双方案对比模式：左侧方案 A，右侧方案 B'
-    : `已退出对比模式，当前查看：${currentPlan.value.label}`
-}
-
-function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement) {
+async function loadGeneratedModel(
+  modelUrl: string,
+  placement: SimulationPlacement,
+  focus = true,
+) {
   if (!viewer) throw new Error('三维地图尚未初始化')
   const sdk = cesium()
   if (generatedModel) viewer.scene.primitives.remove(generatedModel)
+  selectedPoint.value = normalizePoint(
+    placement.longitude,
+    placement.latitude,
+    placement.height,
+    placement.heading,
+    placement.label,
+  )
+  modelScale.value = 1
+  modelHeading.value = placement.heading
+  modelSelected.value = true
   const origin = sdk.Cartesian3.fromDegrees(
     placement.longitude,
     placement.latitude,
@@ -324,33 +447,658 @@ function loadGeneratedModel(modelUrl: string, placement: SimulationPlacement) {
       url: modelUrl,
       modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
       scale: 1,
+      minimumPixelSize: 96,
+      maximumScale: 8,
     }),
   )
-  viewer.camera.flyTo({
+  if (generatedModel.readyPromise) await generatedModel.readyPromise
+  applyModelTransform()
+  upsertMarker(selectedPoint.value)
+  if (focus) viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
       placement.longitude,
-      placement.latitude,
-      420,
+      placement.latitude - 0.00028,
+      65,
     ),
     orientation: {
-      heading: sdk.Math.toRadians(18),
-      pitch: sdk.Math.toRadians(-42),
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
       roll: 0,
     },
   })
 }
 
-async function generatePlan() {
+async function playConstruction(
+  job: Pick<SimulationJob, 'modelUrl' | 'stageUrls' | 'placement'>,
+) {
+  const urls = job.stageUrls?.length ? job.stageUrls : [job.modelUrl!]
+  const run = ++constructionRun
+  for (let index = 0; index < urls.length; index += 1) {
+    if (run !== constructionRun) return
+    constructionStage.value = Math.min(index + 1, 4)
+    buildProgress.value = 72 + Math.round(((index + 1) / urls.length) * 28)
+    engineStatus.value = `施工演示：${constructionStages[constructionStage.value]}`
+    await loadGeneratedModel(urls[index]!, job.placement, index === 0)
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 900))
+  }
+}
+
+function upsertMarker(point: PickedPoint | null) {
+  if (!viewer || !point) return
+  const sdk = cesium()
+  const position = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height,
+  )
+  if (markerEntity) viewer.entities.remove(markerEntity)
+  markerEntity = viewer.entities.add({
+    position,
+    point: {
+      pixelSize: modelSelected.value ? 18 : 12,
+      color: modelSelected.value ? '#3dd6c4' : '#ef7b6e',
+      outlineColor: '#ffffff',
+      outlineWidth: 2,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: point.label,
+      font: '10px sans-serif',
+      fillColor: '#eafffb',
+      showBackground: true,
+      backgroundColor: '#051011',
+      backgroundPadding: { x: 7, y: 4 },
+      pixelOffset: new sdk.Cartesian2(0, -26),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+}
+
+function applyModelTransform() {
+  if (!viewer || !generatedModel || !selectedPoint.value) return
+  const sdk = cesium()
+  const point = selectedPoint.value
+  const origin = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height,
+  )
+  const headingPitchRoll = new sdk.HeadingPitchRoll(
+    sdk.Math.toRadians(modelHeading.value),
+    0,
+    0,
+  )
+  const frame = sdk.Transforms.headingPitchRollToFixedFrame(
+    origin,
+    headingPitchRoll,
+    sdk.Ellipsoid.WGS84,
+    sdk.Transforms.eastNorthUpToFixedFrame,
+  )
+  generatedModel.modelMatrix = sdk.Matrix4.multiplyByUniformScale(
+    frame,
+    modelScale.value,
+    new sdk.Matrix4(),
+  )
+}
+
+function pickGroundPoint(position: { x: number; y: number }) {
+  if (!viewer) return null
+  const sdk = cesium()
+  const ray = viewer.camera.getPickRay(position)
+  const cartesian =
+    (ray ? viewer.scene.globe.pick(ray, viewer.scene) : undefined) ??
+    viewer.scene.pickPosition(position) ??
+    viewer.camera.pickEllipsoid(position, sdk.Ellipsoid.WGS84)
+  if (!cartesian) return null
+  const cartographic = sdk.Cartographic.fromCartesian(cartesian)
+  const longitude = sdk.Math.toDegrees(cartographic.longitude)
+  const latitude = sdk.Math.toDegrees(cartographic.latitude)
+  return normalizePoint(
+    longitude,
+    latitude,
+    cartographic.height,
+    modelHeading.value,
+    formatPointLabel(longitude, latitude),
+  )
+}
+
+function togglePointPicking() {
+  if (pickMode.value) {
+    pickMode.value = false
+    operationMessage.value = '已取消选点'
+    return
+  }
+  pickMode.value = true
+  operationMessage.value = '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
+}
+
+function cancelPointPicking() {
+  pickMode.value = false
+}
+
+function handleSceneClick(position: { x: number; y: number }) {
+  const point = pickGroundPoint(position)
+  if (!point) {
+    operationMessage.value = '未拾取到地图表面，请点击有地形或底图的位置'
+    return
+  }
+  pickMode.value = false
+  modelSelected.value = false
+  selectedPoint.value = point
+  upsertMarker(point)
+  operationMessage.value = `已确定建造位置：${point.label}，请在 AI 建造对话框中输入提示词`
+}
+
+function selectModel() {
+  if (!generatedModel) return
+  modelSelected.value = true
+  if (selectedPoint.value) upsertMarker(selectedPoint.value)
+  operationMessage.value = '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
+}
+
+function startModelDrag(movement: CesiumMovement) {
+  if (!viewer || pickMode.value || measurementMode.value || !movement.position)
+    return
+  const picked = viewer.scene.pick(movement.position) as {
+    primitive?: unknown
+    id?: unknown
+  }
+  const hitModel =
+    picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+  if (!hitModel) return
+  isDraggingModel.value = true
+  suppressClickAfterDrag = true
+  modelSelected.value = true
+}
+
+function moveModelDrag(movement: CesiumMovement) {
+  if (!movement.endPosition) return
+  if (measurementMode.value) {
+    if (measurePoints.value.length > 0) {
+      const cursor = pickGroundPoint(movement.endPosition)
+      if (cursor) drawMeasurePolyline(cursor)
+    }
+    return
+  }
+  if (!isDraggingModel.value) return
+  const point = pickGroundPoint(movement.endPosition)
+  if (!point) return
+  selectedPoint.value = point
+  upsertMarker(point)
+  applyModelTransform()
+}
+
+function endModelDrag() {
+  isDraggingModel.value = false
+}
+
+function notifyScene(message: string) {
+  toolFeedback.value = message
+  window.clearTimeout(feedbackTimer)
+  feedbackTimer = window.setTimeout(() => (toolFeedback.value = ''), 2400)
+}
+
+function clearMeasurementOverlays() {
+  if (!viewer) return
+  for (const entity of measurementEntities) viewer.entities.remove(entity)
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  measurementEntities = []
+  previewEntity = null
+  measurePoints.value = []
+}
+
+function startMeasurement(type: SceneMeasureType) {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  clearMeasurementOverlays()
+  measurementMode.value = type
+  pickMode.value = false
+  notifyScene(
+    type === 'distance'
+      ? '单击依次取点，双击或右键完成距离测量'
+      : '单击绘制范围，双击或右键完成面积测量',
+  )
+}
+
+function cancelMeasurement() {
+  measurementMode.value = null
+  clearMeasurementOverlays()
+}
+
+function addMeasurePoint(position: { x: number; y: number }) {
+  if (!viewer) return
+  const point = pickGroundPoint(position)
+  if (!point) return
+  const sdk = cesium()
+  const cartesian = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height + 1,
+  )
+  measurePoints.value.push(point)
+  const entity = viewer.entities.add({
+    position: cartesian,
+    point: {
+      pixelSize: 7,
+      color: '#54e1ce',
+      outlineColor: '#eafffb',
+      outlineWidth: 1.5,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  measurementEntities.push(entity)
+  drawMeasurePolyline()
+}
+
+function drawMeasurePolyline(cursor?: PickedPoint) {
+  if (!viewer) return
+  const sdk = cesium()
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  previewEntity = null
+  if (measurePoints.value.length < 2) return
+  const positions = measurePoints.value.map((point) =>
+    sdk.Cartesian3.fromDegrees(
+      point.longitude,
+      point.latitude,
+      point.height + 1,
+    ),
+  )
+  if (cursor)
+    positions.push(
+      sdk.Cartesian3.fromDegrees(
+        cursor.longitude,
+        cursor.latitude,
+        cursor.height + 1,
+      ),
+    )
+  previewEntity = viewer.entities.add({
+    polyline: {
+      positions,
+      width: 2,
+      material: '#54e1ce',
+      clampToGround: false,
+    },
+  })
+  measurementEntities.push(previewEntity)
+}
+
+function finishMeasurement() {
+  const type = measurementMode.value
+  if (!type || !viewer) return
+  const sdk = cesium()
+  if (previewEntity) viewer.entities.remove(previewEntity)
+  previewEntity = null
+  let message = ''
+  if (type === 'distance' && measurePoints.value.length >= 2) {
+    let total = 0
+    for (let index = 1; index < measurePoints.value.length; index += 1) {
+      const current = measurePoints.value[index]!
+      const previous = measurePoints.value[index - 1]!
+      total += sdk.Cartesian3.distance(
+        sdk.Cartesian3.fromDegrees(
+          current.longitude,
+          current.latitude,
+          current.height,
+        ),
+        sdk.Cartesian3.fromDegrees(
+          previous.longitude,
+          previous.latitude,
+          previous.height,
+        ),
+      )
+    }
+    message = `距离测量完成：${formatDistance(total)}`
+  } else if (type === 'area' && measurePoints.value.length >= 3) {
+    const area = calculateGeodesicArea(
+      measurePoints.value.map((point) => ({
+        lat: point.latitude,
+        lng: point.longitude,
+      })),
+    )
+    message = `面积测量完成：${formatArea(area)}`
+  } else {
+    message =
+      type === 'distance'
+        ? '距离测量至少需要两个点'
+        : '面积测量至少需要三个点'
+    clearMeasurementOverlays()
+    measurementMode.value = null
+    notifyScene(message)
+    return
+  }
+  const last = measurePoints.value.at(-1)!
+  const labelEntity = viewer.entities.add({
+    position: sdk.Cartesian3.fromDegrees(
+      last.longitude,
+      last.latitude,
+      last.height + 4,
+    ),
+    label: {
+      text: message.replace('测量完成：', ''),
+      font: '12px sans-serif',
+      fillColor: '#eafffb',
+      showBackground: true,
+      backgroundColor: '#051011',
+      backgroundPadding: { x: 7, y: 4 },
+      pixelOffset: new sdk.Cartesian2(0, -22),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  measurementEntities.push(labelEntity)
+  measurementMode.value = null
+  notifyScene(message)
+}
+
+function clearSceneDrawings() {
+  measurementMode.value = null
+  clearMeasurementOverlays()
+  notifyScene('标绘与测量结果已清除')
+}
+
+function refreshScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  viewer.scene.requestRender?.()
+  notifyScene('三维场景渲染已刷新')
+}
+
+function exportScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  try {
+    const canvas = viewer.scene.canvas as HTMLCanvasElement
+    viewer.scene.render?.()
+    const dataUrl = canvas.toDataURL('image/png')
+    const anchor = document.createElement('a')
+    anchor.href = dataUrl
+    anchor.download = `三生模拟场景-${new Date().toISOString().slice(0, 10)}.png`
+    anchor.click()
+    notifyScene('当前三维场景已导出为 PNG')
+  } catch {
+    notifyScene('三维场景导出失败，请重试')
+  }
+}
+
+function zoomScene(direction: 1 | -1) {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  const height = viewer.camera.positionCartographic?.height ?? 1000
+  const delta = Math.max(180, height * 0.35)
+  if (direction > 0) viewer.camera.zoomIn(delta)
+  else viewer.camera.zoomOut(delta)
+}
+
+function locateScene() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  const sdk = cesium()
+  const point = selectedPoint.value
+  if (point) {
+    viewer.camera.flyTo({
+      destination: sdk.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude - 0.00012,
+        Math.max(120, point.height + 55),
+      ),
+      orientation: {
+        heading: 0,
+        pitch: sdk.Math.toRadians(-52),
+        roll: 0,
+      },
+    })
+    return
+  }
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      simulationFocus.longitude,
+      simulationFocus.latitude,
+      simulationFocus.height,
+    ),
+    orientation: {
+      heading: 0,
+      pitch: sdk.Math.toRadians(-90),
+      roll: 0,
+    },
+  })
+}
+
+function updateSceneLayer(key: string, visible: boolean) {
+  const layerKey = key as keyof typeof layerVisibility.value
+  layerVisibility.value[layerKey] = visible
+  toggleLayer(layerKey)
+}
+
+function createPoiEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  const entities: unknown[] = []
+  const labelCap = 400
+  features.forEach((feature, index) => {
+    const point = feature.points[0]
+    if (!point) return
+    entities.push(
+      viewer!.entities.add({
+        position: sdk.Cartesian3.fromDegrees(
+          point.longitude,
+          point.latitude,
+          0,
+        ),
+        point: {
+          pixelSize: 7,
+          color: '#f0b85c',
+          outlineColor: '#04201d',
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        ...(index < labelCap && feature.name
+          ? {
+              label: {
+                text: feature.name,
+                font: '10px sans-serif',
+                fillColor: '#eafffb',
+                showBackground: true,
+                backgroundColor: '#051011',
+                backgroundPadding: { x: 5, y: 3 },
+                pixelOffset: new sdk.Cartesian2(0, -16),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            }
+          : {}),
+        show: layerVisibility.value.poiLayer,
+      }),
+    )
+  })
+  return entities
+}
+
+function createLineEntities(
+  features: ParsedLayerFeature[],
+  color: string,
+  width: number,
+  layerKey: 'roadLayer' | 'waterLayer',
+) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.points.length < 2) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polyline: {
+          positions,
+          width,
+          material: color,
+          clampToGround: true,
+        },
+        show: layerVisibility.value[layerKey],
+      }),
+    ]
+  })
+}
+
+function createPolygonEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.points.length < 3) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polygon: {
+          hierarchy: positions,
+          material: 'rgba(58, 168, 255, 0.28)',
+          outline: true,
+          outlineColor: '#3aa8ff',
+          clampToGround: true,
+        },
+        show: layerVisibility.value.waterLayer,
+      }),
+    ]
+  })
+}
+
+async function loadDataLayers() {
+  if (!viewer) return
+  engineStatus.value = '正在加载水系、路网与 POI 数据图层'
+  try {
+    const [poiFeatures, roadFeatures, waterLines, waterPolygons] =
+      await Promise.all([
+        fetchIServerFeatures(
+          {
+            serviceUrl: config.supermap.mapServices.poi,
+            mapName: 'Lankao_POI_2025',
+            datasetName: 'Lankao_POI_2025',
+          },
+          {
+            attributeFilter: buildWgs84BoundsFilter(
+              114.9,
+              34.9,
+              115.03,
+              35.0,
+            ),
+          },
+        ),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.roadNetwork,
+          mapName: 'Lankao_Road_Network',
+          datasetName: 'Lankao_Road_Network',
+        }),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.water,
+          mapName: 'Lankao_Water',
+          datasetName: 'Laokao_Water_Line',
+        }),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.water,
+          mapName: 'Lankao_Water',
+          datasetName: 'Laokao_Water_Polygon',
+        }),
+      ])
+    dataLayerEntities.value = {
+      poiLayer: createPoiEntities(poiFeatures),
+      roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
+      waterLayer: [
+        ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
+        ...createPolygonEntities(waterPolygons),
+      ],
+    }
+    engineStatus.value = `数据图层已加载：POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}`
+    notifyScene('水系、路网与 POI 数据图层已加载，可在图层菜单中切换')
+  } catch (error) {
+    engineStatus.value = '水系、路网或 POI 数据图层加载失败'
+    notifyScene(
+      error instanceof Error ? error.message : '数据图层加载失败',
+    )
+    console.error('数据图层加载失败', error)
+  }
+}
+
+function setupSceneInteractions() {
+  if (!viewer || eventHandler) return
+  const sdk = cesium()
+  eventHandler = new sdk.ScreenSpaceEventHandler(viewer.scene.canvas)
+  eventHandler.setInputAction((movement) => {
+    if (!movement.position) return
+    if (suppressClickAfterDrag) {
+      suppressClickAfterDrag = false
+      return
+    }
+    if (measurementMode.value) {
+      addMeasurePoint(movement.position)
+      return
+    }
+    if (pickMode.value) {
+      handleSceneClick(movement.position)
+      return
+    }
+    const picked = viewer?.scene.pick(movement.position) as {
+      primitive?: unknown
+      id?: unknown
+    }
+    const hitModel =
+      picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+    if (hitModel) selectModel()
+    else if (!isDraggingModel.value && selectedPoint.value) {
+      modelSelected.value = false
+      upsertMarker(selectedPoint.value)
+    }
+  }, sdk.ScreenSpaceEventType.LEFT_CLICK)
+  eventHandler.setInputAction(startModelDrag, sdk.ScreenSpaceEventType.LEFT_DOWN)
+  eventHandler.setInputAction(moveModelDrag, sdk.ScreenSpaceEventType.MOUSE_MOVE)
+  eventHandler.setInputAction(endModelDrag, sdk.ScreenSpaceEventType.LEFT_UP)
+  eventHandler.setInputAction(
+    () => {
+      if (measurementMode.value) finishMeasurement()
+    },
+    sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+  )
+  eventHandler.setInputAction(
+    () => {
+      if (measurementMode.value) finishMeasurement()
+    },
+    sdk.ScreenSpaceEventType.RIGHT_CLICK,
+  )
+}
+
+async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
+  const point = selectedPoint.value
+  if (!point || !prompt.trim() || isGenerating.value) return
+  const buildingStyle =
+    requestedStyle === 'auto' ? inferBuildingStyle(prompt) : requestedStyle
+  const styleLabel = {
+    'traditional-chinese': '传统中式',
+    modern: '现代',
+    rural: '乡村通用',
+  }[buildingStyle]
+  constructionStage.value = 0
   buildState.value = 'running'
   buildProgress.value = 5
   generatedJob.value = null
-  engineStatus.value = '正在向本机 Blender 提交参数化建模任务'
-  operationMessage.value = '后端将生成道路、排水沟、积水面与示意建筑 GLB'
+  modelSelected.value = false
+  engineStatus.value = `正在向本机 Blender 提交“${styleLabel}”建模任务`
+  operationMessage.value = `将在 ${point.label} 生成“${styleLabel}”建筑模型`
   try {
     const initialJob = await createSimulationJob(config.apiBaseUrl, {
       scenario: currentScenario.value.label,
       plan: currentPlan.value.label,
       ...parameters.value,
+      prompt,
+      buildingStyle,
+      placement: toSimulationPlacement(point),
     })
     const completedJob = await waitForSimulationJob(
       config.apiBaseUrl,
@@ -363,17 +1111,144 @@ async function generatePlan() {
         },
       },
     )
-    loadGeneratedModel(completedJob.modelUrl!, completedJob.placement)
+    await playConstruction(completedJob)
     generatedJob.value = completedJob
     buildState.value = 'ready'
     buildProgress.value = 100
+    modelSelected.value = true
     engineStatus.value = `${completedJob.placement.label} · Blender GLB 已加载`
-    operationMessage.value = '真实 Blender 建模任务已完成；当前为镇域测试定位，不代表徐场村精确落点'
+    operationMessage.value =
+      '真实 Blender 建模任务已完成；点击模型可选中，拖拽移动，或用面板滑杆缩放和旋转'
   } catch (error) {
     buildState.value = 'error'
-    engineStatus.value = error instanceof Error ? error.message : 'Blender 场景构建失败'
+    engineStatus.value =
+      error instanceof Error ? error.message : 'Blender 场景构建失败'
     operationMessage.value = '请检查 Blender 路径、后端服务和模型输出日志'
   }
+}
+
+async function buildWithAgent(prompt: string) {
+  const point = selectedPoint.value
+  if (!point || !prompt.trim() || isGenerating.value) return
+  constructionStage.value = 0
+  buildState.value = 'running'
+  buildProgress.value = 5
+  generatedJob.value = null
+  modelSelected.value = false
+  engineStatus.value = '正在调用 3D Agent 生成 Blender 脚本'
+  operationMessage.value = `3D Agent 将根据提示词在 ${point.label} 生成更精细的模型`
+  try {
+    const initialJob = await createAgentJob(config.apiBaseUrl, {
+      prompt,
+      placement: toSimulationPlacement(point),
+      buildingStyle: inferBuildingStyle(prompt),
+    })
+    const completedJob = await waitForAgentJob(
+      config.apiBaseUrl,
+      initialJob,
+      {
+        timeoutMs: config.reportTimeoutMs,
+        onProgress: (job) => {
+          buildProgress.value = job.progress
+          engineStatus.value = job.message
+        },
+      },
+    )
+    await playConstruction(completedJob)
+    generatedJob.value = completedJob
+    buildState.value = 'ready'
+    buildProgress.value = 100
+    modelSelected.value = true
+    engineStatus.value = `${completedJob.placement.label} · 3D Agent GLB 已加载`
+    operationMessage.value =
+      '3D Agent 已完成智能建模；点击模型可选中，拖拽移动，或用面板滑杆缩放和旋转'
+  } catch (error) {
+    buildState.value = 'error'
+    engineStatus.value =
+      error instanceof Error ? error.message : '3D Agent 建模失败'
+    operationMessage.value =
+      '可切换为“模板生成”模式，或检查 DeepSeek API Key 与本机 Blender 路径'
+  }
+}
+
+const roofLabels: Record<string, string> = {
+  hipped: '歇山顶',
+  pyramidal: '攒尖顶',
+  gable: '双坡顶',
+  flat: '平屋顶',
+}
+
+const buildSummary = computed(() => {
+  const building = generatedJob.value?.parameters?.building
+  if (!building) return ''
+  const parts: string[] = []
+  if (building.typeLabel) parts.push(String(building.typeLabel))
+  if (building.floors) parts.push(`${Number(building.floors)} 层`)
+  if (building.roof) parts.push(roofLabels[String(building.roof)] ?? '')
+  if (building.columns) parts.push('柱廊')
+  if (building.railings) parts.push('围栏')
+  if (building.steps) parts.push('台阶')
+  if (building.courtyard) parts.push('庭院')
+  if (building.plaque) parts.push('牌匾')
+  if (building.lanterns) parts.push('灯笼')
+  if (building.dougong) parts.push('斗拱')
+  if (building.balcony) parts.push('阳台')
+  if (building.ornamentLevel === 3) parts.push('高精细')
+  else if (building.ornamentLevel === 1) parts.push('简洁')
+  return parts.filter(Boolean).join(' · ')
+})
+
+const sceneLayers = computed(() =>
+  layers.map((item) => ({
+    key: item.key,
+    label: item.label,
+    visible: layerVisibility.value[item.key],
+  })),
+)
+
+function updateModelScale(value: number) {
+  modelScale.value = clampModelScale(value)
+  applyModelTransform()
+  selectModel()
+}
+
+function updateModelHeading(value: number) {
+  modelHeading.value = normalizeHeading(value)
+  applyModelTransform()
+  selectModel()
+}
+
+function focusGeneratedModel() {
+  if (!viewer || !selectedPoint.value) return
+  const sdk = cesium()
+  const point = selectedPoint.value
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      point.longitude,
+      point.latitude - 0.00014,
+      Math.max(55, point.height + 42),
+    ),
+    orientation: {
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
+      roll: 0,
+    },
+  })
+}
+
+function removeGeneratedModel() {
+  if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
+  generatedModel = null
+  generatedJob.value = null
+  buildState.value = 'idle'
+  buildProgress.value = 0
+  modelSelected.value = false
+  if (selectedPoint.value) upsertMarker(selectedPoint.value)
+  engineStatus.value = '模型已移除，可重新选点并输入提示词建造'
+}
+
+function openBuilder() {
+  builderOpen.value = true
 }
 
 function saveDraft() {
@@ -387,6 +1262,12 @@ function handoffPlan() {
 function toggleLayer(key: keyof typeof layerVisibility.value) {
   const layer = viewer?.scene?.layers?.find?.(key)
   if (layer) layer.visible = layerVisibility.value[key]
+  const entities = dataLayerEntities.value[key]
+  if (entities) {
+    for (const entity of entities) {
+      ;(entity as { show?: boolean }).show = layerVisibility.value[key]
+    }
+  }
 }
 
 async function initializeViewer() {
@@ -401,6 +1282,7 @@ async function initializeViewer() {
     viewer = new sdk.Viewer(cesiumContainer.value, {
       infoBox: false,
       selectionIndicator: false,
+      preserveDrawingBuffer: true,
       animation: false,
       timeline: false,
       baseLayerPicker: false,
@@ -410,19 +1292,16 @@ async function initializeViewer() {
       navigationHelpButton: false,
     })
     viewer.imageryLayers.removeAll(true)
-    const baseMapUrl = config.supermap.mapServices.base.replace(/\/+$/, '')
+    engineStatus.value = '正在加载 ArcGIS 导航底图'
     viewer.imageryLayers.addImageryProvider(
       new sdk.UrlTemplateImageryProvider({
-        url: `${baseMapUrl}/tileImage.png?scale={scale}&x={x}&y={y}&width=256&height=256&transparent=false&cacheEnabled=true`,
-        minimumLevel: 0,
-        maximumLevel: 18,
+        url: buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken),
         tilingScheme: new sdk.WebMercatorTilingScheme(),
-        customTags: {
-          scale: (_provider, _x, _y, level) =>
-            String(1.6901635716026553e-9 * 2 ** level),
-        },
+        minimumLevel: 0,
+        maximumLevel: 19,
       }),
     )
+    viewer.scene.globe.show = true
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
@@ -432,20 +1311,35 @@ async function initializeViewer() {
       ),
       orientation: {
         heading: 0,
-        pitch: sdk.Math.toRadians(-65),
+        pitch: sdk.Math.toRadians(-90),
         roll: 0,
       },
     })
-    engineStatus.value = '堌阳镇范围底图 · 徐场村精确点位待接入'
+    setupSceneInteractions()
+    void loadDataLayers()
+    engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =
       error instanceof Error ? error.message : '三维引擎初始化失败'
   }
 }
 
-onMounted(initializeViewer)
+function onWindowKeyDown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  cancelMeasurement()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeyDown)
+  void initializeViewer()
+})
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeyDown)
+  constructionRun += 1
+  eventHandler?.destroy()
+  eventHandler = null
+  cancelMeasurement()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -479,9 +1373,9 @@ onBeforeUnmount(() => {
           type="button"
           class="action-button"
           :disabled="isGenerating"
-          @click="generatePlan"
+          @click="openBuilder"
         >
-          {{ isGenerating ? '构建中…' : '重新生成' }}
+          {{ isGenerating ? '构建中…' : 'AI 建造' }}
         </button>
         <button
           type="button"
@@ -590,61 +1484,33 @@ onBeforeUnmount(() => {
         </PanelCard>
       </aside>
 
-      <section
-        class="twin-scene panel-frame"
-        :class="{ comparing: isComparing }"
-      >
-        <div ref="cesiumContainer" class="cesium-container" />
-
-        <div class="map-toolbar simulation-toolbar">
-          <button
-            v-for="(plan, key) in planData"
-            :key="key"
-            class="layer-button"
-            :class="{ active: activePlan === key && !isComparing }"
-            type="button"
-            @click="selectPlan(key as PlanKey)"
-          >
-            {{ plan.stage }} {{ plan.label.split(' · ')[0] }}
-          </button>
-          <button
-            class="layer-button compare-button"
-            :class="{ active: isComparing }"
-            type="button"
-            @click="toggleCompare"
-          >
-            A/B 对比
-          </button>
+      <section class="twin-scene panel-frame">
+        <div
+          ref="cesiumContainer"
+          class="cesium-container"
+          :class="{
+            'is-picking': pickMode,
+            'is-dragging-model': isDraggingModel,
+          }"
+        />
+        <div v-if="pickMode" class="pick-mode-hint">
+          <span>请在地图上点击确定建造位置</span>
+          <button type="button" @click="cancelPointPicking">取消</button>
         </div>
-
-        <div class="builder-badge">
-          <span>Blender 4.5 LTS</span>
-          <strong>{{ builderStatus }}</strong>
-        </div>
-        <div class="scene-status"><i />{{ engineStatus }}</div>
-
-        <div v-if="!generatedJob" class="location-notice">
-          <strong>当前显示堌阳镇范围</strong>
-          <span>点击“重新生成”，由本机 Blender 构建参数化测试场景并加载到地图</span>
-        </div>
-
-        <div v-if="isComparing" class="compare-divider">
-          <span>方案 A</span><i /><span>方案 B</span>
-        </div>
-
-        <div class="version-timeline">
-          <button
-            v-for="(plan, key) in planData"
-            :key="key"
-            type="button"
-            :class="{ active: activePlan === key }"
-            @click="selectPlan(key as PlanKey)"
-          >
-            <i />
-            <span>{{ plan.stage }}</span>
-            <small>{{ plan.label }}</small>
-          </button>
-        </div>
+        <SceneToolbox
+          :measuring="measurementMode"
+          :layers="sceneLayers"
+          :feedback="toolFeedback"
+          @clear="clearSceneDrawings"
+          @measure="startMeasurement"
+          @end-measure="cancelMeasurement"
+          @refresh="refreshScene"
+          @export="exportScene"
+          @zoom-in="zoomScene(1)"
+          @zoom-out="zoomScene(-1)"
+          @locate="locateScene"
+          @update-layer="updateSceneLayer"
+        />
       </section>
 
       <aside class="twin-right">
@@ -727,6 +1593,27 @@ onBeforeUnmount(() => {
     :timeout-ms="config.reportTimeoutMs"
     :context="assistantContext"
     :prompts="assistantPrompts"
+  />
+  <AiBuilderAssistant
+    v-model:open="builderOpen"
+    :point-ready="selectedPoint !== null"
+    :point-label="selectedPoint?.label ?? ''"
+    :picking="pickMode"
+    :is-building="isGenerating"
+    :build-progress="buildProgress"
+    :build-message="engineStatus"
+    :model-ready="buildState === 'ready' && generatedJob !== null"
+    :model-scale="modelScale"
+    :model-heading="modelHeading"
+    :build-summary="buildSummary"
+    @toggle-pick="togglePointPicking"
+    @cancel-pick="cancelPointPicking"
+    @build="buildFromPrompt"
+    @build-agent="buildWithAgent"
+    @update-scale="updateModelScale"
+    @update-heading="updateModelHeading"
+    @remove-model="removeGeneratedModel"
+    @focus-model="focusGeneratedModel"
   />
 </template>
 
@@ -1018,91 +1905,55 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
 }
-.simulation-toolbar {
-  right: auto;
-  left: 10px;
+.cesium-container.is-picking {
+  cursor: crosshair;
 }
-.compare-button {
-  margin-left: 4px;
+.cesium-container.is-dragging-model {
+  cursor: grabbing;
+}
+.pick-mode-hint {
+  position: absolute;
+  z-index: 100;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  min-width: 300px;
+  padding: 8px 12px;
+  gap: 12px;
   color: var(--amber);
-  border-color: rgba(240, 184, 92, 0.35);
+  border: 1px solid rgba(240, 184, 92, 0.5);
+  border-radius: 6px;
+  background: rgba(5, 16, 17, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 10px;
+  transform: translateX(-50%);
 }
-
-.scene-status,
-.builder-badge,
+.pick-mode-hint span {
+  flex: 1;
+}
+.pick-mode-hint button {
+  min-height: 24px;
+  padding: 0 10px;
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 8px;
+  cursor: pointer;
+}
 .scene-legend,
-.version-timeline,
-.simulation-pin,
-.location-notice,
-.compare-divider {
+.simulation-pin {
   position: absolute;
   z-index: 100;
 }
 
-.scene-status,
-.builder-badge,
 .scene-legend {
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: rgba(5, 16, 17, 0.86);
   backdrop-filter: blur(8px);
-}
-
-.scene-status {
-  top: 10px;
-  right: 10px;
-  color: var(--text-soft);
-  font-size: 9px;
-}
-.scene-status i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 8px var(--cyan);
-}
-.builder-badge {
-  top: 48px;
-  right: 10px;
-  display: grid;
-  text-align: right;
-  gap: 2px;
-}
-.builder-badge span {
-  color: var(--text-soft);
-  font: 8px var(--font-data);
-}
-.builder-badge strong {
-  color: var(--cyan);
-  font-size: 9px;
-}
-
-.location-notice {
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: min(360px, calc(100% - 40px));
-  padding: 14px 18px;
-  color: var(--text-soft);
-  text-align: center;
-  border: 1px solid rgba(240, 184, 92, 0.42);
-  border-radius: 7px;
-  background: rgba(5, 16, 17, 0.9);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
-  transform: translate(-50%, -50%);
-  gap: 5px;
-  backdrop-filter: blur(8px);
-}
-.location-notice strong {
-  color: var(--amber);
-  font-size: 12px;
-}
-.location-notice span {
-  font-size: 9px;
-  line-height: 1.6;
 }
 
 .simulation-pin {
@@ -1199,90 +2050,6 @@ onBeforeUnmount(() => {
 }
 .legend-benefit {
   background: var(--amber);
-}
-
-.version-timeline {
-  right: 12px;
-  bottom: 12px;
-  left: 12px;
-  display: grid;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(5, 16, 17, 0.9);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  backdrop-filter: blur(8px);
-}
-.version-timeline::before {
-  position: absolute;
-  top: 15px;
-  right: 17%;
-  left: 17%;
-  height: 1px;
-  content: '';
-  background: rgba(122, 203, 190, 0.2);
-}
-.version-timeline button {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  color: var(--text-soft);
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  gap: 2px;
-}
-.version-timeline button i {
-  width: 8px;
-  height: 8px;
-  border: 2px solid #486561;
-  border-radius: 50%;
-  background: #0a1918;
-}
-.version-timeline button span {
-  margin-top: 2px;
-  font: 8px var(--font-data);
-}
-.version-timeline button small {
-  font-size: 7px;
-}
-.version-timeline button.active {
-  color: var(--cyan);
-}
-.version-timeline button.active i {
-  border-color: var(--cyan);
-  background: var(--cyan);
-  box-shadow: 0 0 8px var(--cyan);
-}
-
-.compare-divider {
-  top: 90px;
-  bottom: 74px;
-  left: 50%;
-  display: grid;
-  justify-items: center;
-  color: var(--text);
-  font-size: 9px;
-  grid-template-rows: auto 1fr auto;
-  transform: translateX(-50%);
-}
-.compare-divider i {
-  width: 1px;
-  margin: 5px 0;
-  background: linear-gradient(transparent, var(--cyan), transparent);
-  box-shadow: 0 0 8px var(--cyan);
-}
-.twin-scene.comparing::before {
-  position: absolute;
-  z-index: 15;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 50%;
-  pointer-events: none;
-  content: '';
-  background: rgba(240, 184, 92, 0.045);
 }
 
 .impact-layout {

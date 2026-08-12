@@ -55,4 +55,40 @@ describe('Blender 模拟任务客户端', () => {
     expect(fetchImpl.mock.calls[0]?.[0]).toBe('/api/simulation/jobs')
     expect(fetchImpl.mock.calls[1]?.[0]).toBe('/api/simulation/jobs/job-1')
   })
+
+  it('把用户在地图选择的落点随任务提交', async () => {
+    const userPlacement = {
+      longitude: 114.970123,
+      latitude: 34.951123,
+      height: 12.35,
+      heading: 30,
+      label: '徐场村路口',
+      accuracy: 'user-picked' as const,
+    }
+    const queued: SimulationJob = {
+      id: 'job-2',
+      status: 'queued',
+      progress: 8,
+      message: '排队中',
+      placement: userPlacement,
+      parameters,
+    }
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...queued, placement: userPlacement }),
+          { status: 202 },
+        ),
+      )
+
+    await createSimulationJob(
+      '/api',
+      { ...parameters, placement: userPlacement },
+      fetchImpl,
+    )
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+
+    expect(body.placement).toEqual(userPlacement)
+  })
 })

@@ -68,4 +68,153 @@ describe('通用 AI 决策助手服务', () => {
       scopeLabel: '道路积水治理 · 方案 A',
     })
   })
+
+  it('先用 Claude Vision 识图，再将视觉证据交给 DeepSeek', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  summary: '图片显示一处道路积水。',
+                  observations: ['路面存在连续水面'],
+                  uncertainties: ['无法从图片确认积水深度'],
+                  recommendedFocus: ['结合排水口位置研判'],
+                }),
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            model: 'deepseek-v4-flash',
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    answer: '图片可作为道路积水的辅助证据。',
+                    evidence: ['路面存在连续水面。'],
+                    suggestions: ['现场测量积水深度。'],
+                    disclaimer: '图片无法确定精确深度。',
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+
+    const result = (await generateDecisionAnswer(
+      {
+        ...createPayload(),
+        image: {
+          name: 'evidence.png',
+          mediaType: 'image/png',
+          data: Buffer.from('test-image').toString('base64'),
+        },
+      },
+      {
+        apiKey: 'deepseek-test-key',
+        anthropicApiKey: 'claude-test-key',
+        fetchImpl,
+      },
+    )) as { meta: { visionModel?: string } }
+    const visionBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+    const deepSeekBody = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body))
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      'https://api.anthropic.com/v1/messages',
+    )
+    expect(visionBody.messages[0].content[0].type).toBe('image')
+    expect(deepSeekBody.messages.at(-1).content).toContain('路面存在连续水面')
+    expect(result.meta.visionModel).toBe('claude-sonnet-4-20250514')
+  })
+
+  it('支持通过 OpenAI 兼容协议调用 Qwen 视觉模型', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            model: 'qwen3.7-plus',
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: '图片显示一栋建筑。',
+                    observations: ['建筑包含坡屋顶'],
+                    uncertainties: ['无法确认内部结构'],
+                    recommendedFocus: ['核对建筑尺度'],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            model: 'deepseek-v4-flash',
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    answer: '可根据坡屋顶特征进一步建模。',
+                    evidence: ['建筑包含坡屋顶。'],
+                    suggestions: ['补充建筑尺度。'],
+                    disclaimer: '图片无法确认内部结构。',
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+
+    const result = (await generateDecisionAnswer(
+      {
+        ...createPayload(),
+        image: {
+          name: 'building.webp',
+          mediaType: 'image/webp',
+          data: Buffer.from('test-image').toString('base64'),
+        },
+      },
+      {
+        apiKey: 'deepseek-test-key',
+        visionApiKey: 'qwen-test-key',
+        visionBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        visionModel: 'qwen3.7-plus',
+        visionProtocol: 'openai',
+        fetchImpl,
+      },
+    )) as { meta: { visionModel?: string } }
+    const visionBody = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    )
+    expect(fetchImpl.mock.calls[0]?.[1]?.headers).toMatchObject({
+      Authorization: 'Bearer qwen-test-key',
+    })
+    expect(visionBody.messages[1].content[0]).toMatchObject({
+      type: 'image_url',
+    })
+    expect(visionBody.messages[1].content[0].image_url.url).toMatch(
+      /^data:image\/webp;base64,/,
+    )
+    expect(visionBody.enable_thinking).toBe(false)
+    expect(result.meta.visionModel).toBe('qwen3.7-plus')
+  })
 })

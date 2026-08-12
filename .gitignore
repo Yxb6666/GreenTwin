@@ -3,7 +3,6 @@ dist/
 tmp/
 .env.local
 .env.*.local
-.cert/
 *.log
 .DS_Store
 .idea/
@@ -12,3 +11,4 @@ tmp/
 Xiaorongqian/Apple_design.md
 Xiaorongqian/Linear_design.md
 Xiaorongqian/Vercel_design.md
+.cert

@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, resolve } from 'node:path'
+import { parseBuildingPrompt } from './simulation-prompt.mjs'
 
 const projectRoot = resolve(process.cwd())
 const defaultOutputDirectory = resolve(projectRoot, 'tmp', 'simulation-models')
@@ -26,18 +27,63 @@ function clamp(value, minimum, maximum, fallback) {
     : fallback
 }
 
+function validatePlacement(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('落点参数必须是对象')
+  }
+  const longitude = Number(value.longitude)
+  const latitude = Number(value.latitude)
+  const height = Number(value.height ?? 0)
+  const heading = Number(value.heading ?? 0)
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new Error('落点经度无效')
+  }
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    throw new Error('落点纬度无效')
+  }
+  if (!Number.isFinite(height) || height < -1000 || height > 10000) {
+    throw new Error('落点高度无效')
+  }
+  if (!Number.isFinite(heading)) {
+    throw new Error('落点朝向无效')
+  }
+  return {
+    longitude: Number(longitude.toFixed(6)),
+    latitude: Number(latitude.toFixed(6)),
+    height: Number(height.toFixed(2)),
+    heading: Number(heading.toFixed(2)),
+    label:
+      typeof value.label === 'string' && value.label.trim()
+        ? value.label.trim().slice(0, 80)
+        : '地图自定义落点',
+    accuracy: 'user-picked',
+  }
+}
+
 export function validateSimulationRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('请求参数必须是对象')
   }
-  return {
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim().slice(0, 240) : ''
+  const requestedStyle = typeof payload.buildingStyle === 'string' ? payload.buildingStyle : ''
+  const buildingStyle = ['traditional-chinese', 'modern', 'rural'].includes(requestedStyle)
+    ? requestedStyle
+    : /古风|中式|传统|四合院|亭/.test(prompt)
+      ? 'traditional-chinese'
+      : 'rural'
+  const result = {
     scenario: typeof payload.scenario === 'string' ? payload.scenario.slice(0, 40) : '道路积水治理',
     plan: typeof payload.plan === 'string' ? payload.plan.slice(0, 40) : '方案 A',
     ditchWidth: clamp(payload.ditchWidth, 0.3, 1.5, 0.5),
     ditchDepth: clamp(payload.ditchDepth, 0.3, 2, 0.7),
     outletCount: Math.round(clamp(payload.outletCount, 1, 12, 4)),
     roadRaiseHeight: clamp(payload.roadRaiseHeight, 0, 1.2, 0.25),
+    prompt,
+    buildingStyle,
+    building: parseBuildingPrompt(prompt, buildingStyle),
   }
+  if (payload.placement != null) result.placement = validatePlacement(payload.placement)
+  return result
 }
 
 function findBlenderExecutable(configuredPath) {
@@ -60,6 +106,12 @@ function publicJob(job, basePath) {
     modelUrl:
       job.status === 'completed'
         ? `${basePath}/models/${encodeURIComponent(job.id)}.glb`
+        : undefined,
+    stageUrls:
+      job.status === 'completed'
+        ? [1, 2, 3, 4].map(
+            (stage) => `${basePath}/models/${encodeURIComponent(job.id)}-stage-${stage}.glb`,
+          )
         : undefined,
     placement: job.placement,
     parameters: job.parameters,
@@ -151,6 +203,14 @@ export function createSimulationService(options = {}) {
   function createJob(payload) {
     const parameters = validateSimulationRequest(payload)
     const id = randomUUID()
+    const placement = parameters.placement ?? {
+      longitude: 114.964285,
+      latitude: 34.9511,
+      height: 0,
+      heading: 0,
+      label: '堌阳镇范围参数化测试场景',
+      accuracy: 'township-demo',
+    }
     const job = {
       id,
       status: 'queued',
@@ -159,14 +219,7 @@ export function createSimulationService(options = {}) {
       createdAt: new Date().toISOString(),
       completedAt: undefined,
       parameters,
-      placement: {
-        longitude: 114.964285,
-        latitude: 34.9511,
-        height: 0,
-        heading: 0,
-        label: '堌阳镇范围参数化测试场景',
-        accuracy: 'township-demo',
-      },
+      placement,
     }
     jobs.set(id, job)
     queue.push(job)
@@ -179,10 +232,13 @@ export function createSimulationService(options = {}) {
     getJob(id) {
       return jobs.get(id)
     },
-    getModelPath(id) {
+    getModelPath(id, stage) {
       const job = jobs.get(id)
       if (!job || job.status !== 'completed') return undefined
-      const filePath = resolve(outputDirectory, `${basename(id)}.glb`)
+      const filePath = resolve(
+        outputDirectory,
+        stage ? `${basename(id)}-stage-${stage}.glb` : `${basename(id)}.glb`,
+      )
       return existsSync(filePath) ? filePath : undefined
     },
   }
@@ -211,9 +267,9 @@ export function createSimulationMiddleware(options = {}) {
         return
       }
 
-      const modelMatch = relativePath.match(/^\/models\/([a-f0-9-]+)\.glb$/i)
+      const modelMatch = relativePath.match(/^\/models\/([a-f0-9-]+)(-stage-([1-4]))?\.glb$/i)
       if ((request.method === 'GET' || request.method === 'HEAD') && modelMatch) {
-        const filePath = service.getModelPath(modelMatch[1])
+        const filePath = service.getModelPath(modelMatch[1], modelMatch[3])
         if (!filePath) {
           sendJson(response, 404, { message: '模型尚未生成' })
           return

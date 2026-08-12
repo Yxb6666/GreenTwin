@@ -6,6 +6,8 @@ import { createReportMiddleware } from './deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './governance-assistant.mjs'
 import { createDecisionAssistantMiddleware } from './decision-assistant.mjs'
 import { createSimulationMiddleware } from './simulation.mjs'
+import { createAgentSimulationMiddleware } from './agent-simulation.mjs'
+import { createArcGisVectorBasemapMiddleware } from './arcgis-vector-basemap.mjs'
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const distDirectory = resolve(projectRoot, 'dist')
@@ -19,6 +21,8 @@ const reportMiddleware = createReportMiddleware()
 const governanceAssistantMiddleware = createGovernanceAssistantMiddleware()
 const decisionAssistantMiddleware = createDecisionAssistantMiddleware()
 const simulationMiddleware = createSimulationMiddleware()
+const agentSimulationMiddleware = createAgentSimulationMiddleware()
+const arcGisVectorBasemapMiddleware = createArcGisVectorBasemapMiddleware()
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -99,6 +103,14 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname.startsWith('/api/simulation/')) {
     await simulationMiddleware(request, response, url.pathname)
+    return
+  }
+  if (url.pathname.startsWith('/api/agent-simulation/')) {
+    await agentSimulationMiddleware(request, response, url.pathname)
+    return
+  }
+  if (url.pathname.startsWith('/api/arcgis/world-streets')) {
+    await arcGisVectorBasemapMiddleware(request, response, url.pathname)
     return
   }
   serveApplication(request, response, url.pathname)
