@@ -28,6 +28,11 @@ import {
   formatDistance,
 } from '@/gis/leaflet/measurement'
 import {
+  buildWgs84BoundsFilter,
+  fetchIServerFeatures,
+  type ParsedLayerFeature,
+} from './iserverLayers'
+import {
   createSimulationJob,
   waitForSimulationJob,
   type SimulationJob,
@@ -191,12 +196,14 @@ const selectedPoint = ref<PickedPoint | null>(null)
 const measurementMode = ref<SceneMeasureType | null>(null)
 const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
+const dataLayerEntities = ref<Record<string, unknown[]>>({})
 const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
   waterLayer: true,
   issueLayer: true,
+  poiLayer: true,
 })
 const parameters = ref({
   ditchWidth: 0.5,
@@ -291,6 +298,7 @@ const layers = [
   { key: 'roadLayer', label: '道路' },
   { key: 'waterLayer', label: '水系' },
   { key: 'issueLayer', label: '问题点' },
+  { key: 'poiLayer', label: 'POI' },
 ] as const
 
 const planData: Record<
@@ -870,6 +878,155 @@ function updateSceneLayer(key: string, visible: boolean) {
   toggleLayer(layerKey)
 }
 
+function createPoiEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  const entities: unknown[] = []
+  const labelCap = 400
+  features.forEach((feature, index) => {
+    const point = feature.points[0]
+    if (!point) return
+    entities.push(
+      viewer!.entities.add({
+        position: sdk.Cartesian3.fromDegrees(
+          point.longitude,
+          point.latitude,
+          0,
+        ),
+        point: {
+          pixelSize: 7,
+          color: '#f0b85c',
+          outlineColor: '#04201d',
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        ...(index < labelCap && feature.name
+          ? {
+              label: {
+                text: feature.name,
+                font: '10px sans-serif',
+                fillColor: '#eafffb',
+                showBackground: true,
+                backgroundColor: '#051011',
+                backgroundPadding: { x: 5, y: 3 },
+                pixelOffset: new sdk.Cartesian2(0, -16),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            }
+          : {}),
+        show: layerVisibility.value.poiLayer,
+      }),
+    )
+  })
+  return entities
+}
+
+function createLineEntities(
+  features: ParsedLayerFeature[],
+  color: string,
+  width: number,
+  layerKey: 'roadLayer' | 'waterLayer',
+) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.points.length < 2) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polyline: {
+          positions,
+          width,
+          material: color,
+          clampToGround: true,
+        },
+        show: layerVisibility.value[layerKey],
+      }),
+    ]
+  })
+}
+
+function createPolygonEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.points.length < 3) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polygon: {
+          hierarchy: positions,
+          material: 'rgba(58, 168, 255, 0.28)',
+          outline: true,
+          outlineColor: '#3aa8ff',
+          clampToGround: true,
+        },
+        show: layerVisibility.value.waterLayer,
+      }),
+    ]
+  })
+}
+
+async function loadDataLayers() {
+  if (!viewer) return
+  engineStatus.value = '正在加载水系、路网与 POI 数据图层'
+  try {
+    const [poiFeatures, roadFeatures, waterLines, waterPolygons] =
+      await Promise.all([
+        fetchIServerFeatures(
+          {
+            serviceUrl: config.supermap.mapServices.poi,
+            mapName: 'Lankao_POI_2025',
+            datasetName: 'Lankao_POI_2025',
+          },
+          {
+            attributeFilter: buildWgs84BoundsFilter(
+              114.9,
+              34.9,
+              115.03,
+              35.0,
+            ),
+          },
+        ),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.roadNetwork,
+          mapName: 'Lankao_Road_Network',
+          datasetName: 'Lankao_Road_Network',
+        }),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.water,
+          mapName: 'Lankao_Water',
+          datasetName: 'Laokao_Water_Line',
+        }),
+        fetchIServerFeatures({
+          serviceUrl: config.supermap.mapServices.water,
+          mapName: 'Lankao_Water',
+          datasetName: 'Laokao_Water_Polygon',
+        }),
+      ])
+    dataLayerEntities.value = {
+      poiLayer: createPoiEntities(poiFeatures),
+      roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
+      waterLayer: [
+        ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
+        ...createPolygonEntities(waterPolygons),
+      ],
+    }
+    engineStatus.value = `数据图层已加载：POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}`
+    notifyScene('水系、路网与 POI 数据图层已加载，可在图层菜单中切换')
+  } catch (error) {
+    engineStatus.value = '水系、路网或 POI 数据图层加载失败'
+    notifyScene(
+      error instanceof Error ? error.message : '数据图层加载失败',
+    )
+    console.error('数据图层加载失败', error)
+  }
+}
+
 function setupSceneInteractions() {
   if (!viewer || eventHandler) return
   const sdk = cesium()
@@ -1105,6 +1262,12 @@ function handoffPlan() {
 function toggleLayer(key: keyof typeof layerVisibility.value) {
   const layer = viewer?.scene?.layers?.find?.(key)
   if (layer) layer.visible = layerVisibility.value[key]
+  const entities = dataLayerEntities.value[key]
+  if (entities) {
+    for (const entity of entities) {
+      ;(entity as { show?: boolean }).show = layerVisibility.value[key]
+    }
+  }
 }
 
 async function initializeViewer() {
@@ -1153,6 +1316,7 @@ async function initializeViewer() {
       },
     })
     setupSceneInteractions()
+    void loadDataLayers()
     engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
     engineStatus.value =

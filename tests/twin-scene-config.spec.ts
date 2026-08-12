@@ -44,4 +44,14 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('preserveDrawingBuffer: true')
     expect(source).toContain('@update-layer="updateSceneLayer"')
   })
+
+  it('三生模拟场景加载水系、路网与 POI 数据图层', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('fetchIServerFeatures')
+    expect(source).toContain("mapName: 'Lankao_POI_2025'")
+    expect(source).toContain("mapName: 'Lankao_Road_Network'")
+    expect(source).toContain("mapName: 'Lankao_Water'")
+    expect(source).toContain("key: 'poiLayer'")
+  })
 })

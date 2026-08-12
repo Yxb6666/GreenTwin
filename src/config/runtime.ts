@@ -15,7 +15,10 @@ export interface RuntimeConfig {
   }
   supermap: {
     leafletSdkUrl: string
-    mapServices: Record<'base' | 'township' | 'population' | 'gdp' | 'landuse', string>
+    mapServices: Record<
+      'base' | 'township' | 'population' | 'gdp' | 'landuse' | 'poi' | 'roadNetwork' | 'water',
+      string
+    >
     dem: {
       serviceUrl: string
       collectionId: string
