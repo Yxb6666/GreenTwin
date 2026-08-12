@@ -5,6 +5,7 @@ import {
   filterCountyBoundaryArtifacts,
   filterTownshipBoundaryArtifacts,
   getCountyOuterBoundaryRings,
+  mergeTownshipFeatures,
 } from '@/gis/leaflet/countyFocusGeometry'
 
 describe('county focus geometry', () => {
@@ -27,6 +28,19 @@ describe('county focus geometry', () => {
 
     expect(boundary).toHaveLength(2)
     expect(boundary.every((ring) => ring.at(0)?.every((value, index) => value === ring.at(-1)?.[index]))).toBe(true)
+  })
+
+  it('将历史同名要素归并为一个 MultiPolygon 行政区', () => {
+    const merged = mergeTownshipFeatures([
+      { code: '410225106', name: '东坝头镇', rings: [[[0, 0], [1, 0], [1, 1], [0, 1]]] },
+      { code: '410225202', name: '东坝头乡', rings: [[[0, 1], [1, 1], [1, 2], [0, 2]]] },
+      { code: '410225999', name: '东坝头镇', rings: [[[3, 3], [4, 3], [4, 4], [3, 4]]] },
+    ])
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({ code: '410225106', name: '东坝头镇' })
+    expect(merged[0]?.rings).toHaveLength(2)
+    expect(merged[0]?.rings[0]).toHaveLength(7)
   })
 
   it('剔除相对县域面积可忽略的量化残环', () => {

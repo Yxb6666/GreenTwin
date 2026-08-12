@@ -4,8 +4,11 @@ import type { TownshipFeature } from '@/gis/leaflet/townshipFeatures'
 import {
   landUseSource,
   masterMapThemeLegends,
+  masterMapThemes,
   resolveTownshipThemeMetric,
+  resolveTownshipThemeMetrics,
 } from '@/features/master/mapThemes'
+import { DEFAULT_DIMENSION_WEIGHTS, scoreTown, towns } from '@/features/sansheng/model'
 
 const yifengFeature: TownshipFeature = {
   code: '410225101',
@@ -21,6 +24,18 @@ const yifengFeature: TownshipFeature = {
 }
 
 describe('主控专题地图指标', () => {
+  it('以行政区划为默认入口并提供 7 个平级主题', () => {
+    expect(masterMapThemes.map(({ key }) => key)).toEqual([
+      'administrative',
+      'population',
+      'gdp',
+      'poi',
+      'landuse',
+      'sansheng',
+      'governance',
+    ])
+  })
+
   it('为人口密度专题生成分级设色指标', () => {
     const metric = resolveTownshipThemeMetric('population', yifengFeature, 0)
 
@@ -46,6 +61,7 @@ describe('主控专题地图指标', () => {
       '文旅资源',
     ])
     expect(metric.breakdown?.reduce((sum, item) => sum + item.value, 0)).toBe(metric.value)
+    expect(metric.radius).toBeCloseTo(Math.min(21, Math.max(11, 8 + Math.sqrt(metric.value) * 1.1)))
   })
 
   it('为土地利用专题使用主导用地分类颜色', () => {
@@ -104,5 +120,39 @@ describe('主控专题地图指标', () => {
     expect(metric.value).toBe(2)
     expect(metric.label).toBe('2 处')
     expect(metric.details).toEqual(['高紧急 1', '处置中 1'])
+  })
+
+  it('人口与三生主题按当前行政区实际值动态分位设色', () => {
+    const features = towns.slice(0, 16).map((town, index): TownshipFeature => ({
+      code: `410225${String(index + 1).padStart(3, '0')}`,
+      name: town.name,
+      rings: yifengFeature.rings,
+    }))
+    const population = resolveTownshipThemeMetrics('population', features)
+    const sansheng = resolveTownshipThemeMetrics('sansheng', features)
+
+    expect(new Set(population.map(({ color }) => color))).toEqual(
+      new Set(masterMapThemeLegends.population.map(({ color }) => color)),
+    )
+    expect(sansheng).toHaveLength(16)
+    expect(sansheng.every(({ dataAvailable }) => dataAvailable)).toBe(true)
+    sansheng.forEach((metric, index) => {
+      expect(metric.value).toBe(scoreTown(towns[index]!, DEFAULT_DIMENSION_WEIGHTS).composite)
+    })
+    expect(new Set(sansheng.map(({ color }) => color))).toEqual(
+      new Set(masterMapThemeLegends.sansheng.map(({ color }) => color)),
+    )
+  })
+
+  it('三生主题对未精确匹配的行政区显示中性缺失色且不造数', () => {
+    const metric = resolveTownshipThemeMetrics('sansheng', [
+      { ...yifengFeature, name: '仪封' },
+    ])[0]!
+
+    expect(metric).toMatchObject({ value: 0, label: '暂无数据', color: '#435852', dataAvailable: false })
+  })
+
+  it('治理问题为零时不生成聚合半径', () => {
+    expect(resolveTownshipThemeMetric('governance', yifengFeature, 0).radius).toBeUndefined()
   })
 })

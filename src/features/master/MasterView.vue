@@ -23,6 +23,7 @@ import {
   masterMapThemeLegends,
   masterMapThemes,
   resolveTownshipThemeMetric,
+  resolveTownshipThemeMetrics,
   type MasterMapThemeKey,
   type ThemeLegendItem,
   type TownshipThemeMetric,
@@ -34,7 +35,7 @@ const { map, focusBounds, townshipFeatures, selectedTownship, activeBaseMap, arc
 const demSummary = ref<DemSummary | null>(null)
 const demError = ref('')
 const demLoading = ref(true)
-const activeMapTheme = ref<MasterMapThemeKey>('population')
+const activeMapTheme = ref<MasterMapThemeKey>('administrative')
 const selectedThemeTownship = ref<TownshipFeature | null>(null)
 const governanceIssues = ref<GovernanceIssue[]>([])
 let thematicLayer: L.LayerGroup | null = null
@@ -123,15 +124,24 @@ const assistantPrompts = ['概括当前全县三生空间态势', '人口与 GDP
 const activeMapThemeConfig = computed(
   () => masterMapThemes.find((theme) => theme.key === activeMapTheme.value) ?? masterMapThemes[0]!,
 )
-const activeMapLegend = computed(() =>
-  activeMapTheme.value === 'poi'
-    ? buildPoiLegend()
-    : masterMapThemeLegends[activeMapTheme.value],
+const activeTownshipMetrics = computed(() =>
+  resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value),
 )
+const activeMapLegend = computed(() => {
+  if (activeMapTheme.value === 'poi') return buildPoiLegend()
+  const legend = [...masterMapThemeLegends[activeMapTheme.value]]
+  if (
+    activeMapTheme.value === 'sansheng' &&
+    activeTownshipMetrics.value.some((metric) => metric.dataAvailable === false)
+  ) {
+    legend.push({ label: '暂无数据', color: '#435852' })
+  }
+  return legend
+})
 const selectedTownshipMetric = computed(() => {
   if (!selectedThemeTownship.value) return null
   const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedThemeTownship.value?.code)
-  return resolveTownshipThemeMetric(activeMapTheme.value, selectedThemeTownship.value, Math.max(index, 0), governanceIssues.value)
+  return index >= 0 ? activeTownshipMetrics.value[index] ?? null : null
 })
 const mapThemeStatus = computed(() =>
   townshipFeatures.value.length > 0
@@ -199,7 +209,9 @@ function buildPoiLegend(): ThemeLegendItem[] {
   )
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
+    const metric = activeMapTheme.value === 'poi'
+      ? activeTownshipMetrics.value[index]!
+      : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value)
     metric.breakdown?.forEach((item) => {
       const previous = totals.get(item.label)
       totals.set(item.label, {
@@ -235,15 +247,16 @@ function townshipName(feature: TownshipFeature) {
 }
 
 function polygonStyle(metric: TownshipThemeMetric, selected: boolean): L.PathOptions {
-  const isPointTheme = activeMapTheme.value === 'poi' || activeMapTheme.value === 'governance'
+  const isPoi = activeMapTheme.value === 'poi'
+  const isGovernance = activeMapTheme.value === 'governance'
+  const isPointTheme = isPoi || isGovernance
 
   return {
-    color: selected ? '#eafffb' : '#d6ed9f',
+    color: selected ? '#eafffb' : isPointTheme ? '#9DBE78' : '#AFCB78',
     fillColor: metric.color,
-    fillOpacity: isPointTheme ? 0.2 : 0.58,
-    opacity: selected ? 1 : 0.92,
-    weight: selected ? 2.6 : 1.15,
-    dashArray: isPointTheme ? '5 5' : undefined,
+    fillOpacity: isPoi ? 0.08 : isGovernance ? 0.06 : activeMapTheme.value === 'population' ? 0.49 : 0.52,
+    opacity: selected ? 1 : isPointTheme ? 0.55 : 0.75,
+    weight: selected ? 2.6 : isPointTheme ? 0.8 : 1,
   }
 }
 
@@ -264,13 +277,21 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
   if (!thematicLayer) return
   const center = L.latLng(townshipRepresentativePoint(feature))
   const isGovernance = activeMapTheme.value === 'governance'
+  if (isGovernance && metric.value <= 0) return
+  const strokeColor = isGovernance
+    ? metric.value >= 10
+      ? '#E6A099'
+      : metric.value >= 5
+        ? '#E4AD92'
+        : '#E8CD8A'
+    : '#A6E8D9'
 
-  L.circleMarker(center, {
+  const circle = L.circleMarker(center, {
     radius: metric.radius ?? 18,
-    color: isGovernance ? '#ffe0cc' : '#eafffb',
+    color: strokeColor,
     fillColor: metric.color,
-    fillOpacity: metric.value > 0 ? 0.78 : 0.38,
-    opacity: 0.96,
+    fillOpacity: isGovernance ? 0.68 : 0.72,
+    opacity: 0.95,
     weight: 1.4,
   })
     .bindTooltip(tooltipContent(feature, metric), {
@@ -279,6 +300,8 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
       opacity: 1,
       sticky: true,
     })
+    .on('mouseover', () => circle.setStyle({ weight: 2.8, color: '#eafffb', fillOpacity: 0.82 }))
+    .on('mouseout', () => circle.setStyle({ weight: 1.4, color: strokeColor, fillOpacity: isGovernance ? 0.68 : 0.72 }))
     .on('click', () => focusTownship(feature))
     .addTo(thematicLayer)
 
@@ -287,7 +310,8 @@ function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric)
     icon: L.divIcon({
       className: 'master-cluster-label',
       html: `<span>${metric.value}</span>`,
-      iconAnchor: [16, 12],
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
     }),
   }).addTo(thematicLayer)
 }
@@ -307,15 +331,16 @@ function renderThematicMap() {
   if (!instance) return
 
   clearThematicLayer()
-  if (townshipFeatures.value.length === 0) return
+  if (townshipFeatures.value.length === 0 || activeMapTheme.value === 'administrative') return
 
   thematicLayer = L.layerGroup().addTo(instance)
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = resolveTownshipThemeMetric(activeMapTheme.value, feature, index, governanceIssues.value)
+    const metric = activeTownshipMetrics.value[index]
+    if (!metric) return
     const selected = selectedThemeTownship.value?.code === feature.code
     const style = polygonStyle(metric, selected)
-    const polygon = L.polygon(feature.rings, style)
+    const polygon = L.polygon(feature.rings.map((ring) => [ring]), style)
 
     polygon
       .bindTooltip(tooltipContent(feature, metric), {
@@ -495,7 +520,7 @@ onMounted(async () => {
           <div ref="mapContainer" class="map-container" />
           <div class="master-theme-tabs" role="tablist" aria-label="主控专题地图">
             <button
-              v-for="(theme, index) in masterMapThemes"
+              v-for="theme in masterMapThemes"
               :key="theme.key"
               type="button"
               role="tab"
@@ -503,21 +528,18 @@ onMounted(async () => {
               :class="{ active: activeMapTheme === theme.key }"
               @click="setActiveMapTheme(theme.key)"
             >
-              <span>{{ String(index + 1).padStart(2, '0') }}</span>
-              <strong>{{ theme.shortLabel }}</strong>
-              <small>{{ theme.modeLabel }}</small>
+              <strong>{{ theme.label }}</strong>
             </button>
           </div>
           <aside class="master-map-legend" aria-label="专题图例">
             <header>
-              <span>{{ activeMapThemeConfig.modeLabel }}</span>
               <strong>{{ activeMapThemeConfig.label }}</strong>
               <small>{{ mapThemeStatus }}</small>
             </header>
             <p>{{ activeMapThemeConfig.description }}</p>
             <ul>
               <li v-for="item in activeMapLegend" :key="item.label">
-                <i :style="{ background: item.color }" />
+                <i :class="`legend-${item.kind ?? 'area'}`" :style="{ background: item.color }" />
                 <span>{{ item.label }}</span>
                 <b v-if="item.value != null">{{ item.value }} 个</b>
               </li>
@@ -979,19 +1001,20 @@ onMounted(async () => {
   left: 66px;
   display: grid;
   gap: 7px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   pointer-events: auto;
 }
 
 .master-theme-tabs button {
   display: grid;
   min-width: 0;
-  min-height: 46px;
-  padding: 7px 9px;
+  height: 56px;
+  padding: 7px 6px;
+  place-items: center;
   border: 1px solid rgba(122, 203, 190, 0.2);
   border-radius: 7px;
   color: var(--text-soft);
-  text-align: left;
+  text-align: center;
   background: linear-gradient(145deg, rgba(5, 20, 21, 0.88), rgba(12, 42, 39, 0.74));
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
   cursor: pointer;
@@ -1011,24 +1034,11 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 
-.master-theme-tabs span {
-  color: var(--cyan);
-  font: 9px var(--font-data);
-  letter-spacing: 0.08em;
-}
-
 .master-theme-tabs strong {
   overflow: hidden;
   color: currentColor;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.master-theme-tabs small {
-  overflow: hidden;
-  font-size: 8px;
-  opacity: 0.8;
+  font-size: 16px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1055,13 +1065,6 @@ onMounted(async () => {
   display: grid;
   gap: 2px;
   grid-template-columns: 1fr auto;
-}
-
-.master-map-legend header span {
-  color: var(--cyan);
-  font: 9px var(--font-data);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .master-map-legend header strong {
@@ -1107,6 +1110,16 @@ onMounted(async () => {
   height: 8px;
   flex: 0 0 auto;
   border: 1px solid rgba(234, 255, 251, 0.34);
+  border-radius: 999px;
+}
+
+.master-map-legend li i.legend-line {
+  height: 2px;
+  border: 0;
+  border-radius: 0;
+}
+
+.master-map-legend li i.legend-dot {
   border-radius: 999px;
 }
 
@@ -1240,24 +1253,25 @@ onMounted(async () => {
 }
 
 :global(.master-cluster-label) {
-  width: auto !important;
-  height: auto !important;
+  width: 32px !important;
+  height: 32px !important;
   border: 0 !important;
   background: transparent !important;
 }
 
 :global(.master-cluster-label span) {
   display: grid;
-  min-width: 32px;
-  height: 22px;
-  padding: 0 7px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   place-items: center;
-  border: 1px solid rgba(234, 255, 251, 0.55);
-  border-radius: 999px;
-  color: #eafffb;
-  background: rgba(5, 20, 21, 0.82);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.24);
-  font: 11px var(--font-data);
+  border: 0;
+  border-radius: 0;
+  color: #fff;
+  background: transparent;
+  box-shadow: none;
+  font: 700 12px var(--font-data);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .land-use {
@@ -1522,8 +1536,7 @@ onMounted(async () => {
   .master-side, .master-center { gap: 8px; }
   .master-center { grid-template-rows: minmax(0, 1fr) auto; }
   .master-theme-tabs { gap: 5px; }
-  .master-theme-tabs button { min-height: 40px; padding: 5px 7px; }
-  .master-theme-tabs small { display: none; }
+  .master-theme-tabs button { height: 56px; padding: 5px 7px; }
   .master-map-legend { width: 230px; gap: 7px; padding: 9px; }
   .master-map-legend ul { grid-template-columns: 1fr; }
   .land-use { gap: 8px; grid-template-rows: minmax(82px, 1fr) auto; }

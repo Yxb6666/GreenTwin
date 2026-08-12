@@ -1,4 +1,9 @@
-import type { TownshipFeature, TownshipRing } from './townshipFeatures'
+import {
+  getTownshipLabel,
+  OFFICIAL_TOWNSHIP_LABELS,
+  type TownshipFeature,
+  type TownshipRing,
+} from './townshipFeatures'
 
 interface BoundaryEdge {
   count: number
@@ -146,6 +151,32 @@ export function filterCountyBoundaryArtifacts(boundaryRings: TownshipRing[]) {
 
 export function filterTownshipBoundaryArtifacts(townshipRings: TownshipRing[]) {
   return filterRingsByArea(townshipRings, MIN_TOWNSHIP_PART_AREA_RATIO)
+}
+
+/**
+ * Merges historical source records into the 16 current township/street units.
+ * Shared internal edges are dissolved while detached, meaningful parts remain
+ * as independent rings of the same logical feature.
+ */
+export function mergeTownshipFeatures(features: TownshipFeature[]): TownshipFeature[] {
+  const groups = new Map<string, TownshipFeature[]>()
+
+  features.forEach((feature) => {
+    const label = getTownshipLabel(feature)
+    if (!label) return
+    const group = groups.get(label) ?? []
+    group.push(feature)
+    groups.set(label, group)
+  })
+
+  return OFFICIAL_TOWNSHIP_LABELS.flatMap((name) => {
+    const group = groups.get(name)
+    if (!group?.length) return []
+    const rings = filterCountyBoundaryArtifacts(buildCountyBoundaryRings(group))
+    if (rings.length === 0) return []
+    const code = [...group].sort((first, second) => first.code.localeCompare(second.code))[0]!.code
+    return [{ code, name, rings }]
+  })
 }
 
 export function getCountyOuterBoundaryRings(boundaryRings: TownshipRing[]) {

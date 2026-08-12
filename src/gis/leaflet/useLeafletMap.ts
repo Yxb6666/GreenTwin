@@ -6,8 +6,8 @@ import {
   buildCountyBoundaryRings,
   buildCountyInverseMaskRings,
   filterCountyBoundaryArtifacts,
-  filterTownshipBoundaryArtifacts,
   getCountyOuterBoundaryRings,
+  mergeTownshipFeatures,
 } from './countyFocusGeometry'
 import { focusMapOnTownship, isTownshipInteractionBlocked, TOWNSHIP_FOCUS_START_EVENT } from './mapFocus'
 import { loadIServerMapBounds, type GeographicBounds } from './serviceBounds'
@@ -75,6 +75,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   const townshipLayers: TownshipLayerEntry[] = []
   let countyFocusContextAdded = false
   let countyFocusContextLoading = false
+  let rawTownshipFeatures: TownshipFeature[] = []
   let disposed = false
 
   function getTownshipVisualState(entry: TownshipLayerEntry) {
@@ -150,6 +151,64 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     }).addTo(instance)
 
     return true
+  }
+
+  function renderTownshipFeatures(
+    instance: L.Map,
+    features: TownshipFeature[],
+    interactionOptions: LeafletMapInteractionOptions,
+  ) {
+    townshipLayers.splice(0).forEach((entry) => entry.layer.remove())
+    const displayFeatures = interactionOptions.townshipFocus
+      ? features.filter((feature) => getTownshipLabel(feature))
+      : features
+
+    displayFeatures.forEach((feature) => {
+      const label = getTownshipLabel(feature)
+      const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
+      const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
+      const displayRings = feature.rings
+      const polygon = L.polygon(displayRings.map((ring) => [ring]), {
+        ...townshipBaseStyle,
+        className: townshipIsInteractive ? 'township-map-region' : undefined,
+        interactive: townshipIsInteractive,
+      })
+      if (label) {
+        polygon.bindTooltip(label, {
+          permanent: true,
+          direction: 'center',
+          className: 'township-map-label',
+          pane: 'townshipLabelPane',
+          interactive: false,
+          opacity: 1,
+        })
+      }
+      if (townshipIsInteractive && label) {
+        const entry: TownshipLayerEntry = {
+          name: label,
+          layer: polygon,
+          baseStyle: { ...townshipBaseStyle },
+        }
+        townshipLayers.push(entry)
+        polygon.on('tooltipopen', () => refreshTownshipLabel(entry, getTownshipVisualState(entry)))
+        polygon.on('mouseover', () => {
+          if (isTownshipInteractionBlocked(instance)) return
+          hoveredTownship.value = label
+          instance.getContainer().style.cursor = 'pointer'
+          refreshTownshipStyles()
+        })
+        polygon.on('mouseout', () => {
+          if (hoveredTownship.value === label) hoveredTownship.value = null
+          instance.getContainer().style.cursor = ''
+          refreshTownshipStyles()
+        })
+        polygon.on('click', (event) => {
+          if (selectTownship(instance, polygon, label)) L.DomEvent.stopPropagation(event)
+        })
+      }
+      polygon.addTo(instance)
+    })
+    refreshTownshipStyles()
   }
 
   function activateBaseLayer(layer: L.TileLayer, mode: BaseMapMode) {
@@ -296,10 +355,11 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
             void loadTownshipFeatures(overlayServiceUrl)
               .then((features) => {
                 if (disposed) return
-                townshipFeatures.value = [...townshipFeatures.value, ...features]
-                const displayFeatures = interactionOptions.townshipFocus
-                  ? features.filter((feature) => getTownshipLabel(feature))
-                  : features
+                rawTownshipFeatures = [...rawTownshipFeatures, ...features]
+                const mergedFeatures = interactionOptions.townshipFocus
+                  ? mergeTownshipFeatures(rawTownshipFeatures)
+                  : rawTownshipFeatures
+                townshipFeatures.value = mergedFeatures
                 if (
                   interactionOptions.townshipFocus &&
                   !countyFocusContextAdded &&
@@ -314,61 +374,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
                     })
                     .catch(() => {
                       if (!disposed && !countyFocusContextAdded) {
-                        countyFocusContextAdded = addCountyFocusContext(instance, features)
+                        countyFocusContextAdded = addCountyFocusContext(instance, mergedFeatures)
                       }
                     })
                     .finally(() => {
                       countyFocusContextLoading = false
                     })
                 }
-                displayFeatures.forEach((feature) => {
-                  const label = getTownshipLabel(feature)
-                  const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
-                  const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
-                  const displayRings = townshipIsInteractive
-                    ? filterTownshipBoundaryArtifacts(feature.rings)
-                    : feature.rings
-                  const polygon = L.polygon(displayRings, {
-                    ...townshipBaseStyle,
-                    className: townshipIsInteractive ? 'township-map-region' : undefined,
-                    interactive: townshipIsInteractive,
-                  })
-                  if (label) {
-                    polygon.bindTooltip(label, {
-                      permanent: true,
-                      direction: 'center',
-                      className: 'township-map-label',
-                      pane: 'townshipLabelPane',
-                      interactive: false,
-                      opacity: 1,
-                    })
-                  }
-                  if (townshipIsInteractive && label) {
-                    const entry: TownshipLayerEntry = {
-                      name: label,
-                      layer: polygon,
-                      baseStyle: { ...townshipBaseStyle },
-                    }
-                    townshipLayers.push(entry)
-                    polygon.on('tooltipopen', () => refreshTownshipLabel(entry, getTownshipVisualState(entry)))
-                    polygon.on('mouseover', () => {
-                      if (isTownshipInteractionBlocked(instance)) return
-                      hoveredTownship.value = label
-                      instance.getContainer().style.cursor = 'pointer'
-                      refreshTownshipStyles()
-                    })
-                    polygon.on('mouseout', () => {
-                      if (hoveredTownship.value === label) hoveredTownship.value = null
-                      instance.getContainer().style.cursor = ''
-                      refreshTownshipStyles()
-                    })
-                    polygon.on('click', (event) => {
-                      if (selectTownship(instance, polygon, label)) L.DomEvent.stopPropagation(event)
-                    })
-                  }
-                  polygon.addTo(instance)
-                  if (townshipIsInteractive) refreshTownshipStyles()
-                })
+                renderTownshipFeatures(instance, mergedFeatures, interactionOptions)
               })
               .catch(() => {
                 if (!disposed) error.value = '二维乡镇叠加层加载失败，请检查 iServer 查询接口与跨域配置。'
@@ -416,6 +429,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     selectedTownship.value = null
     hoveredTownship.value = null
     townshipLayers.length = 0
+    rawTownshipFeatures = []
     countyFocusContextAdded = false
     countyFocusContextLoading = false
     townshipFeatures.value = []

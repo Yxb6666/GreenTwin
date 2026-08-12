@@ -33,6 +33,25 @@ interface IServerQueryResult {
   recordsets?: IServerRecordset[]
 }
 
+export const OFFICIAL_TOWNSHIP_LABELS = [
+  '兰阳街道',
+  '桐乡街道',
+  '惠安街道',
+  '东坝头镇',
+  '谷营镇',
+  '堌阳镇',
+  '孟寨乡',
+  '南彰镇',
+  '闫楼乡',
+  '小宋镇',
+  '许河镇',
+  '考城镇',
+  '葡萄架乡',
+  '红庙镇',
+  '仪封镇',
+  '三义寨乡',
+] as const
+
 const OFFICIAL_TOWNSHIP_NAMES: Record<string, string> = {
   '410225001': '兰阳街道',
   '410225002': '桐乡街道',
@@ -212,7 +231,24 @@ function ringCentroid(ring: TownshipRing): TownshipPoint | null {
 }
 
 export function townshipRepresentativePoint(feature: TownshipFeature): TownshipPoint {
-  const points = feature.rings.flat()
+  const primaryRing = feature.rings.reduce<TownshipRing | null>((largest, ring) => {
+    const ringArea = Math.abs(
+      ring.reduce((area, [lat, lng], index) => {
+        const [nextLat, nextLng] = ring[(index + 1) % ring.length] ?? [lat, lng]
+        return area + lng * nextLat - nextLng * lat
+      }, 0) / 2,
+    )
+    if (!largest) return ring
+    const largestArea = Math.abs(
+      largest.reduce((area, [lat, lng], index) => {
+        const [nextLat, nextLng] = largest[(index + 1) % largest.length] ?? [lat, lng]
+        return area + lng * nextLat - nextLng * lat
+      }, 0) / 2,
+    )
+    return ringArea > largestArea ? ring : largest
+  }, null)
+  const primaryFeature = primaryRing ? { ...feature, rings: [primaryRing] } : feature
+  const points = primaryFeature.rings.flat()
   if (points.length === 0) return [0, 0]
 
   const bounds = points.reduce(
@@ -233,11 +269,11 @@ export function townshipRepresentativePoint(feature: TownshipFeature): TownshipP
     (bounds.minLat + bounds.maxLat) / 2,
     (bounds.minLng + bounds.maxLng) / 2,
   ]
-  if (isPointInsideTownship(center, feature)) return center
+  if (isPointInsideTownship(center, primaryFeature)) return center
 
-  const candidates = feature.rings
+  const candidates = primaryFeature.rings
     .map(ringCentroid)
-    .filter((point): point is TownshipPoint => point != null && isPointInsideTownship(point, feature))
+    .filter((point): point is TownshipPoint => point != null && isPointInsideTownship(point, primaryFeature))
 
   const gridSize = 18
   for (let latIndex = 1; latIndex < gridSize; latIndex += 1) {
@@ -246,7 +282,7 @@ export function townshipRepresentativePoint(feature: TownshipFeature): TownshipP
         bounds.minLat + ((bounds.maxLat - bounds.minLat) * latIndex) / gridSize,
         bounds.minLng + ((bounds.maxLng - bounds.minLng) * lngIndex) / gridSize,
       ]
-      if (isPointInsideTownship(candidate, feature)) candidates.push(candidate)
+      if (isPointInsideTownship(candidate, primaryFeature)) candidates.push(candidate)
     }
   }
 

@@ -210,6 +210,22 @@ describe('行政区划要素解析', () => {
     expect(isPointInsideTownship(representativePoint, irregularFeature)).toBe(true)
   })
 
+  it('多部件行政区的代表点优先落在最大主体面', () => {
+    const multiPartFeature: TownshipFeature = {
+      code: '410225108',
+      name: '仪封镇',
+      rings: [
+        [[20, 20], [20, 20.2], [20.2, 20.2], [20.2, 20], [20, 20]],
+        [[0, 0], [0, 4], [4, 4], [4, 0], [0, 0]],
+      ],
+    }
+
+    const point = townshipRepresentativePoint(multiPartFeature)
+    expect(point[0]).toBeLessThan(5)
+    expect(point[1]).toBeLessThan(5)
+    expect(isPointInsideTownship(point, multiPartFeature)).toBe(true)
+  })
+
   it('丢弃点数与分段信息不一致的损坏几何', () => {
     expect(parseTownshipFeatures({ recordsets: [{ features: [feature('410225101', [5])] }] })).toEqual([])
   })
