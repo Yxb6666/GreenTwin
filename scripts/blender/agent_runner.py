@@ -26,7 +26,7 @@ def _normalize_color(color):
     return tuple(numeric)
 
 
-def material(name, color, metallic=0.0, roughness=0.7):
+def material(name, color, metallic=0.0, roughness=0.7, *args, **kwargs):
     value = bpy.data.materials.new(name)
     value.use_nodes = True
     shader = value.node_tree.nodes.get("Principled BSDF")
@@ -41,7 +41,7 @@ def material(name, color, metallic=0.0, roughness=0.7):
     return value
 
 
-def add_box(name, location, dimensions, value, build_stage=1):
+def add_box(name, location, dimensions, value, build_stage=1, *args, **kwargs):
     bpy.ops.mesh.primitive_cube_add(location=location)
     item = bpy.context.object
     item.name = name
@@ -52,7 +52,9 @@ def add_box(name, location, dimensions, value, build_stage=1):
     return item
 
 
-def add_beveled_box(name, location, dimensions, value, build_stage=1, bevel=0.06):
+def add_beveled_box(
+    name, location, dimensions, value, build_stage=1, bevel=0.06, *args, **kwargs
+):
     item = add_box(name, location, dimensions, value, build_stage)
     if bevel > 0:
         modifier = item.modifiers.new(name="Soft edges", type="BEVEL")
@@ -61,7 +63,9 @@ def add_beveled_box(name, location, dimensions, value, build_stage=1, bevel=0.06
     return item
 
 
-def add_cylinder(name, location, radius, depth, value, build_stage=2, vertices=12):
+def add_cylinder(
+    name, location, radius, depth, value, build_stage=2, vertices=12, *args, **kwargs
+):
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=vertices,
         radius=radius,
@@ -78,7 +82,9 @@ def add_cylinder(name, location, radius, depth, value, build_stage=2, vertices=1
     return item
 
 
-def add_beam_between(name, start, end, radius, value, build_stage=3, vertices=8):
+def add_beam_between(
+    name, start, end, radius, value, build_stage=3, vertices=8, *args, **kwargs
+):
     start_point = Vector(start)
     end_point = Vector(end)
     direction = end_point - start_point
@@ -96,7 +102,7 @@ def add_beam_between(name, start, end, radius, value, build_stage=3, vertices=8)
     return item
 
 
-def add_roof_mesh(name, vertices, faces, value, build_stage=3):
+def add_roof_mesh(name, vertices, faces, value, build_stage=3, *args, **kwargs):
     mesh = bpy.data.meshes.new(f"{name}Mesh")
     mesh.from_pydata(vertices, [], faces)
     mesh.update()

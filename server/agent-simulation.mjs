@@ -109,21 +109,34 @@ export function validateAgentRequest(payload) {
 }
 
 export function extractAgentCode(content) {
-  const normalized = String(content || '')
-    .trim()
-    .replace(/^```(?:json|python)?\s*/i, '')
-    .replace(/\s*```$/, '')
-  let value
-  try {
-    value = JSON.parse(normalized)
-  } catch {
-    throw new Error('DeepSeek 未返回合法 JSON')
+  const raw = String(content || '').replace(/^\uFEFF/, '').trim()
+  const stripFence = (text) =>
+    text
+      .replace(/^```(?:json|python)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim()
+  const candidates = [stripFence(raw), raw]
+  const firstBrace = raw.indexOf('{')
+  const lastBrace = raw.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(stripFence(raw.slice(firstBrace, lastBrace + 1)))
   }
-  const code = value?.code
-  if (typeof code !== 'string' || !code.trim()) {
-    throw new Error('DeepSeek 未返回可执行的 Blender 代码')
+  for (const candidate of candidates) {
+    try {
+      const value = JSON.parse(candidate)
+      if (
+        value &&
+        typeof value.code === 'string' &&
+        value.code.trim()
+      ) {
+        return value.code.trim()
+      }
+    } catch {
+      // 继续尝试下一个候选格式
+    }
   }
-  return code.trim()
+  if (/def\s+build_custom\s*\(/.test(raw)) return raw
+  throw new Error('DeepSeek 未返回合法 JSON')
 }
 
 export function validateGeneratedCode(code) {
@@ -172,55 +185,63 @@ export async function generateAgentScript(
   const system = [
     '你是 GreenTwin 的 Blender 程序化建模 Agent。',
     '根据用户提示词生成 Python 函数 build_custom(config)，只调用提供的辅助函数与 bpy/math/mathutils。',
-    '辅助函数：material(name,color,metallic,roughness)、add_box(name,location,dimensions,material,build_stage)、add_beveled_box(...)、add_cylinder(...)、add_beam_between(...)、add_roof_mesh(...)。',
+    '辅助函数精确签名：material(name,color,metallic=0.0,roughness=0.7)；add_box(name,location,dimensions,material,build_stage=1)；add_beveled_box(name,location,dimensions,material,build_stage=1,bevel=0.06)；add_cylinder(name,location,radius,depth,material,build_stage=2,vertices=12)；add_beam_between(name,start,end,radius,material,build_stage=3,vertices=8)；add_roof_mesh(name,vertices,faces,material,build_stage=3)。除列出的参数外不要传任何其他参数。',
     '材质颜色必须传 RGBA 四元组且取值在 0-1，例如 material("Stone", (0.5, 0.5, 0.5, 1.0))；禁止传三元组 RGB。',
     '规则：build_custom 内部禁止写任何 import 语句，math、mathutils、bpy 已在全局可用；不读写文件、不执行系统命令、不访问网络；坐标单位为米，建筑底平面中心放在 (0,0,0) 附近；每个几何体必须设置 build_stage（1-4，从地基到装饰）；控制对象数量在 200 个以内。',
     '必须只输出 JSON：{"code":"<build_custom 函数完整源码>"}，不使用 Markdown 代码围栏。',
   ].join('\n')
-  let response
-  try {
-    response = await fetchImpl(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: system },
-          {
-            role: 'user',
-            content: `用户提示词：${prompt}\n\n解析后的建造参数（JSON）：${JSON.stringify(building)}\n\n请生成 build_custom(config) 的完整源码。`,
-          },
-        ],
-        response_format: { type: 'json_object' },
-        thinking: { type: 'disabled' },
-        temperature: 0.2,
-        max_tokens: 4000,
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-  } catch (error) {
-    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
-      throw new Error('DeepSeek 生成脚本超时，请重试')
+  const baseUserContent = `用户提示词：${prompt}\n\n解析后的建造参数（JSON）：${JSON.stringify(building)}\n\n请生成 build_custom(config) 的完整源码。`
+  const callDeepSeek = async (userContent) => {
+    let response
+    try {
+      response = await fetchImpl(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: userContent },
+          ],
+          response_format: { type: 'json_object' },
+          thinking: { type: 'disabled' },
+          temperature: 0.2,
+          max_tokens: 6000,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+    } catch (error) {
+      if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+        throw new Error('DeepSeek 生成脚本超时，请重试')
+      }
+      throw new Error(
+        `无法连接 DeepSeek：${error instanceof Error ? error.message : '未知错误'}`,
+      )
     }
-    throw new Error(`无法连接 DeepSeek：${error instanceof Error ? error.message : '未知错误'}`)
+    if (!response.ok) {
+      throw new Error(
+        response.status === 401 || response.status === 403
+          ? 'DeepSeek API Key 无效，请检查服务端配置'
+          : `DeepSeek 上游错误 ${response.status}`,
+      )
+    }
+    const payload = await response.json()
+    const content = payload?.choices?.[0]?.message?.content
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error('DeepSeek 未返回内容')
+    }
+    return content
   }
-  if (!response.ok) {
-    throw new Error(
-      response.status === 401 || response.status === 403
-        ? 'DeepSeek API Key 无效，请检查服务端配置'
-        : `DeepSeek 上游错误 ${response.status}`,
-    )
+  try {
+    return extractAgentCode(await callDeepSeek(baseUserContent))
+  } catch {
+    const reminder = `${baseUserContent}\n\n注意：上次输出无法解析为合法 JSON。请只输出 {"code":"<build_custom 完整源码>"} 这一种格式，代码内的换行与引号必须转义，不要输出任何说明文字。`
+    return extractAgentCode(await callDeepSeek(reminder))
   }
-  const payload = await response.json()
-  const content = payload?.choices?.[0]?.message?.content
-  if (typeof content !== 'string' || !content.trim()) {
-    throw new Error('DeepSeek 未返回内容')
-  }
-  return extractAgentCode(content)
 }
 
 function findBlenderExecutable(configuredPath) {

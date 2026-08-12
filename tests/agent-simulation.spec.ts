@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   extractAgentCode,
+  generateAgentScript,
   validateAgentRequest,
   validateGeneratedCode,
 } from '../server/agent-simulation.mjs'
@@ -13,6 +14,20 @@ describe('3D Agent 模拟任务服务', () => {
     expect(
       extractAgentCode(`\`\`\`json\n{"code": ${JSON.stringify(code)}}\n\`\`\``),
     ).toBe(code.trim())
+  })
+
+  it('能从带说明文字的输出中提取 JSON 代码', () => {
+    const code = 'def build_custom(config):\n    pass\n'
+    expect(
+      extractAgentCode(
+        `好的，以下是代码：\n\`\`\`json\n{"code": ${JSON.stringify(code)}}\n\`\`\`\n请查收。`,
+      ),
+    ).toBe(code.trim())
+  })
+
+  it('模型直接返回 Python 源码时也能接受', () => {
+    const source = 'def build_custom(config):\n    add_box("X", (0, 0, 0), (1, 1, 1), material("S", (1, 1, 1, 1)))'
+    expect(extractAgentCode(source)).toBe(source)
   })
 
   it('拒绝不包含 build_custom 的代码', () => {
@@ -80,6 +95,46 @@ describe('3D Agent 模拟任务服务', () => {
     ).toThrow('提示词长度')
   })
 
+  it('首次解析失败时自动重试一次', async () => {
+    const code = 'def build_custom(config):\n    pass\n'
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              { message: { content: '抱歉，我无法生成 JSON，直接给出代码吧' } },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ code }),
+                },
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+
+    const result = await generateAgentScript(
+      '建一座三层古风楼阁',
+      { buildingType: 'tower' },
+      { apiKey: 'test-key', fetchImpl },
+      5000,
+    )
+
+    expect(result).toBe(code.trim())
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
   it('Blender 执行器把辅助函数注入与生成代码相同的命名空间', async () => {
     const source = await readFile(
       resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
@@ -110,5 +165,26 @@ describe('3D Agent 模拟任务服务', () => {
     expect(source).toContain('ALLOWED_IMPORT_MODULES = {"math", "mathutils", "bpy"}')
     expect(source).toContain('"__import__": safe_import')
     expect(source).toContain('不允许导入模块: %s')
+  })
+
+  it('Blender 辅助函数容忍生成代码的多余参数', async () => {
+    const source = await readFile(
+      resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
+      'utf8',
+    )
+    const helpers = [
+      'material',
+      'add_box',
+      'add_beveled_box',
+      'add_cylinder',
+      'add_beam_between',
+      'add_roof_mesh',
+    ]
+    for (const helper of helpers) {
+      expect(source).toMatch(new RegExp(`def ${helper}\\(`))
+    }
+    expect(
+      (source.match(/\*args, \*\*kwargs/g) || []).length,
+    ).toBeGreaterThanOrEqual(helpers.length)
   })
 })
