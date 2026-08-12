@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { BASE_MAP_OPTIONS, buildArcGisTileUrl, getBaseMapOption } from '@/gis/leaflet/baseMaps'
 
 describe('ArcGIS 底图配置', () => {
-  it('提供四种指定的 ArcGIS 底图', () => {
+  it('提供六种指定的 ArcGIS 底图', () => {
     expect(BASE_MAP_OPTIONS.map((option) => option.key)).toEqual([
       'light-gray',
       'dark-gray',
       'outdoor',
+      'navigation',
+      'topographic',
       'standard',
     ])
+    expect(getBaseMapOption('navigation')?.arcgisStyle).toBe('arcgis/navigation')
+    expect(getBaseMapOption('topographic')?.tileUrl).toContain(
+      '/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    )
     expect(getBaseMapOption('standard')?.tileUrl).toContain('/World_Imagery/MapServer/tile/{z}/{y}/{x}')
   })
 
