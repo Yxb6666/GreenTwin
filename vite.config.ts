@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { createReportMiddleware } from './server/deepseek-report.mjs'
 import { createGovernanceAssistantMiddleware } from './server/governance-assistant.mjs'
+import { createDecisionAssistantMiddleware } from './server/decision-assistant.mjs'
 import { createSimulationMiddleware } from './server/simulation.mjs'
 
 function deepseekReportApi(env: Record<string, string>): Plugin {
@@ -57,6 +58,27 @@ function simulationApi(env: Record<string, string>): Plugin {
   }
 }
 
+function decisionAssistantApi(env: Record<string, string>): Plugin {
+  const middleware = createDecisionAssistantMiddleware({
+    apiKey: env.DEEPSEEK_API_KEY,
+    baseUrl: env.DEEPSEEK_API_BASE_URL,
+    model: env.DEEPSEEK_MODEL,
+    timeoutMs: Number(env.DEEPSEEK_TIMEOUT_MS) || 90000,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    anthropicBaseUrl: env.ANTHROPIC_API_BASE_URL,
+    anthropicModel: env.ANTHROPIC_MODEL,
+  })
+
+  return {
+    name: 'greentwin-decision-assistant-api',
+    configureServer(server) {
+      server.middlewares.use('/api/assistant/decision', (request, response) => {
+        void middleware(request, response)
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
@@ -64,6 +86,7 @@ export default defineConfig(({ mode }) => {
       vue(),
       deepseekReportApi(env),
       governanceAssistantApi(env),
+      decisionAssistantApi(env),
       simulationApi(env),
       viteStaticCopy({
         targets: [

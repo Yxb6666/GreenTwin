@@ -2,8 +2,10 @@
 import { nextTick, ref } from 'vue'
 import { useDraggablePanel } from '@/shared/composables/useDraggablePanel'
 import {
+  prepareDecisionAssistantImage,
   requestDecisionAssistant,
   type DecisionAssistantContext,
+  type DecisionAssistantImage,
   type DecisionAssistantResponse,
 } from './assistant'
 
@@ -13,6 +15,7 @@ interface Message {
   content: string
   result?: DecisionAssistantResponse
   error?: boolean
+  imageName?: string
 }
 
 const props = defineProps<{
@@ -27,6 +30,9 @@ const isLoading = ref(false)
 const draft = ref('')
 const messageId = ref(1)
 const messageList = ref<HTMLElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
+const attachedImage = ref<DecisionAssistantImage | null>(null)
+const attachmentError = ref('')
 const messages = ref<Message[]>([
   {
     id: messageId.value++,
@@ -72,8 +78,16 @@ async function sendQuestion(question = draft.value) {
     .filter((message) => message.id !== 1 && !message.error)
     .slice(-8)
     .map((message) => ({ role: message.role, content: message.content }))
-  messages.value.push({ id: messageId.value++, role: 'user', content })
+  const image = attachedImage.value
+  messages.value.push({
+    id: messageId.value++,
+    role: 'user',
+    content,
+    imageName: image?.name,
+  })
   draft.value = ''
+  attachedImage.value = null
+  attachmentError.value = ''
   isOpen.value = true
   isLoading.value = true
   await scrollToLatest()
@@ -86,6 +100,7 @@ async function sendQuestion(question = draft.value) {
         question: content,
         history,
         context: props.context,
+        image: image ?? undefined,
       },
     )
     messages.value.push({
@@ -105,6 +120,21 @@ async function sendQuestion(question = draft.value) {
   } finally {
     isLoading.value = false
     await scrollToLatest()
+  }
+}
+
+async function selectImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  attachmentError.value = ''
+  try {
+    attachedImage.value = await prepareDecisionAssistantImage(file)
+  } catch (error) {
+    attachedImage.value = null
+    attachmentError.value =
+      error instanceof Error ? error.message : '图片处理失败'
   }
 }
 
@@ -204,6 +234,9 @@ function onComposerKeydown(event: KeyboardEvent) {
             }}</span>
             <div class="assistant-message__body">
               <p>{{ message.content }}</p>
+              <small v-if="message.imageName" class="assistant-image-reference">
+                已附加图片 · {{ message.imageName }}
+              </small>
               <template v-if="message.result">
                 <ul
                   v-if="message.result.evidence.length"
@@ -232,7 +265,12 @@ function onComposerKeydown(event: KeyboardEvent) {
                 </div>
                 <footer>
                   <span>{{ message.result.scopeLabel }}</span>
-                  <span>{{ message.result.meta.model }}</span>
+                  <span>
+                    {{ message.result.meta.model }}
+                    <template v-if="message.result.meta.visionModel">
+                      · Vision {{ message.result.meta.visionModel }}
+                    </template>
+                  </span>
                 </footer>
                 <small class="assistant-disclaimer">{{
                   message.result.disclaimer
@@ -262,6 +300,23 @@ function onComposerKeydown(event: KeyboardEvent) {
         </div>
 
         <div class="assistant-composer">
+          <input
+            ref="imageInput"
+            class="assistant-image-input"
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            @change="selectImage"
+          />
+          <button
+            class="assistant-attach-button"
+            type="button"
+            :disabled="isLoading"
+            aria-label="添加图片"
+            title="添加图片，由 Claude Vision 识别后交给 DeepSeek 研判"
+            @click="imageInput?.click()"
+          >
+            ＋图
+          </button>
           <textarea
             v-model="draft"
             rows="2"
@@ -279,6 +334,21 @@ function onComposerKeydown(event: KeyboardEvent) {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 12L20 4l-6 16-2.7-5.3L4 12zM11.3 14.7L20 4" />
             </svg>
+          </button>
+        </div>
+        <div
+          v-if="attachedImage || attachmentError"
+          class="assistant-attachment-status"
+        >
+          <span v-if="attachedImage">图片已就绪：{{ attachedImage.name }}</span>
+          <span v-else class="is-error">{{ attachmentError }}</span>
+          <button
+            v-if="attachedImage"
+            type="button"
+            aria-label="移除图片"
+            @click="attachedImage = null"
+          >
+            移除
           </button>
         </div>
         <p class="assistant-notice">
@@ -673,6 +743,13 @@ function onComposerKeydown(event: KeyboardEvent) {
   font-size: 7px;
 }
 
+.assistant-image-reference {
+  display: block;
+  margin-top: 6px;
+  color: var(--cyan);
+  font-size: 8px;
+}
+
 .assistant-thinking {
   display: flex;
   align-items: center;
@@ -726,7 +803,11 @@ function onComposerKeydown(event: KeyboardEvent) {
   border: 1px solid rgba(122, 203, 190, 0.22);
   border-radius: 8px;
   background: rgba(3, 13, 14, 0.7);
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+}
+
+.assistant-image-input {
+  display: none;
 }
 
 .assistant-composer textarea {
@@ -751,6 +832,39 @@ function onComposerKeydown(event: KeyboardEvent) {
   border: 1px solid rgba(61, 214, 196, 0.52);
   border-radius: 7px;
   background: linear-gradient(145deg, #1caa97, #197a70);
+  cursor: pointer;
+}
+
+.assistant-composer > .assistant-attach-button {
+  align-self: end;
+  width: 38px;
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.24);
+  background: rgba(61, 214, 196, 0.06);
+  font-size: 8px;
+}
+
+.assistant-attachment-status {
+  display: flex;
+  align-items: center;
+  margin: 5px 12px 0;
+  gap: 8px;
+  color: var(--cyan);
+  font-size: 8px;
+}
+
+.assistant-attachment-status .is-error {
+  color: var(--amber);
+}
+
+.assistant-attachment-status button {
+  margin-left: auto;
+  padding: 2px 7px;
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 7px;
   cursor: pointer;
 }
 
