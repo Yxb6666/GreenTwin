@@ -33,6 +33,12 @@ export interface IServerLayerSource {
   datasetName: string
 }
 
+export function buildIServerMapUrl(source: IServerLayerSource) {
+  const serviceUrl = source.serviceUrl.replace(/\/+$/, '')
+  const restUrl = /\/rest$/i.test(serviceUrl) ? serviceUrl : `${serviceUrl}/rest`
+  return `${restUrl}/maps/${source.mapName}`
+}
+
 export function buildWgs84BoundsFilter(
   minLongitude: number,
   minLatitude: number,
@@ -123,7 +129,7 @@ export async function fetchIServerFeatures(
 ): Promise<ParsedLayerFeature[]> {
   const fetchImpl = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? 60000
-  const baseUrl = `${source.serviceUrl.replace(/\/$/, '')}/rest/maps/${source.mapName}`
+  const baseUrl = buildIServerMapUrl(source)
   const queryUrl = `${baseUrl}/queryResults.json`
   const body = {
     queryMode: options.bounds ? 'BoundsQuery' : 'SqlQuery',

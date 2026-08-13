@@ -257,9 +257,14 @@ function inferBuildingStyle(
 
 // 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
 const simulationFocus = {
-  longitude: 114.964285,
-  latitude: 34.9511,
-  height: 12000,
+  longitude: 114.965,
+  latitude: 34.95,
+  height: 900,
+}
+
+const simulationFocusOrientation = {
+  heading: 18,
+  pitch: -48,
 }
 
 const scenarioTemplates: Array<{
@@ -897,8 +902,8 @@ function locateScene() {
       simulationFocus.height,
     ),
     orientation: {
-      heading: 0,
-      pitch: sdk.Math.toRadians(-90),
+      heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
+      pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
       roll: 0,
     },
   })
@@ -1427,8 +1432,8 @@ async function initializeViewer() {
         simulationFocus.height,
       ),
       orientation: {
-        heading: 0,
-        pitch: sdk.Math.toRadians(-90),
+        heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
+        pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
         roll: 0,
       },
     })
