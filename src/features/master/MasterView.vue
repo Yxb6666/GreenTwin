@@ -590,13 +590,22 @@ function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
   return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
 }
 
-function tracePoiTreeCanopy(context: CanvasRenderingContext2D, x: number, y: number, radius: number) {
-  context.moveTo(x, y - radius * 0.82)
-  context.bezierCurveTo(x + radius * 0.44, y - radius * 0.86, x + radius * 0.76, y - radius * 0.54, x + radius * 0.72, y - radius * 0.18)
-  context.bezierCurveTo(x + radius * 0.98, y - radius * 0.02, x + radius * 0.82, y + radius * 0.36, x + radius * 0.52, y + radius * 0.34)
-  context.bezierCurveTo(x + radius * 0.28, y + radius * 0.58, x - radius * 0.28, y + radius * 0.58, x - radius * 0.52, y + radius * 0.34)
-  context.bezierCurveTo(x - radius * 0.82, y + radius * 0.36, x - radius * 0.98, y - radius * 0.02, x - radius * 0.72, y - radius * 0.18)
-  context.bezierCurveTo(x - radius * 0.76, y - radius * 0.54, x - radius * 0.44, y - radius * 0.86, x, y - radius * 0.82)
+function tracePoiPineTree(context: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  context.moveTo(x, y - size * 0.36)
+  context.lineTo(x - size * 0.27, y - size * 0.03)
+  context.lineTo(x - size * 0.14, y - size * 0.03)
+  context.lineTo(x - size * 0.32, y + size * 0.17)
+  context.lineTo(x - size * 0.15, y + size * 0.17)
+  context.lineTo(x - size * 0.36, y + size * 0.38)
+  context.quadraticCurveTo(x - size * 0.16, y + size * 0.48, x - size * 0.04, y + size * 0.34)
+  context.lineTo(x - size * 0.04, y + size * 0.52)
+  context.lineTo(x + size * 0.04, y + size * 0.52)
+  context.lineTo(x + size * 0.04, y + size * 0.34)
+  context.quadraticCurveTo(x + size * 0.16, y + size * 0.48, x + size * 0.36, y + size * 0.38)
+  context.lineTo(x + size * 0.15, y + size * 0.17)
+  context.lineTo(x + size * 0.32, y + size * 0.17)
+  context.lineTo(x + size * 0.14, y - size * 0.03)
+  context.lineTo(x + size * 0.27, y - size * 0.03)
   context.closePath()
 }
 
@@ -613,6 +622,53 @@ function tracePoiRoundedRect(context: CanvasRenderingContext2D, x: number, y: nu
   context.lineTo(x, y + radius)
   context.quadraticCurveTo(x, y, x + radius, y)
   context.closePath()
+}
+
+function tracePoiStar(context: CanvasRenderingContext2D, x: number, y: number, outerRadius: number, innerRadius: number) {
+  for (let index = 0; index < 10; index += 1) {
+    const angle = -Math.PI / 2 + (Math.PI * index) / 5
+    const radius = index % 2 === 0 ? outerRadius : innerRadius
+    const pointX = x + Math.cos(angle) * radius
+    const pointY = y + Math.sin(angle) * radius
+    if (index === 0) context.moveTo(pointX, pointY)
+    else context.lineTo(pointX, pointY)
+  }
+  context.closePath()
+}
+
+function drawPoiPublicServiceNodeSymbol(context: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string) {
+  const size = radius * 1.95
+  const cornerRadius = size * 0.22
+  const left = x - size / 2
+  const top = y - size / 2
+
+  context.save()
+  context.lineJoin = 'round'
+  context.lineCap = 'round'
+
+  context.beginPath()
+  tracePoiRoundedRect(context, left, top, size, size, cornerRadius)
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.5)'
+  context.lineWidth = 0.75
+  context.fill()
+  context.stroke()
+
+  context.beginPath()
+  context.moveTo(x - size * 0.31, y + size * 0.27)
+  context.lineTo(x - size * 0.31, y - size * 0.06)
+  context.lineTo(x, y - size * 0.25)
+  context.lineTo(x + size * 0.31, y - size * 0.06)
+  context.lineTo(x + size * 0.31, y + size * 0.27)
+  context.strokeStyle = 'rgba(255, 255, 255, 0.96)'
+  context.lineWidth = Math.max(1.4, radius * 0.24)
+  context.stroke()
+
+  context.beginPath()
+  tracePoiStar(context, x + size * 0.26, y - size * 0.28, size * 0.12, size * 0.052)
+  context.fillStyle = 'rgba(255, 255, 255, 0.96)'
+  context.fill()
+  context.restore()
 }
 
 function drawPoiIndustryNodeSymbol(context: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string) {
@@ -645,6 +701,32 @@ function drawPoiIndustryNodeSymbol(context: CanvasRenderingContext2D, x: number,
   context.restore()
 }
 
+function drawPoiCultureTourismNodeSymbol(context: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string) {
+  const size = radius * 1.95
+  const cornerRadius = size * 0.22
+  const left = x - size / 2
+  const top = y - size / 2
+
+  context.save()
+  context.lineJoin = 'round'
+  context.lineCap = 'round'
+
+  context.beginPath()
+  tracePoiRoundedRect(context, left, top, size, size, cornerRadius)
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.5)'
+  context.lineWidth = 0.75
+  context.fill()
+  context.stroke()
+
+  context.beginPath()
+  tracePoiPineTree(context, x, y - size * 0.02, size * 0.66)
+  context.strokeStyle = 'rgba(255, 255, 255, 0.96)'
+  context.lineWidth = Math.max(1.35, radius * 0.22)
+  context.stroke()
+  context.restore()
+}
+
 function drawPoiPublicServiceSymbols(
   context: CanvasRenderingContext2D,
   records: readonly PoiRecord[],
@@ -652,41 +734,10 @@ function drawPoiPublicServiceSymbols(
   radius: number,
   color: string,
 ) {
-  context.lineJoin = 'round'
-
-  context.beginPath()
   records.forEach((record) => {
     const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    context.rect(point.x - radius * 0.62, point.y - radius * 0.08, radius * 1.24, radius * 0.88)
+    drawPoiPublicServiceNodeSymbol(context, point.x, point.y, radius, color)
   })
-  context.fillStyle = color
-  context.strokeStyle = 'rgba(234, 255, 251, 0.9)'
-  context.lineWidth = 1
-  context.fill()
-  context.stroke()
-
-  context.beginPath()
-  records.forEach((record) => {
-    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    context.moveTo(point.x - radius * 0.82, point.y - radius * 0.05)
-    context.lineTo(point.x, point.y - radius * 0.82)
-    context.lineTo(point.x + radius * 0.82, point.y - radius * 0.05)
-    context.closePath()
-  })
-  context.fillStyle = color
-  context.strokeStyle = 'rgba(234, 255, 251, 0.9)'
-  context.lineWidth = 1
-  context.fill()
-  context.stroke()
-
-  const windowSize = Math.max(1.25, radius * 0.32)
-  context.beginPath()
-  records.forEach((record) => {
-    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    context.rect(point.x - windowSize / 2, point.y + radius * 0.2, windowSize, radius * 0.58)
-  })
-  context.fillStyle = 'rgba(255, 255, 255, 0.92)'
-  context.fill()
 }
 
 function drawPoiIndustrySymbols(
@@ -709,37 +760,10 @@ function drawPoiCultureTourismSymbols(
   radius: number,
   color: string,
 ) {
-  context.lineJoin = 'round'
-  const treeRadius = radius * 1.08
-
-  context.beginPath()
   records.forEach((record) => {
     const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    context.rect(point.x - treeRadius * 0.15, point.y + treeRadius * 0.18, treeRadius * 0.3, treeRadius * 0.78)
+    drawPoiCultureTourismNodeSymbol(context, point.x, point.y, radius, color)
   })
-  context.fillStyle = 'rgba(104, 71, 38, 0.92)'
-  context.fill()
-
-  context.beginPath()
-  records.forEach((record) => {
-    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    tracePoiTreeCanopy(context, point.x, point.y - treeRadius * 0.06, treeRadius * 0.72)
-  })
-  context.fillStyle = color
-  context.strokeStyle = 'rgba(234, 255, 251, 0.84)'
-  context.lineWidth = 1
-  context.fill()
-  context.stroke()
-
-  context.beginPath()
-  records.forEach((record) => {
-    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-    context.moveTo(point.x - treeRadius * 0.4, point.y + treeRadius * 0.98)
-    context.lineTo(point.x + treeRadius * 0.4, point.y + treeRadius * 0.98)
-  })
-  context.strokeStyle = 'rgba(234, 255, 251, 0.78)'
-  context.lineWidth = 1.2
-  context.stroke()
 }
 
 function drawPoiSymbols(
@@ -1974,20 +1998,15 @@ onMounted(async () => {
 .master-map-legend li i.master-poi-breakdown-icon--public-service,
 .master-map-breakdown i.master-poi-breakdown-icon--public-service {
   background: var(--poi-icon-color);
-  border-radius: 0;
-  clip-path: polygon(50% 4%, 96% 41%, 86% 41%, 86% 100%, 14% 100%, 14% 41%, 4% 41%);
-  filter: drop-shadow(0 0 0.8px rgba(234, 255, 251, 0.82));
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(234, 255, 251, 0.34);
 }
 
 .master-poi-breakdown-icon--public-service::before {
-  left: 5px;
-  top: 8px;
-  z-index: 1;
-  width: 4px;
-  height: 5px;
-  background: rgba(255, 255, 255, 0.92);
+  inset: 2px;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M3.5 13.4V8.6L9 5.2l5.5 3.4v4.8' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M13.1 3.3l.55 1.1 1.22.18-.88.86.2 1.21-1.08-.57-1.08.57.2-1.21-.88-.86 1.22-.18z' fill='white'/%3E%3C/svg%3E");
   border: 0;
-  border-radius: 1px 1px 0 0;
+  border-radius: 0;
 }
 
 .master-poi-breakdown-icon--public-service::after {
@@ -2011,26 +2030,23 @@ onMounted(async () => {
   display: none;
 }
 
-.master-poi-breakdown-icon--culture-tourism::before {
-  left: 2px;
-  top: 1px;
-  width: 10px;
-  height: 9px;
+.master-map-legend li i.master-poi-breakdown-icon--culture-tourism,
+.master-map-breakdown i.master-poi-breakdown-icon--culture-tourism {
   background: var(--poi-icon-color);
-  border: 1px solid rgba(234, 255, 251, 0.76);
-  border-radius: 50% 50% 44% 44%;
-  box-shadow:
-    -3px 2px 0 -1px var(--poi-icon-color),
-    3px 2px 0 -1px var(--poi-icon-color);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(234, 255, 251, 0.34);
+}
+
+.master-poi-breakdown-icon--culture-tourism::before {
+  inset: 2px;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M9 2.6 5.4 6.9h1.8L4.8 9.5h2.1L4.2 12.2c1.7.9 3 .4 3.8-.5v2.8h2v-2.8c.8.9 2.1 1.4 3.8.5l-2.7-2.7h2.1l-2.4-2.6h1.8z' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .master-poi-breakdown-icon--culture-tourism::after {
-  left: 6px;
-  top: 8px;
-  width: 2px;
-  height: 5px;
-  background: rgba(104, 71, 38, 0.95);
-  border-radius: 1px;
+  display: none;
 }
 
 .master-map-breakdown b {
