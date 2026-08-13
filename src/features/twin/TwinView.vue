@@ -14,6 +14,13 @@ import AiBuilderAssistant, {
 import SceneToolbox, {
   type SceneMeasureType,
 } from './SceneToolbox.vue'
+import WeatherSimulation from './WeatherSimulation.vue'
+import {
+  createWeatherState,
+  describeWeatherRisk,
+  resolveWeatherMetrics,
+  type WeatherState,
+} from './weatherSimulation'
 import {
   clampModelScale,
   formatPointLabel,
@@ -59,6 +66,10 @@ interface ModelPrimitive {
   modelMatrix?: unknown
 }
 
+interface WeatherPostProcessStage {
+  uniforms: Record<string, number>
+}
+
 interface CesiumMovement {
   position?: { x: number; y: number }
   endPosition?: { x: number; y: number }
@@ -85,6 +96,10 @@ interface SuperMapViewer {
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
+    }
+    postProcessStages?: {
+      add: (stage: WeatherPostProcessStage) => WeatherPostProcessStage
+      remove: (stage: WeatherPostProcessStage) => boolean
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
@@ -174,6 +189,11 @@ interface CesiumRuntime {
     toRadians: (degrees: number) => number
     toDegrees: (radians: number) => number
   }
+  PostProcessStageLibrary?: {
+    createRainStage: () => WeatherPostProcessStage
+    createSnowStage: () => WeatherPostProcessStage
+    createFogStage: () => WeatherPostProcessStage
+  }
 }
 
 const config = useRuntimeConfig()
@@ -198,6 +218,8 @@ const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
 const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
+const weatherState = ref(createWeatherState('rain'))
+const nativeWeatherEffects = ref(false)
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -221,6 +243,7 @@ let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
+let weatherStage: WeatherPostProcessStage | null = null
 
 const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
 
@@ -360,6 +383,7 @@ const currentScenario = computed(
     scenarioTemplates[0]!,
 )
 const currentPlan = computed(() => planData[activePlan.value])
+const weatherMetrics = computed(() => resolveWeatherMetrics(weatherState.value))
 const isGenerating = computed(() => buildState.value === 'running')
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
@@ -383,6 +407,14 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     },
     recommendation: currentPlan.value.recommendation,
     parameters: parameters.value,
+    weather: {
+      type: weatherMetrics.value.label,
+      intensity: `${weatherState.value.intensity}%`,
+      precipitation: `${weatherMetrics.value.precipitation} mm/h`,
+      visibility: `${weatherMetrics.value.visibility} m`,
+      windSpeed: `${weatherState.value.windSpeed} m/s`,
+      risk: describeWeatherRisk(weatherState.value),
+    },
     visibleLayers: layers
       .filter((item) => layerVisibility.value[item.key])
       .map((item) => item.label),
@@ -1270,6 +1302,46 @@ function toggleLayer(key: keyof typeof layerVisibility.value) {
   }
 }
 
+function clearNativeWeatherEffect() {
+  if (viewer?.scene.postProcessStages && weatherStage) {
+    viewer.scene.postProcessStages.remove(weatherStage)
+  }
+  weatherStage = null
+  nativeWeatherEffects.value = false
+}
+
+function applyNativeWeatherEffect(state: WeatherState) {
+  clearNativeWeatherEffect()
+  if (!viewer || state.kind === 'clear') return
+  const stages = cesium().PostProcessStageLibrary
+  const collection = viewer.scene.postProcessStages
+  if (!stages || !collection) return
+
+  if (state.kind === 'rain' || state.kind === 'storm') {
+    weatherStage = stages.createRainStage()
+    weatherStage.uniforms.speed = 8 + state.intensity * 0.24 + state.windSpeed
+    weatherStage.uniforms.angle = -0.15 - state.windSpeed * 0.035
+  } else if (state.kind === 'snow') {
+    weatherStage = stages.createSnowStage()
+    weatherStage.uniforms.density = 1 + state.intensity * 0.08
+    weatherStage.uniforms.speed = 0.8 + state.windSpeed * 0.35
+    weatherStage.uniforms.angle = state.windDirection / 360
+  } else {
+    weatherStage = stages.createFogStage()
+    weatherStage.uniforms.scale = 0.35 + state.intensity * 0.025
+  }
+
+  collection.add(weatherStage)
+  nativeWeatherEffects.value = true
+  viewer.scene.requestRender?.()
+}
+
+function updateWeather(state: WeatherState) {
+  applyNativeWeatherEffect(state)
+  const metrics = resolveWeatherMetrics(state)
+  operationMessage.value = `天气场景已切换为${metrics.label}：降水 ${metrics.precipitation} mm/h、能见度 ${(metrics.visibility / 1000).toFixed(1)} km；${describeWeatherRisk(state)}`
+}
+
 async function initializeViewer() {
   await nextTick()
   if (!cesiumContainer.value) return
@@ -1316,6 +1388,7 @@ async function initializeViewer() {
       },
     })
     setupSceneInteractions()
+    applyNativeWeatherEffect(weatherState.value)
     void loadDataLayers()
     engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
@@ -1340,6 +1413,7 @@ onBeforeUnmount(() => {
   eventHandler?.destroy()
   eventHandler = null
   cancelMeasurement()
+  clearNativeWeatherEffect()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -1497,6 +1571,11 @@ onBeforeUnmount(() => {
           <span>请在地图上点击确定建造位置</span>
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
+        <WeatherSimulation
+          v-model="weatherState"
+          :native-effects="nativeWeatherEffects"
+          @change="updateWeather"
+        />
         <SceneToolbox
           :measuring="measurementMode"
           :layers="sceneLayers"
