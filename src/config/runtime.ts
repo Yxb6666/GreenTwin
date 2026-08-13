@@ -28,7 +28,14 @@ export interface RuntimeConfig {
       serviceUrl: string
       collectionId: string
       opacity: number
-      rendererType: 'STRETCHED' | 'UNIQUE_VALUES'
+      renderingRule: {
+        displayMode: 'STRETCHED'
+        displayBands: string
+        interpolationMode: 'NEARESTNEIGHBOR'
+        colorTable: string[]
+        noData: string
+        noDataTransparent: boolean
+      }
     }
     webglSdkUrl: string
     webglWidgetsCssUrl: string
@@ -52,7 +59,7 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (!config.arcgis || typeof config.arcgis.accessToken !== 'string') {
     throw new Error('缺少 ArcGIS accessToken 运行时配置')
   }
-  if (!config.supermap?.leafletSdkUrl || !config.supermap.mapServices?.base || !config.supermap.mapServices.township || !config.supermap.mapServices.poi || !config.supermap.dem?.serviceUrl || !config.supermap.dem.collectionId || !config.supermap.dem.itemId || !config.supermap.landuseRaster?.serviceUrl || !config.supermap.landuseRaster.collectionId) {
+  if (!config.supermap?.leafletSdkUrl || !config.supermap.mapServices?.base || !config.supermap.mapServices.township || !config.supermap.mapServices.poi || !config.supermap.dem?.serviceUrl || !config.supermap.dem.collectionId || !config.supermap.dem.itemId || !config.supermap.landuseRaster?.serviceUrl || !config.supermap.landuseRaster.collectionId || !config.supermap.landuseRaster.renderingRule?.colorTable.length) {
     throw new Error('缺少 SuperMap SDK、二维地图、POI 或 DEM 影像服务配置')
   }
 }

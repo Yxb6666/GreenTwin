@@ -132,7 +132,7 @@ const baseAdministrativeLegend: ThemeLegendItem[] = [
   { label: '兰考县界', color: '#dceb72', kind: 'line' },
   { label: '乡镇 / 街道界', color: '#b9cf65', kind: 'line' },
 ]
-const landUseClassificationReady = computed(() => config.supermap.landuseRaster.rendererType === 'UNIQUE_VALUES')
+const landUseClassificationReady = computed(() => config.supermap.landuseRaster.renderingRule.colorTable.length > 0)
 const activeMapThemeConfig = computed(() => {
   if (activeMapTheme.value == null) return baseAdministrativeTheme
   const theme = masterMapThemes.find((item) => item.key === activeMapTheme.value)!
