@@ -1,77 +1,159 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import L from 'leaflet'
-import ScreenHeader from '@/shared/components/ScreenHeader.vue'
-import PanelCard from '@/shared/components/PanelCard.vue'
-import MapToolbox from '@/shared/components/MapToolbox.vue'
-import MasterSanshengRadar from '@/features/master/MasterSanshengRadar.vue'
-import TerrainAnalysisDrawer from '@/features/master/TerrainAnalysisDrawer.vue'
-import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
-import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
-import { useRuntimeConfig } from '@/config/useRuntimeConfig'
-import { useLeafletMap } from '@/gis/leaflet/useLeafletMap'
-import { orderTownshipRingParts, townshipRepresentativePoint, type TownshipFeature } from '@/gis/leaflet/townshipFeatures'
-import { loadGovernanceIssues, type GovernanceIssue } from '@/features/governance/data'
-import { DEM_RENDERING_RULE, loadDemSummary, type DemSummary } from '@/features/master/demService'
-import { calculatePopulationChangeRate, gdpTrend, getPopulationTrendLabel, latestDensityRecord, latestPopulation, latestPopulationDensity, latestPopulationGrowth, populationTrend } from '@/features/master/data'
-import { COUNTY_SANSHENG_SCORES, resolveMasterSanshengEvaluation } from '@/features/master/sanshengSelection'
-import { getPointThemeLabelPlacement, type PointThemeLabelDirection } from '@/features/master/pointThemeLabelPlacement'
-import { landUseSource, masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme, type MasterMapThemeKey, type ThemeLegendItem, type TownshipThemeMetric } from '@/features/master/mapThemes'
-import { buildPoiIndexByTownship, loadPoiRecords, type PoiRecord, type TownshipPoiSummary } from '@/features/master/poiService'
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
+import L from "leaflet";
+import ScreenHeader from "@/shared/components/ScreenHeader.vue";
+import PanelCard from "@/shared/components/PanelCard.vue";
+import MapToolbox from "@/shared/components/MapToolbox.vue";
+import MasterSanshengRadar from "@/features/master/MasterSanshengRadar.vue";
+import TerrainAnalysisDrawer from "@/features/master/TerrainAnalysisDrawer.vue";
+import DecisionAssistant from "@/shared/assistant/DecisionAssistant.vue";
+import type { DecisionAssistantContext } from "@/shared/assistant/assistant";
+import { useRuntimeConfig } from "@/config/useRuntimeConfig";
+import { useLeafletMap } from "@/gis/leaflet/useLeafletMap";
+import {
+  orderTownshipRingParts,
+  townshipRepresentativePoint,
+  type TownshipFeature,
+} from "@/gis/leaflet/townshipFeatures";
+import {
+  loadGovernanceIssues,
+  type GovernanceIssue,
+} from "@/features/governance/data";
+import {
+  DEM_RENDERING_RULE,
+  loadDemSummary,
+  type DemSummary,
+} from "@/features/master/demService";
+import {
+  calculatePopulationChangeRate,
+  gdpTrend,
+  getPopulationTrendLabel,
+  latestDensityRecord,
+  latestPopulation,
+  latestPopulationDensity,
+  latestPopulationGrowth,
+  populationTrend,
+} from "@/features/master/data";
+import {
+  COUNTY_SANSHENG_SCORES,
+  resolveMasterSanshengEvaluation,
+} from "@/features/master/sanshengSelection";
+import {
+  getPointThemeLabelPlacement,
+  type PointThemeLabelDirection,
+} from "@/features/master/pointThemeLabelPlacement";
+import {
+  landUseSource,
+  masterMapThemeLegends,
+  masterMapThemes,
+  resolveTownshipThemeMetric,
+  resolveTownshipThemeMetrics,
+  toggleMasterMapTheme,
+  type MasterMapThemeKey,
+  type ThemeLegendItem,
+  type TownshipThemeMetric,
+} from "@/features/master/mapThemes";
+import {
+  buildPoiIndexByTownship,
+  loadPoiRecords,
+  type PoiRecord,
+  type TownshipPoiSummary,
+} from "@/features/master/poiService";
+import {
+  GREENTWIN_MAP_COLORS,
+  POI_CATEGORY_COLORS,
+} from "@/features/master/mapThemeColors";
 
-const config = useRuntimeConfig()
-const mapContainer = ref<HTMLElement | null>(null)
-const { map, focusBounds, townshipFeatures, selectedTownship, activeBaseMap, arcgisAvailable, error: mapError, initialize, setBaseMap, setLandUseRaster, clearSelectedTownship, focusTownshipByName, setTownshipLabelPlacement, resetTownshipLabelPlacements } = useLeafletMap(mapContainer)
-const demSummary = ref<DemSummary | null>(null)
-const demError = ref('')
-const demLoading = ref(true)
-const activeMapTheme = ref<MasterMapThemeKey | null>(null)
-const selectedThemeTownship = ref<TownshipFeature | null>(null)
-const governanceIssues = ref<GovernanceIssue[]>([])
-const poiRecords = shallowRef<PoiRecord[]>([])
-const poiMetricsByTownship = shallowRef<ReadonlyMap<string, TownshipPoiSummary>>(new Map())
-const poiRecordsByTownship = shallowRef<ReadonlyMap<string, readonly PoiRecord[]>>(new Map())
-const poiLoading = ref(true)
-const poiIndexing = ref(false)
-const poiError = ref('')
-let thematicLayer: L.LayerGroup | null = null
-let poiIndexRequestId = 0
-const pointThemeLabelOverrides: Partial<Record<string, PointThemeLabelDirection>> = {
-  惠安街道: 'right',
-}
-const poiBucketLegend: Record<PoiRecord['bucket'], ThemeLegendItem> = {
-  publicService: masterMapThemeLegends.poi[0]!,
-  industry: masterMapThemeLegends.poi[1]!,
-  cultureTourism: masterMapThemeLegends.poi[2]!,
-}
-const populationLabelYears = new Set([2020, 2021, 2025])
-const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
-const populationChangeRate = computed(() => calculatePopulationChangeRate(populationTrend))
-const populationTrendLabel = computed(() => getPopulationTrendLabel(populationChangeRate.value))
+const config = useRuntimeConfig();
+const mapContainer = ref<HTMLElement | null>(null);
+const {
+  map,
+  focusBounds,
+  townshipFeatures,
+  selectedTownship,
+  activeBaseMap,
+  arcgisAvailable,
+  error: mapError,
+  initialize,
+  setBaseMap,
+  setLandUseRaster,
+  setCountyOutlineStyle,
+  clearSelectedTownship,
+  focusTownshipByName,
+  setTownshipLabelPlacement,
+  resetTownshipLabelPlacements,
+} = useLeafletMap(mapContainer);
+const demSummary = ref<DemSummary | null>(null);
+const demError = ref("");
+const demLoading = ref(true);
+const activeMapTheme = ref<MasterMapThemeKey | null>(null);
+const selectedThemeTownship = ref<TownshipFeature | null>(null);
+const governanceIssues = ref<GovernanceIssue[]>([]);
+const poiRecords = shallowRef<PoiRecord[]>([]);
+const poiMetricsByTownship = shallowRef<
+  ReadonlyMap<string, TownshipPoiSummary>
+>(new Map());
+const poiRecordsByTownship = shallowRef<
+  ReadonlyMap<string, readonly PoiRecord[]>
+>(new Map());
+const poiLoading = ref(true);
+const poiIndexing = ref(false);
+const poiError = ref("");
+const mapToast = ref("");
+let mapToastTimer: ReturnType<typeof setTimeout> | null = null;
+const recentToastMessages = new Map<string, number>();
+let thematicLayer: L.LayerGroup | null = null;
+let poiIndexRequestId = 0;
+const pointThemeLabelOverrides: Partial<
+  Record<string, PointThemeLabelDirection>
+> = {
+  惠安街道: "right",
+};
+const populationLabelYears = new Set([2020, 2021, 2025]);
+const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(
+  null,
+);
+const populationChangeRate = computed(() =>
+  calculatePopulationChangeRate(populationTrend),
+);
+const populationTrendLabel = computed(() =>
+  getPopulationTrendLabel(populationChangeRate.value),
+);
 const populationTrendChart = computed(() => {
-  const width = 248
-  const height = 118
-  const left = 26
-  const right = 26
-  const top = 25
-  const bottom = 22
-  const values = populationTrend.map((item) => item.populationWan)
-  const minimum = Math.min(...values) - 0.8
-  const maximum = Math.max(...values) + 0.8
-  const plotWidth = width - left - right
-  const plotHeight = height - top - bottom
-  const valueRange = maximum - minimum || 1
+  const width = 248;
+  const height = 118;
+  const left = 26;
+  const right = 26;
+  const top = 25;
+  const bottom = 22;
+  const values = populationTrend.map((item) => item.populationWan);
+  const minimum = Math.min(...values) - 0.8;
+  const maximum = Math.max(...values) + 0.8;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const valueRange = maximum - minimum || 1;
   const points = populationTrend.map((item, index) => ({
     ...item,
     x: left + (plotWidth * index) / Math.max(1, populationTrend.length - 1),
     y: top + ((maximum - item.populationWan) / valueRange) * plotHeight,
-  }))
-  const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ')
-  const areaPath = points.length ? `M ${points[0]!.x} ${height - bottom} L ${linePoints} L ${points.at(-1)!.x} ${height - bottom} Z` : ''
-  const gridLines = [minimum, (minimum + maximum) / 2, maximum].map((value) => ({
-    value,
-    y: top + ((maximum - value) / valueRange) * plotHeight,
-  }))
+  }));
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPath = points.length
+    ? `M ${points[0]!.x} ${height - bottom} L ${linePoints} L ${points.at(-1)!.x} ${height - bottom} Z`
+    : "";
+  const gridLines = [minimum, (minimum + maximum) / 2, maximum].map(
+    (value) => ({
+      value,
+      y: top + ((maximum - value) / valueRange) * plotHeight,
+    }),
+  );
 
   return {
     width,
@@ -84,16 +166,26 @@ const populationTrendChart = computed(() => {
     linePoints,
     areaPath,
     gridLines,
-  }
-})
+  };
+});
 const activePopulationChartPoint = computed(() => {
-  if (!activePopulationPoint.value) return null
-  return populationTrendChart.value.points.find((point) => point.year === activePopulationPoint.value?.year) ?? null
-})
-const sanshengEvaluation = computed(() => resolveMasterSanshengEvaluation(selectedTownship.value))
+  if (!activePopulationPoint.value) return null;
+  return (
+    populationTrendChart.value.points.find(
+      (point) => point.year === activePopulationPoint.value?.year,
+    ) ?? null
+  );
+});
+const sanshengEvaluation = computed(() =>
+  resolveMasterSanshengEvaluation(selectedTownship.value),
+);
 const assistantContext = computed<DecisionAssistantContext>(() => ({
-  module: '三生空间',
-  scopeLabel: selectedTownship.value ? `${selectedTownship.value}三生评价 · 其余指标为兰考县县域` : activeLandUse.value ? `兰考县全域综合态势 · ${activeLandUse.value.name}` : '兰考县全域综合态势',
+  module: "三生空间",
+  scopeLabel: selectedTownship.value
+    ? `${selectedTownship.value}三生评价 · 其余指标为兰考县县域`
+    : activeLandUse.value
+      ? `兰考县全域综合态势 · ${activeLandUse.value.name}`
+      : "兰考县全域综合态势",
   updatedAt: new Date().toISOString(),
   data: {
     population: {
@@ -106,371 +198,489 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
       year: gdpTrend.at(-1)!.year,
       valueYiYuan: gdpTrend.at(-1)!.gdpYiYuan,
     },
-    populationTrend: populationTrend.map((item) => `${item.year}:${item.populationWan}万人`),
-    gdpTrend: gdpTrend.map((item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`),
+    populationTrend: populationTrend.map(
+      (item) => `${item.year}:${item.populationWan}万人`,
+    ),
+    gdpTrend: gdpTrend.map(
+      (item) => `${item.year}:${item.gdpYiYuan.toFixed(2)}亿元`,
+    ),
     landUse: landUseSource.map((item) => `${item.name}:${item.value}%`),
-    selectedLandUse: activeLandUse.value?.name ?? '未选中',
-    selectedTownship: selectedTownship.value ?? '未选中',
-    townshipSansheng: sanshengEvaluation.value.scores ? { ...sanshengEvaluation.value.scores } : '三生模型当前未配置该行政区指标',
+    selectedLandUse: activeLandUse.value?.name ?? "未选中",
+    selectedTownship: selectedTownship.value ?? "未选中",
+    townshipSansheng: sanshengEvaluation.value.scores
+      ? { ...sanshengEvaluation.value.scores }
+      : "三生模型当前未配置该行政区指标",
     dataScopes: {
-      population: '兰考县县域',
-      gdp: '兰考县县域',
-      landUse: '兰考县县域',
-      sansheng: sanshengEvaluation.value.scope === 'township' ? `${sanshengEvaluation.value.areaName}行政区` : sanshengEvaluation.value.scope === 'unavailable' ? `${sanshengEvaluation.value.areaName}行政区（暂无模型数据）` : '兰考县县域',
+      population: "兰考县县域",
+      gdp: "兰考县县域",
+      landUse: "兰考县县域",
+      sansheng:
+        sanshengEvaluation.value.scope === "township"
+          ? `${sanshengEvaluation.value.areaName}行政区`
+          : sanshengEvaluation.value.scope === "unavailable"
+            ? `${sanshengEvaluation.value.areaName}行政区（暂无模型数据）`
+            : "兰考县县域",
     },
     countyScores: { ecology: 88, life: 82, production: 90 },
-    dem: demSummary.value === null ? (demLoading.value ? '加载中' : demError.value || '暂无数据') : JSON.stringify(demSummary.value),
+    dem:
+      demSummary.value === null
+        ? demLoading.value
+          ? "加载中"
+          : demError.value || "暂无数据"
+        : JSON.stringify(demSummary.value),
   },
-}))
-const assistantPrompts = ['概括当前全县三生空间态势', '人口与 GDP 趋势反映了什么？', '土地利用结构有哪些优化方向？', '结合当前数据给出三项优先行动']
+}));
+const assistantPrompts = [
+  "概括当前全县三生空间态势",
+  "人口与 GDP 趋势反映了什么？",
+  "土地利用结构有哪些优化方向？",
+  "结合当前数据给出三项优先行动",
+];
 
 const baseAdministrativeTheme = {
-  label: '行政区划',
-  description: '兰考县现行乡镇、街道行政区划',
-}
+  label: "行政区划",
+  description: "兰考县现行乡镇、街道行政区划",
+};
 const baseAdministrativeLegend: ThemeLegendItem[] = [
-  { label: '兰考县界', color: '#dceb72', kind: 'line' },
-  { label: '乡镇 / 街道界', color: '#b9cf65', kind: 'line' },
-]
-const landUseClassificationReady = computed(() => config.supermap.landuseRaster.rendererType === 'UNIQUE_VALUES')
+  {
+    label: "兰考县界",
+    color: GREENTWIN_MAP_COLORS.admin.countyStroke,
+    kind: "line",
+  },
+  {
+    label: "乡镇 / 街道界",
+    color: GREENTWIN_MAP_COLORS.admin.townshipStroke,
+    kind: "line",
+  },
+];
+const landUseClassificationReady = computed(
+  () => config.supermap.landuseRaster.rendererType === "UNIQUE_VALUES",
+);
 const activeMapThemeConfig = computed(() => {
-  if (activeMapTheme.value == null) return baseAdministrativeTheme
-  const theme = masterMapThemes.find((item) => item.key === activeMapTheme.value)!
-  if (theme.key === 'poi') {
+  if (activeMapTheme.value == null) return baseAdministrativeTheme;
+  const theme = masterMapThemes.find(
+    (item) => item.key === activeMapTheme.value,
+  )!;
+  if (theme.key === "poi") {
     return {
       ...theme,
-      description: poiLoading.value || poiIndexing.value
-        ? 'Lankao_POI_2025 真实点位加载中'
-        : poiError.value
-          ? '真实 POI 服务暂不可用'
-          : `${poiRecords.value.length} 个真实 POI 点位`,
-    }
+      description:
+        poiLoading.value || poiIndexing.value
+          ? "Lankao_POI_2025 真实点位加载中"
+          : poiError.value
+            ? "真实 POI 服务暂不可用"
+            : `${poiRecords.value.length} 个真实 POI 点位`,
+    };
   }
-  if (theme.key === 'landuse' && !landUseClassificationReady.value) {
+  if (theme.key === "landuse" && !landUseClassificationReady.value) {
     return {
       ...theme,
-      description: 'Lankao-Land 真实栅格 · 服务端分类色表待配置',
-    }
+      description: "Lankao-Land 真实栅格 · 服务端分类色表待配置",
+    };
   }
-  return theme
-})
-const activeTownshipMetrics = computed(() => resolveTownshipThemeMetrics(activeMapTheme.value, townshipFeatures.value, governanceIssues.value, poiMetricsByTownship.value))
+  return theme;
+});
+const activeTownshipMetrics = computed(() =>
+  resolveTownshipThemeMetrics(
+    activeMapTheme.value,
+    townshipFeatures.value,
+    governanceIssues.value,
+    poiMetricsByTownship.value,
+  ),
+);
 const activeMapLegend = computed(() => {
-  if (activeMapTheme.value == null) return baseAdministrativeLegend
-  if (activeMapTheme.value === 'poi') return buildPoiLegend()
-  if (activeMapTheme.value === 'landuse' && !landUseClassificationReady.value) {
-    return [{ label: '真实栅格（待配置分类色表）', color: '#7E9189' }]
+  if (activeMapTheme.value == null) return baseAdministrativeLegend;
+  if (activeMapTheme.value === "poi") return buildPoiLegend();
+  if (activeMapTheme.value === "landuse" && !landUseClassificationReady.value) {
+    return [
+      {
+        label: "真实栅格（待配置分类色表）",
+        color: GREENTWIN_MAP_COLORS.landUse.other,
+      },
+    ];
   }
-  const legend = [...masterMapThemeLegends[activeMapTheme.value]]
-  if (activeMapTheme.value === 'sansheng' && activeTownshipMetrics.value.some((metric) => metric.dataAvailable === false)) {
-    legend.push({ label: '暂无数据', color: '#435852' })
+  const legend = [...masterMapThemeLegends[activeMapTheme.value]];
+  if (
+    activeMapTheme.value === "sansheng" &&
+    activeTownshipMetrics.value.some((metric) => metric.dataAvailable === false)
+  ) {
+    legend.push({ label: "暂无评价数据", color: GREENTWIN_MAP_COLORS.noData });
   }
-  return legend
-})
+  return legend;
+});
 const selectedTownshipMetric = computed(() => {
-  if (!selectedThemeTownship.value) return null
-  const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedThemeTownship.value?.code)
-  return index >= 0 ? (activeTownshipMetrics.value[index] ?? null) : null
-})
-const mapThemeStatus = computed(() => (townshipFeatures.value.length > 0 ? `${townshipFeatures.value.length} 个行政区` : '行政区划加载中'))
-const selectedAreaLabel = computed(() => (selectedThemeTownship.value ? townshipName(selectedThemeTownship.value) : (selectedTownship.value ?? '兰考县')))
+  if (!selectedThemeTownship.value) return null;
+  const index = townshipFeatures.value.findIndex(
+    (feature) => feature.code === selectedThemeTownship.value?.code,
+  );
+  return index >= 0 ? (activeTownshipMetrics.value[index] ?? null) : null;
+});
+const mapThemeStatus = computed(() =>
+  townshipFeatures.value.length > 0
+    ? `${townshipFeatures.value.length} 个行政区`
+    : "行政区划加载中",
+);
+const selectedAreaLabel = computed(() =>
+  selectedThemeTownship.value
+    ? townshipName(selectedThemeTownship.value)
+    : (selectedTownship.value ?? "兰考县"),
+);
 
 interface MasterDecisionInsight {
-  meta: string
-  theme: string
-  scope: string
-  primaryLabel: string
-  primaryValue: string
-  secondaryLabel: string
-  secondaryValue: string
-  assessment: string
-  recommendation: string
-  chips: string[]
-  note: string
+  meta: string;
+  theme: string;
+  scope: string;
+  primaryLabel: string;
+  primaryValue: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+  assessment: string;
+  recommendation: string;
+  chips: string[];
+  note: string;
 }
 
 function formatSignedPercent(value: number) {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
 function strongestBreakdown(metric: TownshipThemeMetric | null) {
-  return metric?.breakdown?.reduce((strongest, item) => (item.value > strongest.value ? item : strongest)) ?? null
+  return (
+    metric?.breakdown?.reduce((strongest, item) =>
+      item.value > strongest.value ? item : strongest,
+    ) ?? null
+  );
 }
 
-function weakestSanshengDimension(scores: { ecology: number; life: number; production: number }) {
+function weakestSanshengDimension(scores: {
+  ecology: number;
+  life: number;
+  production: number;
+}) {
   return [
-    { label: '生态', value: scores.ecology },
-    { label: '生活', value: scores.life },
-    { label: '生产', value: scores.production },
-  ].sort((first, second) => first.value - second.value)[0]!
+    { label: "生态", value: scores.ecology },
+    { label: "生活", value: scores.life },
+    { label: "生产", value: scores.production },
+  ].sort((first, second) => first.value - second.value)[0]!;
 }
 
 function landUseRecommendation(name: string) {
-  if (name.includes('耕地')) return '叠加产业节点和治理问题，优先识别设施农业提升区与农田环境治理点。'
-  if (name.includes('林地')) return '结合生态廊道和水系边界，识别保育修复与景观连通空间。'
-  if (name.includes('村庄')) return '重点核查村庄建设边界，联动人口密度判断公共服务补短板优先级。'
-  if (name.includes('水域')) return '叠加人居环境问题，优先排查沟渠沿线治理和生态修复需求。'
-  return '作为弹性空间继续叠加专题数据，筛选可调整或需核查的用地单元。'
+  if (name.includes("耕地"))
+    return "叠加产业节点和治理问题，优先识别设施农业提升区与农田环境治理点。";
+  if (name.includes("林地"))
+    return "结合生态廊道和水系边界，识别保育修复与景观连通空间。";
+  if (name.includes("村庄"))
+    return "重点核查村庄建设边界，联动人口密度判断公共服务补短板优先级。";
+  if (name.includes("水域"))
+    return "叠加人居环境问题，优先排查沟渠沿线治理和生态修复需求。";
+  return "作为弹性空间继续叠加专题数据，筛选可调整或需核查的用地单元。";
 }
 
 const decisionInsight = computed<MasterDecisionInsight>(() => {
-  const scope = selectedAreaLabel.value
-  const themeKey = activeMapTheme.value
-  const theme = activeMapThemeConfig.value.label
-  const selectedMetric = selectedTownshipMetric.value
-  const hasSelectedTownship = selectedThemeTownship.value !== null
+  const scope = selectedAreaLabel.value;
+  const themeKey = activeMapTheme.value;
+  const theme = activeMapThemeConfig.value.label;
+  const selectedMetric = selectedTownshipMetric.value;
+  const hasSelectedTownship = selectedThemeTownship.value !== null;
 
-  if (themeKey === 'population') {
+  if (themeKey === "population") {
     if (hasSelectedTownship && selectedMetric) {
-      const diff = selectedMetric.value - latestPopulationDensity
+      const diff = selectedMetric.value - latestPopulationDensity;
       return {
-        meta: '随人口专题 / 乡镇选区联动',
+        meta: "随人口专题 / 乡镇选区联动",
         theme,
         scope,
-        primaryLabel: '人口密度',
+        primaryLabel: "人口密度",
         primaryValue: selectedMetric.label,
-        secondaryLabel: '县域基准',
+        secondaryLabel: "县域基准",
         secondaryValue: `${latestPopulationDensity} 人/km²`,
-        assessment: `${scope}人口密度${diff >= 0 ? '高于' : '低于'}县域基准约 ${Math.abs(diff)} 人/km²，适合进一步判断公共服务承载和村庄建设压力。`,
-        recommendation: diff >= 0 ? '优先叠加 POI 与治理问题，识别服务覆盖不足和高频治理点。' : '重点关注产业、耕地和生态空间利用效率，避免简单按城区逻辑配置资源。',
-        chips: ['人口密度', '县域对比', '服务承载'],
+        assessment: `${scope}人口密度${diff >= 0 ? "高于" : "低于"}县域基准约 ${Math.abs(diff)} 人/km²，适合进一步判断公共服务承载和村庄建设压力。`,
+        recommendation:
+          diff >= 0
+            ? "优先叠加 POI 与治理问题，识别服务覆盖不足和高频治理点。"
+            : "重点关注产业、耕地和生态空间利用效率，避免简单按城区逻辑配置资源。",
+        chips: ["人口密度", "县域对比", "服务承载"],
         note: selectedMetric.meta,
-      }
+      };
     }
 
     return {
-      meta: '随人口专题联动',
+      meta: "随人口专题联动",
       theme,
       scope,
       primaryLabel: `${latestPopulation.year} 年人口`,
       primaryValue: `${latestPopulation.populationWan.toFixed(1)} 万`,
-      secondaryLabel: '人口趋势',
+      secondaryLabel: "人口趋势",
       secondaryValue: `${formatSignedPercent(populationChangeRate.value)} · ${populationTrendLabel.value}`,
       assessment: `兰考县人口规模总体${populationTrendLabel.value}，县域人口密度约 ${latestPopulationDensity} 人/km²。`,
-      recommendation: '点击具体乡镇，右侧会自动切换为该行政区的人口承载研判。',
-      chips: ['县域人口', '2020—2025', '趋势判断'],
-      note: '县域统计口径',
-    }
+      recommendation: "点击具体乡镇，右侧会自动切换为该行政区的人口承载研判。",
+      chips: ["县域人口", "2020—2025", "趋势判断"],
+      note: "县域统计口径",
+    };
   }
 
-  if (themeKey === 'gdp') {
-    const latestGdp = gdpTrend.at(-1)!
-    const firstGdp = gdpTrend[0]!
-    const gdpGrowth = ((latestGdp.gdpYiYuan - firstGdp.gdpYiYuan) / firstGdp.gdpYiYuan) * 100
+  if (themeKey === "gdp") {
+    const latestGdp = gdpTrend.at(-1)!;
+    const firstGdp = gdpTrend[0]!;
+    const gdpGrowth =
+      ((latestGdp.gdpYiYuan - firstGdp.gdpYiYuan) / firstGdp.gdpYiYuan) * 100;
     if (hasSelectedTownship && selectedMetric) {
       return {
-        meta: '随 GDP 专题 / 乡镇选区联动',
+        meta: "随 GDP 专题 / 乡镇选区联动",
         theme,
         scope,
-        primaryLabel: '经济强度',
+        primaryLabel: "经济强度",
         primaryValue: selectedMetric.label,
-        secondaryLabel: '县域 GDP',
+        secondaryLabel: "县域 GDP",
         secondaryValue: `${latestGdp.gdpYiYuan.toFixed(1)} 亿元`,
         assessment: `${scope}当前经济强度为${selectedMetric.label}，可作为产业节点、交通廊道和公共服务配置的联动参考。`,
-        recommendation: selectedMetric.value >= 45 ? '优先叠加 POI，筛选产业服务集聚节点和招商承载空间。' : '建议结合人口密度与三生评价，判断产业补链还是生态保育更优先。',
-        chips: ['经济强度', '产业承载', '乡镇对比'],
+        recommendation:
+          selectedMetric.value >= 45
+            ? "优先叠加 POI，筛选产业服务集聚节点和招商承载空间。"
+            : "建议结合人口密度与三生评价，判断产业补链还是生态保育更优先。",
+        chips: ["经济强度", "产业承载", "乡镇对比"],
         note: selectedMetric.meta,
-      }
+      };
     }
 
     return {
-      meta: '随 GDP 专题联动',
+      meta: "随 GDP 专题联动",
       theme,
       scope,
       primaryLabel: `${latestGdp.year} 年 GDP`,
       primaryValue: `${latestGdp.gdpYiYuan.toFixed(1)} 亿元`,
-      secondaryLabel: '累计变化',
+      secondaryLabel: "累计变化",
       secondaryValue: formatSignedPercent(gdpGrowth),
-      assessment: '县域经济总量保持增长态势，适合与产业节点和交通骨架联动识别重点片区。',
-      recommendation: '点击乡镇后，可查看该区域经济强度并生成更具体的发展判断。',
-      chips: ['县域 GDP', '产业研判', '增长趋势'],
-      note: '县域统计口径',
-    }
+      assessment:
+        "县域经济总量保持增长态势，适合与产业节点和交通骨架联动识别重点片区。",
+      recommendation:
+        "点击乡镇后，可查看该区域经济强度并生成更具体的发展判断。",
+      chips: ["县域 GDP", "产业研判", "增长趋势"],
+      note: "县域统计口径",
+    };
   }
 
-  if (themeKey === 'poi') {
+  if (themeKey === "poi") {
     if (poiLoading.value && poiMetricsByTownship.value.size === 0) {
       return {
-        meta: '随 POI 专题联动',
+        meta: "随 POI 专题联动",
         theme,
         scope,
-        primaryLabel: '真实 POI',
-        primaryValue: '加载中',
-        secondaryLabel: '数据源',
-        secondaryValue: 'Lankao_POI_2025',
-        assessment: '正在从 SuperMap iServer 读取真实 POI 点位，并按乡镇边界重新聚合。',
-        recommendation: '加载完成后点击地图聚合点，可查看对应乡镇的公共服务、产业节点和文旅资源结构。',
-        chips: ['真实 POI', 'iServer', '乡镇聚合'],
-        note: 'Lankao_POI_2025',
-      }
+        primaryLabel: "真实 POI",
+        primaryValue: "加载中",
+        secondaryLabel: "数据源",
+        secondaryValue: "Lankao_POI_2025",
+        assessment:
+          "正在从 SuperMap iServer 读取真实 POI 点位，并按乡镇边界重新聚合。",
+        recommendation:
+          "加载完成后点击地图聚合点，可查看对应乡镇的公共服务、产业节点和文旅资源结构。",
+        chips: ["真实 POI", "iServer", "乡镇聚合"],
+        note: "Lankao_POI_2025",
+      };
     }
     if (poiError.value && poiMetricsByTownship.value.size === 0) {
       return {
-        meta: '随 POI 专题联动',
+        meta: "随 POI 专题联动",
         theme,
         scope,
-        primaryLabel: '真实 POI',
-        primaryValue: '加载失败',
-        secondaryLabel: '数据源',
-        secondaryValue: 'Lankao_POI_2025',
-        assessment: '真实 POI 服务暂时不可用，当前不再使用三生指标推算 POI。',
-        recommendation: '请检查 POI iServer 地址、跨域配置和现场网络连通性。',
-        chips: ['真实 POI', '服务异常', '未使用模拟值'],
+        primaryLabel: "真实 POI",
+        primaryValue: "加载失败",
+        secondaryLabel: "数据源",
+        secondaryValue: "Lankao_POI_2025",
+        assessment: "真实 POI 服务暂时不可用，当前不再使用三生指标推算 POI。",
+        recommendation: "请检查 POI iServer 地址、跨域配置和现场网络连通性。",
+        chips: ["真实 POI", "服务异常", "未使用模拟值"],
         note: poiError.value,
-      }
+      };
     }
     if (hasSelectedTownship && selectedMetric) {
-      const strongest = strongestBreakdown(selectedMetric)
+      const strongest = strongestBreakdown(selectedMetric);
       return {
-        meta: '随 POI 专题 / 乡镇选区联动',
+        meta: "随 POI 专题 / 乡镇选区联动",
         theme,
         scope,
-        primaryLabel: 'POI 聚合',
+        primaryLabel: "POI 聚合",
         primaryValue: selectedMetric.label,
-        secondaryLabel: strongest?.label ?? '主导类型',
-        secondaryValue: strongest ? `${strongest.value} 个` : '暂无',
-        assessment: `${scope}公共服务、产业和文旅资源已聚合为专题点，当前主导项为${strongest?.label ?? '综合节点'}。`,
-        recommendation: strongest?.label === '产业节点' ? '建议叠加 GDP，筛选产业服务集聚与交通可达性更好的节点。' : '建议叠加人口密度，判断公共服务补点或文旅服务提升方向。',
-        chips: ['POI 聚合', '服务节点', '专题点位'],
+        secondaryLabel: strongest?.label ?? "主导类型",
+        secondaryValue: strongest ? `${strongest.value} 个` : "暂无",
+        assessment: `${scope}公共服务、产业和文旅资源已聚合为专题点，当前主导项为${strongest?.label ?? "综合节点"}。`,
+        recommendation:
+          strongest?.label === "产业节点"
+            ? "建议叠加 GDP，筛选产业服务集聚与交通可达性更好的节点。"
+            : "建议叠加人口密度，判断公共服务补点或文旅服务提升方向。",
+        chips: ["POI 聚合", "服务节点", "专题点位"],
         note: selectedMetric.meta,
-      }
+      };
     }
 
-    const poiTotals = buildPoiLegend()
-    const total = poiTotals.reduce((sum, item) => sum + (item.value ?? 0), 0)
-    const strongest = poiTotals.reduce((top, item) => ((item.value ?? 0) > (top.value ?? 0) ? item : top), poiTotals[0]!)
+    const poiTotals = buildPoiLegend();
+    const total = poiTotals.reduce((sum, item) => sum + (item.value ?? 0), 0);
+    const strongest = poiTotals.reduce(
+      (top, item) => ((item.value ?? 0) > (top.value ?? 0) ? item : top),
+      poiTotals[0]!,
+    );
     return {
-      meta: '随 POI 专题联动',
+      meta: "随 POI 专题联动",
       theme,
       scope,
-      primaryLabel: '聚合总量',
+      primaryLabel: "聚合总量",
       primaryValue: `${total} 个`,
       secondaryLabel: strongest.label,
       secondaryValue: `${strongest.value ?? 0} 个`,
-      assessment: '当前按乡镇展示公共服务、产业节点和文旅资源聚合点，适合快速识别服务集聚区。',
-      recommendation: '点击地图聚合点，右侧会切换为对应乡镇的 POI 结构研判。',
-      chips: ['公共服务', '产业节点', '文旅资源'],
-      note: 'Lankao_POI_2025 真实点位聚合',
-    }
+      assessment:
+        "当前按乡镇展示公共服务、产业节点和文旅资源聚合点，适合快速识别服务集聚区。",
+      recommendation: "点击地图聚合点，右侧会切换为对应乡镇的 POI 结构研判。",
+      chips: ["公共服务", "产业节点", "文旅资源"],
+      note: "Lankao_POI_2025 真实点位聚合",
+    };
   }
 
-  if (themeKey === 'landuse') {
-    const dominant = activeLandUse.value ?? landUseSource.reduce((top, item) => (item.value > top.value ? item : top), landUseSource[0]!)
+  if (themeKey === "landuse") {
+    const dominant =
+      activeLandUse.value ??
+      landUseSource.reduce(
+        (top, item) => (item.value > top.value ? item : top),
+        landUseSource[0]!,
+      );
     return {
-      meta: '随土地利用专题联动',
+      meta: "随土地利用专题联动",
       theme,
       scope,
       primaryLabel: dominant.name,
       primaryValue: `${dominant.value}%`,
-      secondaryLabel: '图层状态',
-      secondaryValue: landUseClassificationReady.value ? '栅格分类已启用' : '分类色表待配置',
+      secondaryLabel: "图层状态",
+      secondaryValue: landUseClassificationReady.value
+        ? "栅格分类已启用"
+        : "分类色表待配置",
       assessment: `当前土地利用关注${dominant.name}，全县结构以耕地与设施农业为主，适合叠加治理问题和 POI 判断空间冲突。`,
       recommendation: landUseRecommendation(dominant.name),
-      chips: ['土地结构', 'Lankao-Land', '空间管控'],
-      note: landUseClassificationReady.value ? '真实栅格分类服务' : '真实栅格服务已接入，分类色表仍需现场配置',
-    }
+      chips: ["土地结构", "Lankao-Land", "空间管控"],
+      note: landUseClassificationReady.value
+        ? "真实栅格分类服务"
+        : "真实栅格服务已接入，分类色表仍需现场配置",
+    };
   }
 
-  if (themeKey === 'sansheng') {
-    const evaluation = sanshengEvaluation.value
-    const scores = evaluation.scores
+  if (themeKey === "sansheng") {
+    const evaluation = sanshengEvaluation.value;
+    const scores = evaluation.scores;
     if (!scores) {
       return {
-        meta: '随三生评价 / 乡镇选区联动',
+        meta: "随三生评价 / 乡镇选区联动",
         theme,
         scope,
-        primaryLabel: '综合得分',
-        primaryValue: '暂无数据',
-        secondaryLabel: '匹配状态',
-        secondaryValue: '未匹配模型',
+        primaryLabel: "综合得分",
+        primaryValue: "暂无数据",
+        secondaryLabel: "匹配状态",
+        secondaryValue: "未匹配模型",
         assessment: `${scope}暂未匹配到三生模型同名指标，当前不做分数推断。`,
-        recommendation: '建议先补齐该行政区三生指标，再参与专题比选和方案研判。',
-        chips: ['三生评价', '数据缺失', '不造数'],
+        recommendation:
+          "建议先补齐该行政区三生指标，再参与专题比选和方案研判。",
+        chips: ["三生评价", "数据缺失", "不造数"],
         note: evaluation.meta,
-      }
+      };
     }
-    const weakest = weakestSanshengDimension(scores)
+    const weakest = weakestSanshengDimension(scores);
     return {
-      meta: hasSelectedTownship ? '随三生评价 / 乡镇选区联动' : '随三生评价专题联动',
+      meta: hasSelectedTownship
+        ? "随三生评价 / 乡镇选区联动"
+        : "随三生评价专题联动",
       theme,
       scope: evaluation.areaName,
-      primaryLabel: '综合得分',
+      primaryLabel: "综合得分",
       primaryValue: `${scores.composite.toFixed(1)} 分`,
-      secondaryLabel: '相对短板',
+      secondaryLabel: "相对短板",
       secondaryValue: `${weakest.label} ${weakest.value.toFixed(1)}`,
       assessment: `${evaluation.areaName}三生协同水平为 ${scores.composite.toFixed(1)} 分，当前相对短板集中在${weakest.label}维度。`,
-      recommendation: weakest.label === '生活' ? '优先联动人口密度、POI 和治理问题，补齐公共服务与人居环境短板。' : weakest.label === '生态' ? '优先叠加土地利用和水系空间，识别生态修复与管控边界。' : '优先叠加 GDP 与 POI，识别产业节点和生产空间提质方向。',
-      chips: ['生态', '生活', '生产'],
+      recommendation:
+        weakest.label === "生活"
+          ? "优先联动人口密度、POI 和治理问题，补齐公共服务与人居环境短板。"
+          : weakest.label === "生态"
+            ? "优先叠加土地利用和水系空间，识别生态修复与管控边界。"
+            : "优先叠加 GDP 与 POI，识别产业节点和生产空间提质方向。",
+      chips: ["生态", "生活", "生产"],
       note: evaluation.meta,
-    }
+    };
   }
 
-  if (themeKey === 'governance') {
+  if (themeKey === "governance") {
     if (hasSelectedTownship && selectedMetric) {
       return {
-        meta: '随治理专题 / 乡镇选区联动',
+        meta: "随治理专题 / 乡镇选区联动",
         theme,
         scope,
-        primaryLabel: '问题数量',
+        primaryLabel: "问题数量",
         primaryValue: selectedMetric.label,
-        secondaryLabel: '处置结构',
-        secondaryValue: selectedMetric.details?.join(' / ') ?? '暂无',
-        assessment: selectedMetric.value > 0 ? `${scope}已聚合 ${selectedMetric.label}治理问题，可继续拆解高紧急和处置中事项。` : `${scope}当前暂无已加载治理问题点位。`,
-        recommendation: selectedMetric.value >= 10 ? '建议优先生成治理清单，并叠加人口密度识别高影响片区。' : '建议继续结合土地利用和 POI，判断问题是否集中在村庄边界或服务薄弱点。',
-        chips: ['治理问题', '热点识别', '处置优先级'],
+        secondaryLabel: "处置结构",
+        secondaryValue: selectedMetric.details?.join(" / ") ?? "暂无",
+        assessment:
+          selectedMetric.value > 0
+            ? `${scope}已聚合 ${selectedMetric.label}治理问题，可继续拆解高紧急和处置中事项。`
+            : `${scope}当前暂无已加载治理问题点位。`,
+        recommendation:
+          selectedMetric.value >= 10
+            ? "建议优先生成治理清单，并叠加人口密度识别高影响片区。"
+            : "建议继续结合土地利用和 POI，判断问题是否集中在村庄边界或服务薄弱点。",
+        chips: ["治理问题", "热点识别", "处置优先级"],
         note: selectedMetric.meta,
-      }
+      };
     }
 
-    const total = governanceIssues.value.length
-    const urgent = governanceIssues.value.filter((issue) => issue.urgency === '高').length
+    const total = governanceIssues.value.length;
+    const urgent = governanceIssues.value.filter(
+      (issue) => issue.urgency === "高",
+    ).length;
     return {
-      meta: '随治理专题联动',
+      meta: "随治理专题联动",
       theme,
       scope,
-      primaryLabel: '问题总量',
+      primaryLabel: "问题总量",
       primaryValue: `${total} 处`,
-      secondaryLabel: '高紧急',
+      secondaryLabel: "高紧急",
       secondaryValue: `${urgent} 处`,
-      assessment: '当前治理问题以点位聚合方式叠加在地图上，适合快速识别热点和高紧急事件分布。',
-      recommendation: '点击某个乡镇聚合点，右侧会切换为该区域的治理处置研判。',
-      chips: ['点位聚合', '热点发现', '属性筛查'],
-      note: '治理事件 GeoJSON',
-    }
+      assessment:
+        "当前治理问题以点位聚合方式叠加在地图上，适合快速识别热点和高紧急事件分布。",
+      recommendation: "点击某个乡镇聚合点，右侧会切换为该区域的治理处置研判。",
+      chips: ["点位聚合", "热点发现", "属性筛查"],
+      note: "治理事件 GeoJSON",
+    };
   }
 
   return {
-    meta: '随地图选区联动',
+    meta: "随地图选区联动",
     theme,
     scope,
-    primaryLabel: '当前范围',
+    primaryLabel: "当前范围",
     primaryValue: scope,
-    secondaryLabel: '地图状态',
+    secondaryLabel: "地图状态",
     secondaryValue: mapThemeStatus.value,
-    assessment: hasSelectedTownship ? `已定位到${scope}，可切换上方专题查看该区域的人口、产业、土地或治理研判。` : '当前为行政区划底图视图，适合先选择专题或点击乡镇定位关注区域。',
-    recommendation: '点击上方专题按钮或地图乡镇，右下角会自动生成对应的决策解读。',
-    chips: ['行政区划', '专题待选', '点击联动'],
-    note: '基础地图视图',
-  }
-})
+    assessment: hasSelectedTownship
+      ? `已定位到${scope}，可切换上方专题查看该区域的人口、产业、土地或治理研判。`
+      : "当前为行政区划底图视图，适合先选择专题或点击乡镇定位关注区域。",
+    recommendation:
+      "点击上方专题按钮或地图乡镇，右下角会自动生成对应的决策解读。",
+    chips: ["行政区划", "专题待选", "点击联动"],
+    note: "基础地图视图",
+  };
+});
 
 function pointOnCircle(angle: number, radius: number) {
-  const radians = ((angle - 90) * Math.PI) / 180
+  const radians = ((angle - 90) * Math.PI) / 180;
   return {
     x: 60 + radius * Math.cos(radians),
     y: 60 + radius * Math.sin(radians),
-  }
+  };
 }
 
-let landUseStartAngle = 0
+let landUseStartAngle = 0;
 const landUseSlices = landUseSource.map((item) => {
-  const startAngle = landUseStartAngle
-  const endAngle = startAngle + item.value * 3.6
-  const start = pointOnCircle(startAngle, 50)
-  const end = pointOnCircle(endAngle, 50)
-  const midpoint = pointOnCircle((startAngle + endAngle) / 2, 4)
-  const label = pointOnCircle((startAngle + endAngle) / 2, 31)
-  landUseStartAngle = endAngle
+  const startAngle = landUseStartAngle;
+  const endAngle = startAngle + item.value * 3.6;
+  const start = pointOnCircle(startAngle, 50);
+  const end = pointOnCircle(endAngle, 50);
+  const midpoint = pointOnCircle((startAngle + endAngle) / 2, 4);
+  const label = pointOnCircle((startAngle + endAngle) / 2, 31);
+  landUseStartAngle = endAngle;
 
   return {
     ...item,
@@ -479,405 +689,538 @@ const landUseSlices = landUseSource.map((item) => {
     offsetY: midpoint.y - 60,
     labelX: label.x,
     labelY: label.y,
-  }
-})
+  };
+});
 
-const activeLandUse = ref<(typeof landUseSlices)[number] | null>(null)
-const landTooltipPosition = ref({ x: 60, y: 20 })
+const activeLandUse = ref<(typeof landUseSlices)[number] | null>(null);
+const landTooltipPosition = ref({ x: 60, y: 20 });
 
 function updateLandTooltip(event: PointerEvent) {
-  const svg = (event.currentTarget as SVGPathElement).ownerSVGElement
-  if (!svg) return
-  const bounds = svg.getBoundingClientRect()
+  const svg = (event.currentTarget as SVGPathElement).ownerSVGElement;
+  if (!svg) return;
+  const bounds = svg.getBoundingClientRect();
   landTooltipPosition.value = {
-    x: Math.min(96, Math.max(24, ((event.clientX - bounds.left) / bounds.width) * 120)),
-    y: Math.min(108, Math.max(20, ((event.clientY - bounds.top) / bounds.height) * 120)),
-  }
+    x: Math.min(
+      96,
+      Math.max(24, ((event.clientX - bounds.left) / bounds.width) * 120),
+    ),
+    y: Math.min(
+      108,
+      Math.max(20, ((event.clientY - bounds.top) / bounds.height) * 120),
+    ),
+  };
 }
 
-function activateLandUse(item: (typeof landUseSlices)[number], event?: PointerEvent) {
-  activeLandUse.value = item
-  if (event) updateLandTooltip(event)
-  else landTooltipPosition.value = { x: 60, y: 22 }
+function activateLandUse(
+  item: (typeof landUseSlices)[number],
+  event?: PointerEvent,
+) {
+  activeLandUse.value = item;
+  if (event) updateLandTooltip(event);
+  else landTooltipPosition.value = { x: 60, y: 22 };
 }
 
 function clearActiveLandUse() {
-  activeLandUse.value = null
+  activeLandUse.value = null;
 }
 
 function buildPoiLegend(): ThemeLegendItem[] {
-  const totals = new Map(masterMapThemeLegends.poi.map((item) => [item.label, { ...item, value: 0 }]))
+  const totals = new Map(
+    masterMapThemeLegends.poi.map((item) => [
+      item.label,
+      { ...item, value: 0 },
+    ]),
+  );
 
   townshipFeatures.value.forEach((feature, index) => {
-    const metric = activeMapTheme.value === 'poi' ? activeTownshipMetrics.value[index]! : resolveTownshipThemeMetric('poi', feature, index, governanceIssues.value, poiMetricsByTownship.value)
+    const metric =
+      activeMapTheme.value === "poi"
+        ? activeTownshipMetrics.value[index]!
+        : resolveTownshipThemeMetric(
+            "poi",
+            feature,
+            index,
+            governanceIssues.value,
+            poiMetricsByTownship.value,
+          );
     metric.breakdown?.forEach((item) => {
-      const previous = totals.get(item.label)
+      const previous = totals.get(item.label);
       totals.set(item.label, {
         label: item.label,
         color: item.color,
         value: (previous?.value ?? 0) + item.value,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  return [...totals.values()]
+  return [...totals.values()];
 }
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    }
-    return entities[character]!
-  })
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character]!;
+  });
 }
 
 function townshipBounds(feature: TownshipFeature) {
-  return L.latLngBounds(feature.rings.flat())
+  return L.latLngBounds(feature.rings.flat());
 }
 
 function townshipName(feature: TownshipFeature) {
-  return feature.name || feature.code || '行政区'
+  return feature.name || feature.code || "行政区";
 }
 
-function polygonStyle(metric: TownshipThemeMetric, selected: boolean): L.PathOptions {
-  const isPoi = activeMapTheme.value === 'poi'
-  const isGovernance = activeMapTheme.value === 'governance'
-  const isLandUse = activeMapTheme.value === 'landuse'
-  const isPointTheme = isPoi || isGovernance
+function thematicBoundaryStyle() {
+  const theme = activeMapTheme.value;
+  if (theme === "population" || theme === "gdp" || theme === "sansheng") {
+    return GREENTWIN_MAP_COLORS.boundaries[theme];
+  }
+  if (theme === "governance") return GREENTWIN_MAP_COLORS.boundaries.governance;
+  return {
+    county: GREENTWIN_MAP_COLORS.admin.countyStroke,
+    township: GREENTWIN_MAP_COLORS.admin.townshipStroke,
+    hover: GREENTWIN_MAP_COLORS.admin.hoverStroke,
+    selected: GREENTWIN_MAP_COLORS.admin.selectedStroke,
+  };
+}
+
+function polygonStyle(
+  metric: TownshipThemeMetric,
+  selected: boolean,
+): L.PathOptions {
+  const isPoi = activeMapTheme.value === "poi";
+  const isGovernance = activeMapTheme.value === "governance";
+  const isLandUse = activeMapTheme.value === "landuse";
+  const isPointTheme = isPoi || isGovernance;
+  const boundary = thematicBoundaryStyle();
 
   return {
-    color: selected ? '#eafffb' : isPointTheme ? '#9DBE78' : isLandUse ? '#C6D879' : '#AFCB78',
-    fillColor: metric.color,
-    fillOpacity: isLandUse ? 0.01 : isPoi ? 0.08 : isGovernance ? 0.06 : activeMapTheme.value === 'population' ? 0.49 : 0.52,
-    opacity: selected ? 1 : isPointTheme ? 0.55 : isLandUse ? 0.7 : 0.75,
-    weight: selected ? 2.6 : isPointTheme ? 0.8 : 1,
-  }
+    color: selected
+      ? boundary.selected ?? GREENTWIN_MAP_COLORS.admin.selectedStroke
+      : isLandUse
+        ? GREENTWIN_MAP_COLORS.admin.landUseTownshipStroke
+        : boundary.township,
+    fillColor: isPointTheme
+      ? selected
+        ? GREENTWIN_MAP_COLORS.admin.selectedFill
+        : isGovernance
+          ? "#78AAA5"
+          : GREENTWIN_MAP_COLORS.admin.baseFill
+      : metric.color,
+    fillOpacity: isLandUse
+      ? 0.01
+      : isPoi
+        ? selected
+          ? 0.22
+          : 0.1
+        : isGovernance
+          ? 0.14
+          : activeMapTheme.value === "population"
+            ? 0.72
+            : activeMapTheme.value === "gdp"
+              ? 0.72
+              : metric.dataAvailable === false
+                ? 0.5
+                : 0.73,
+    opacity: selected ? 1 : 0.7,
+    weight: selected ? 2.6 : 1.1,
+  };
 }
 
 function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
-  const details = metric.breakdown?.map((item) => `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)} ${item.value}</span>`).join('') ?? metric.details?.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('') ?? ''
-  return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
-}
-
-interface PoiCanvasLayerState {
-  _canvas?: HTMLCanvasElement
-  _poiMap?: L.Map
-  _records: readonly PoiRecord[]
-  _draw: () => void
-}
-
-const PoiCanvasLayerClass = L.Layer.extend({
-  initialize(records: readonly PoiRecord[]) {
-    const layer = this as unknown as PoiCanvasLayerState
-    layer._records = records
-  },
-  onAdd(mapInstance: L.Map) {
-    const layer = this as unknown as PoiCanvasLayerState
-    const canvas = L.DomUtil.create('canvas', 'master-poi-canvas leaflet-zoom-animated') as HTMLCanvasElement
-    layer._poiMap = mapInstance
-    layer._canvas = canvas
-    canvas.style.pointerEvents = 'none'
-    mapInstance.getPanes().overlayPane.appendChild(canvas)
-    mapInstance.on('moveend zoomend resize viewreset', layer._draw, layer)
-    layer._draw()
-  },
-  onRemove(mapInstance: L.Map) {
-    const layer = this as unknown as PoiCanvasLayerState
-    if (layer._canvas?.parentElement) layer._canvas.parentElement.removeChild(layer._canvas)
-    mapInstance.off('moveend zoomend resize viewreset', layer._draw, layer)
-    layer._canvas = undefined
-    layer._poiMap = undefined
-  },
-  _draw() {
-    const layer = this as unknown as PoiCanvasLayerState
-    const mapInstance = layer._poiMap
-    const canvas = layer._canvas
-    if (!mapInstance || !canvas) return
-
-    const size = mapInstance.getSize()
-    const pixelRatio = window.devicePixelRatio || 1
-    const topLeft = mapInstance.containerPointToLayerPoint([0, 0])
-    L.DomUtil.setPosition(canvas, topLeft)
-    canvas.width = size.x * pixelRatio
-    canvas.height = size.y * pixelRatio
-    canvas.style.width = `${size.x}px`
-    canvas.style.height = `${size.y}px`
-
-    const context = canvas.getContext('2d')
-    if (!context) return
-    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-    context.clearRect(0, 0, size.x, size.y)
-    context.globalAlpha = 0.86
-
-    const radius = layer._records.length > 1500 ? 2.4 : layer._records.length > 600 ? 2.9 : 3.4
-    const bounds = mapInstance.getBounds().pad(0.04)
-    const recordsByBucket = new Map<PoiRecord['bucket'], PoiRecord[]>()
-    layer._records.forEach((record) => {
-      const latLng = L.latLng(record.latitude, record.longitude)
-      if (!bounds.contains(latLng)) return
-      const bucketRecords = recordsByBucket.get(record.bucket) ?? []
-      bucketRecords.push(record)
-      recordsByBucket.set(record.bucket, bucketRecords)
-    })
-
-    recordsByBucket.forEach((records, bucket) => {
-      context.beginPath()
-      records.forEach((record) => {
-        const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-        context.moveTo(point.x + radius, point.y)
-        context.arc(point.x, point.y, radius, 0, Math.PI * 2)
-      })
-      context.fillStyle = poiBucketLegend[bucket].color
-      context.fill()
-    })
-  },
-})
-
-function createPoiCanvasLayer(records: readonly PoiRecord[]) {
-  const Constructor = PoiCanvasLayerClass as unknown as new (records: readonly PoiRecord[]) => L.Layer
-  return new Constructor(records)
+  const details =
+    metric.breakdown
+      ?.map(
+        (item) =>
+          `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)} ${item.value}</span>`,
+      )
+      .join("") ??
+    metric.details
+      ?.map((detail) => `<span>${escapeHtml(detail)}</span>`)
+      .join("") ??
+    "";
+  return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`;
 }
 
 function addPoiPointMarkers(feature: TownshipFeature) {
-  if (!thematicLayer) return
-  const records = poiRecordsByTownship.value.get(feature.code) ?? []
-  thematicLayer.addLayer(createPoiCanvasLayer(records))
+  if (!thematicLayer) return;
+  const records = poiRecordsByTownship.value.get(feature.code) ?? [];
+  records.forEach((record) => {
+    const fillColor = POI_CATEGORY_COLORS[record.bucket];
+    const marker = L.circleMarker([record.latitude, record.longitude], {
+      pane: "townshipOverlayPane",
+      radius: 5,
+      color: "rgba(245, 255, 252, 0.92)",
+      fillColor,
+      fillOpacity: 0.92,
+      opacity: 0.95,
+      weight: 1,
+    })
+      .bindTooltip(
+        `<strong>${escapeHtml(record.name || "POI")}</strong><small>${escapeHtml(record.majorCategory || record.middleCategory || "兴趣点")}</small>`,
+        { className: "master-map-tooltip", direction: "top", opacity: 1 },
+      )
+      .on("mouseover", () =>
+        marker.setStyle({ radius: 7, color: "#FFFFFF", weight: 2 }),
+      )
+      .on("mouseout", () =>
+        marker.setStyle({ radius: 5, color: "rgba(245, 255, 252, 0.92)", weight: 1 }),
+      );
+    thematicLayer!.addLayer(marker);
+  });
 }
 
-function addClusterMarker(feature: TownshipFeature, metric: TownshipThemeMetric) {
-  if (!thematicLayer) return
-  const center = L.latLng(townshipRepresentativePoint(feature))
-  const isGovernance = activeMapTheme.value === 'governance'
-  const isPoi = activeMapTheme.value === 'poi'
-  if (metric.dataAvailable === false || ((isGovernance || isPoi) && metric.value <= 0)) return
+function addClusterMarker(
+  feature: TownshipFeature,
+  metric: TownshipThemeMetric,
+) {
+  if (!thematicLayer) return;
+  const center = L.latLng(townshipRepresentativePoint(feature));
+  const isGovernance = activeMapTheme.value === "governance";
+  const isPoi = activeMapTheme.value === "poi";
+  const selected = selectedThemeTownship.value?.code === feature.code;
+  if (
+    metric.dataAvailable === false ||
+    ((isGovernance || isPoi) && metric.value <= 0)
+  )
+    return;
   const countyBounds =
     focusBounds.value ??
     (() => {
-      const bounds = L.latLngBounds(townshipFeatures.value.flatMap((item) => item.rings.flat()))
+      const bounds = L.latLngBounds(
+        townshipFeatures.value.flatMap((item) => item.rings.flat()),
+      );
       return [
         [bounds.getSouth(), bounds.getWest()],
         [bounds.getNorth(), bounds.getEast()],
-      ] as [[number, number], [number, number]]
-    })()
+      ] as [[number, number], [number, number]];
+    })();
   const placement = getPointThemeLabelPlacement(
     [center.lat, center.lng],
     countyBounds,
     metric.radius ?? 18,
     pointThemeLabelOverrides[townshipName(feature)],
-  )
+  );
   setTownshipLabelPlacement(
     townshipName(feature),
     {
       direction: placement.direction,
       offset: L.point(placement.offset),
-      className: 'township-map-label township-map-label--point-theme',
+      className: "township-map-label township-map-label--point-theme",
     },
     center,
-  )
-  const strokeColor = isGovernance ? (metric.value >= 10 ? '#E6A099' : metric.value >= 5 ? '#E4AD92' : '#E8CD8A') : '#A6E8D9'
+  );
+  const strokeColor = selected
+    ? GREENTWIN_MAP_COLORS.admin.selectedStroke
+    : isGovernance
+      ? GREENTWIN_MAP_COLORS.governance.stroke
+      : GREENTWIN_MAP_COLORS.poi.stroke;
+  const hoverColor = isGovernance
+    ? GREENTWIN_MAP_COLORS.governance.hoverStroke
+    : GREENTWIN_MAP_COLORS.poi.hoverStroke;
+  const fillColor =
+    selected && isPoi ? GREENTWIN_MAP_COLORS.poi.selected : metric.color;
+  const normalFillOpacity = isGovernance ? 0.9 : selected ? 0.9 : 0.84;
 
   const circle = L.circleMarker(center, {
     radius: metric.radius ?? 18,
+    pane: "townshipOverlayPane",
     color: strokeColor,
-    fillColor: metric.color,
-    fillOpacity: isGovernance ? 0.68 : 0.72,
+    fillColor,
+    fillOpacity: normalFillOpacity,
     opacity: 0.95,
-    weight: 1.4,
+    weight: selected
+      ? 2.5
+      : isGovernance
+        ? metric.value >= 10
+          ? 1.5
+          : 1.25
+        : 1.6,
   })
     .bindTooltip(tooltipContent(feature, metric), {
-      className: 'master-map-tooltip',
+      className: "master-map-tooltip",
       direction: placement.clusterTooltipDirection,
       opacity: 1,
       sticky: true,
     })
-    .on('mouseover', () => circle.setStyle({ weight: 2.8, color: '#eafffb', fillOpacity: 0.82 }))
-    .on('mouseout', () =>
+    .on("mouseover", () => {
+      if (!selected)
+        circle.setStyle({
+          weight: 2,
+          color: hoverColor,
+          fillColor: isPoi ? GREENTWIN_MAP_COLORS.poi.hover : metric.color,
+          fillOpacity: 0.9,
+        });
+    })
+    .on("mouseout", () =>
       circle.setStyle({
-        weight: 1.4,
+        weight: selected
+          ? 2.5
+          : isGovernance
+            ? metric.value >= 10
+              ? 1.5
+              : 1.25
+            : 1.6,
         color: strokeColor,
-        fillOpacity: isGovernance ? 0.68 : 0.72,
+        fillColor,
+        fillOpacity: normalFillOpacity,
       }),
     )
-    .on('click', () => focusTownship(feature))
-    .addTo(thematicLayer)
+    .on("click", () => focusTownship(feature))
+    .addTo(thematicLayer);
 
   L.marker(center, {
     interactive: false,
     icon: L.divIcon({
-      className: 'master-cluster-label',
+      className: "master-cluster-label",
       html: `<span>${metric.value}</span>`,
       iconSize: [32, 32],
       iconAnchor: [16, 16],
     }),
-  }).addTo(thematicLayer)
+  }).addTo(thematicLayer);
 }
 
 function clearThematicLayer() {
-  thematicLayer?.remove()
-  thematicLayer = null
+  thematicLayer?.remove();
+  thematicLayer = null;
 }
 
 function resetMapSelection() {
-  selectedThemeTownship.value = null
-  clearSelectedTownship()
+  selectedThemeTownship.value = null;
+  clearSelectedTownship();
 }
 
 function clearActiveTheme() {
-  if (activeMapTheme.value == null) return false
-  activeMapTheme.value = null
-  return true
+  if (activeMapTheme.value == null) return false;
+  activeMapTheme.value = null;
+  return true;
 }
 
 function resetToAdministrativeView() {
-  activeMapTheme.value = null
-  selectedThemeTownship.value = null
-  clearSelectedTownship()
-  clearThematicLayer()
-  resetTownshipLabelPlacements()
+  activeMapTheme.value = null;
+  selectedThemeTownship.value = null;
+  clearSelectedTownship();
+  clearThematicLayer();
+  resetTownshipLabelPlacements();
 }
 
 function renderThematicMap() {
-  const instance = map.value
-  if (!instance) return
+  const instance = map.value;
+  if (!instance) return;
 
-  clearThematicLayer()
-  resetTownshipLabelPlacements()
-  setLandUseRaster(activeMapTheme.value === 'landuse', config.supermap.landuseRaster)
-  if (townshipFeatures.value.length === 0 || activeMapTheme.value == null) return
+  clearThematicLayer();
+  resetTownshipLabelPlacements();
+  setLandUseRaster(
+    activeMapTheme.value === "landuse",
+    config.supermap.landuseRaster,
+  );
+  if (townshipFeatures.value.length === 0 || activeMapTheme.value == null)
+    return;
 
-  thematicLayer = L.layerGroup().addTo(instance)
+  thematicLayer = L.layerGroup().addTo(instance);
 
   const metricByCode = new Map(
-    townshipFeatures.value.map((feature, index) => [feature.code, activeTownshipMetrics.value[index]]),
-  )
-  const featureParts = new Map<string, L.Polygon[]>()
+    townshipFeatures.value.map((feature, index) => [
+      feature.code,
+      activeTownshipMetrics.value[index],
+    ]),
+  );
+  const featureParts = new Map<string, L.Polygon[]>();
 
-  orderTownshipRingParts(townshipFeatures.value).forEach(({ feature, ring }) => {
-    const metric = metricByCode.get(feature.code)
-    if (!metric) return
-    const selected = selectedThemeTownship.value?.code === feature.code
-    const style = polygonStyle(metric, selected)
-    const polygon = L.polygon([ring], style)
-    const parts = featureParts.get(feature.code) ?? []
-    parts.push(polygon)
-    featureParts.set(feature.code, parts)
+  orderTownshipRingParts(townshipFeatures.value).forEach(
+    ({ feature, ring }) => {
+      const metric = metricByCode.get(feature.code);
+      if (!metric) return;
+      const selected = selectedThemeTownship.value?.code === feature.code;
+      const style = polygonStyle(metric, selected);
+      const polygon = L.polygon([ring], {
+        ...style,
+        pane: "townshipOverlayPane",
+      });
+      const parts = featureParts.get(feature.code) ?? [];
+      parts.push(polygon);
+      featureParts.set(feature.code, parts);
 
-    polygon
-      .bindTooltip(tooltipContent(feature, metric), {
-        className: 'master-map-tooltip',
-        direction: 'top',
-        opacity: 1,
-        sticky: true,
-      })
-      .on('mouseover', () => {
-        parts.forEach((part) =>
-          part.setStyle({
-            ...style,
-            color: '#eafffb',
-            fillOpacity: Math.min((style.fillOpacity ?? 0.58) + 0.12, 0.74),
-            weight: 2.4,
-          }),
-        )
-      })
-      .on('mouseout', () => {
-        parts.forEach((part) =>
-          part.setStyle(polygonStyle(metric, selectedThemeTownship.value?.code === feature.code)),
-        )
-      })
-      .on('click', () => focusTownship(feature))
-      .addTo(thematicLayer!)
-  })
+      polygon
+        .bindTooltip(tooltipContent(feature, metric), {
+          className: "master-map-tooltip",
+          direction: "top",
+          opacity: 1,
+          sticky: true,
+        })
+        .on("mouseover", () => {
+          parts.forEach((part) =>
+            part.setStyle({
+              ...style,
+              color:
+                thematicBoundaryStyle().hover ??
+                GREENTWIN_MAP_COLORS.admin.hoverStroke,
+              fillOpacity: Math.min((style.fillOpacity ?? 0.58) + 0.06, 0.82),
+              weight: 2.1,
+            }),
+          );
+        })
+        .on("mouseout", () => {
+          parts.forEach((part) =>
+            part.setStyle(
+              polygonStyle(
+                metric,
+                selectedThemeTownship.value?.code === feature.code,
+              ),
+            ),
+          );
+        })
+        .on("click", () => focusTownship(feature))
+        .addTo(thematicLayer!);
+    },
+  );
 
-  if (activeMapTheme.value === 'poi') {
+  if (activeMapTheme.value === "poi") {
     if (selectedThemeTownship.value) {
-      addPoiPointMarkers(selectedThemeTownship.value)
+      addPoiPointMarkers(selectedThemeTownship.value);
     } else {
       townshipFeatures.value.forEach((feature, index) => {
-        const metric = activeTownshipMetrics.value[index]
-        if (metric) addClusterMarker(feature, metric)
-      })
+        const metric = activeTownshipMetrics.value[index];
+        if (metric) addClusterMarker(feature, metric);
+      });
     }
   }
 
-  if (activeMapTheme.value === 'governance') {
+  if (activeMapTheme.value === "governance") {
     townshipFeatures.value.forEach((feature, index) => {
-      const metric = activeTownshipMetrics.value[index]
-      if (metric) addClusterMarker(feature, metric)
-    })
+      const metric = activeTownshipMetrics.value[index];
+      if (metric) addClusterMarker(feature, metric);
+    });
   }
 }
 
 function setActiveMapTheme(themeKey: MasterMapThemeKey) {
-  activeMapTheme.value = toggleMasterMapTheme(activeMapTheme.value, themeKey)
+  activeMapTheme.value = toggleMasterMapTheme(activeMapTheme.value, themeKey);
 }
 
 function focusTownship(feature: TownshipFeature) {
-  selectedThemeTownship.value = feature
-  const name = townshipName(feature)
-  if (focusTownshipByName(name)) return
-  selectedTownship.value = name
+  selectedThemeTownship.value = feature;
+  const name = townshipName(feature);
+  if (focusTownshipByName(name)) return;
+  selectedTownship.value = name;
   map.value?.flyToBounds(townshipBounds(feature), {
     animate: true,
     duration: 0.85,
     padding: [58, 58],
-    maxZoom: activeMapTheme.value === 'poi' || activeMapTheme.value === 'governance' ? 13 : 12.25,
-  })
+    maxZoom:
+      activeMapTheme.value === "poi" || activeMapTheme.value === "governance"
+        ? 13
+        : 12.25,
+  });
 }
 
 watch(selectedTownship, (name) => {
-  selectedThemeTownship.value = name ? (townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null) : null
-})
+  selectedThemeTownship.value = name
+    ? (townshipFeatures.value.find(
+        (feature) => townshipName(feature) === name,
+      ) ?? null)
+    : null;
+});
 
 async function refreshPoiMetrics() {
-  const requestId = ++poiIndexRequestId
+  const requestId = ++poiIndexRequestId;
   if (poiRecords.value.length === 0 || townshipFeatures.value.length === 0) {
-    poiMetricsByTownship.value = new Map()
-    poiRecordsByTownship.value = new Map()
-    poiIndexing.value = false
-    return
+    poiMetricsByTownship.value = new Map();
+    poiRecordsByTownship.value = new Map();
+    poiIndexing.value = false;
+    return;
   }
 
-  poiIndexing.value = true
-  const index = await buildPoiIndexByTownship(poiRecords.value, townshipFeatures.value)
-  if (requestId !== poiIndexRequestId) return
-  poiMetricsByTownship.value = index.summaries
-  poiRecordsByTownship.value = index.recordsByTownship
-  poiIndexing.value = false
+  poiIndexing.value = true;
+  const index = await buildPoiIndexByTownship(
+    poiRecords.value,
+    townshipFeatures.value,
+  );
+  if (requestId !== poiIndexRequestId) return;
+  poiMetricsByTownship.value = index.summaries;
+  poiRecordsByTownship.value = index.recordsByTownship;
+  poiIndexing.value = false;
 }
 
-watch([poiRecords, townshipFeatures], refreshPoiMetrics, { flush: 'post' })
-watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship, poiRecordsByTownship], renderThematicMap, { flush: 'post' })
+watch([poiRecords, townshipFeatures], refreshPoiMetrics, { flush: "post" });
+watch(
+  [activeMapTheme, townshipFeatures],
+  () => {
+    const boundary = thematicBoundaryStyle();
+    setCountyOutlineStyle({
+      color: boundary.county,
+      weight: activeMapTheme.value === "governance" ? 1.9 : 2.15,
+      opacity: activeMapTheme.value == null ? 0.92 : 0.9,
+    });
+  },
+  { immediate: true },
+);
+
+function showMapToast(message: string) {
+  if (!message) return;
+  const now = Date.now();
+  if (now - (recentToastMessages.get(message) ?? 0) < 5000) return;
+  recentToastMessages.set(message, now);
+  mapToast.value = message;
+  if (mapToastTimer) clearTimeout(mapToastTimer);
+  mapToastTimer = setTimeout(() => {
+    mapToast.value = "";
+    mapToastTimer = null;
+  }, 2600);
+}
+
+watch(mapError, showMapToast);
+watch(demError, showMapToast);
+watch(
+  [
+    map,
+    townshipFeatures,
+    activeMapTheme,
+    selectedThemeTownship,
+    governanceIssues,
+    poiMetricsByTownship,
+    poiRecordsByTownship,
+  ],
+  renderThematicMap,
+  { flush: "post" },
+);
 onBeforeUnmount(() => {
-  clearThematicLayer()
-  resetTownshipLabelPlacements()
-})
+  if (mapToastTimer) clearTimeout(mapToastTimer);
+  clearThematicLayer();
+  resetTownshipLabelPlacements();
+});
 
 onMounted(async () => {
-  const issuesPromise = loadGovernanceIssues(`${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`)
+  const issuesPromise = loadGovernanceIssues(
+    `${import.meta.env.BASE_URL}data/governance/governance-issues.geojson`,
+  )
     .then((issues) => {
-      governanceIssues.value = issues
+      governanceIssues.value = issues;
     })
     .catch(() => {
-      governanceIssues.value = []
-    })
+      governanceIssues.value = [];
+    });
   const poiPromise = loadPoiRecords(config.supermap.mapServices.poi)
     .then((records) => {
-      poiRecords.value = records
-      poiError.value = ''
+      poiRecords.value = records;
+      poiError.value = "";
     })
     .catch((cause) => {
-      poiRecords.value = []
-      poiError.value = cause instanceof Error ? cause.message : 'POI 数据加载失败'
+      poiRecords.value = [];
+      poiError.value =
+        cause instanceof Error ? cause.message : "POI 数据加载失败";
     })
     .finally(() => {
-      poiLoading.value = false
-    })
-  void poiPromise
+      poiLoading.value = false;
+    });
+  void poiPromise;
 
   await initialize(
     config.supermap.leafletSdkUrl,
@@ -893,23 +1236,31 @@ onMounted(async () => {
       renderingRule: DEM_RENDERING_RULE,
     },
     { townshipFocus: true },
-  )
+  );
 
   try {
-    demSummary.value = await loadDemSummary(config.supermap.dem.serviceUrl, config.supermap.dem.collectionId, config.supermap.dem.itemId)
+    demSummary.value = await loadDemSummary(
+      config.supermap.dem.serviceUrl,
+      config.supermap.dem.collectionId,
+      config.supermap.dem.itemId,
+    );
   } catch (cause) {
-    demError.value = cause instanceof Error ? cause.message : 'DEM 数据加载失败'
+    demError.value =
+      cause instanceof Error ? cause.message : "DEM 数据加载失败";
   } finally {
-    demLoading.value = false
+    demLoading.value = false;
   }
 
-  await issuesPromise
-})
+  await issuesPromise;
+});
 </script>
 
 <template>
   <main class="screen-page master-page">
-    <ScreenHeader title="兰考县和美乡村数字孪生决策平台" subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判" />
+    <ScreenHeader
+      title="兰考县和美乡村数字孪生决策平台"
+      subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判"
+    />
 
     <div class="master-layout">
       <aside class="master-side">
@@ -918,8 +1269,13 @@ onMounted(async () => {
             <div class="metric-grid">
               <article class="metric-card">
                 <span>年末总人口</span>
-                <strong>{{ latestPopulation.populationWan.toFixed(1) }}万</strong>
-                <small>{{ latestPopulation.year }}年 · 较上年 {{ latestPopulationGrowth.toFixed(1) }}%</small>
+                <strong
+                  >{{ latestPopulation.populationWan.toFixed(1) }}万</strong
+                >
+                <small
+                  >{{ latestPopulation.year }}年 · 较上年
+                  {{ latestPopulationGrowth.toFixed(1) }}%</small
+                >
               </article>
               <article class="metric-card">
                 <span>人口密度</span>
@@ -927,46 +1283,137 @@ onMounted(async () => {
                 <small>{{ latestDensityRecord.year }}年 · 人 / km²</small>
               </article>
             </div>
-            <div class="population-trend" aria-label="2020 至 2025 年兰考县人口变化趋势">
+            <div
+              class="population-trend"
+              aria-label="2020 至 2025 年兰考县人口变化趋势"
+            >
               <div class="population-trend__plot">
-                <div class="population-trend__header"><span>人口变化趋势</span><em>万人</em></div>
-                <svg :viewBox="`0 0 ${populationTrendChart.width} ${populationTrendChart.height}`" preserveAspectRatio="none" role="img" aria-label="人口变化趋势折线面积图">
+                <div class="population-trend__header">
+                  <span>人口变化趋势</span><em>万人</em>
+                </div>
+                <svg
+                  :viewBox="`0 0 ${populationTrendChart.width} ${populationTrendChart.height}`"
+                  preserveAspectRatio="none"
+                  role="img"
+                  aria-label="人口变化趋势折线面积图"
+                >
                   <defs>
-                    <linearGradient id="population-area-gradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#3dd6c4" stop-opacity="0.18" />
-                      <stop offset="100%" stop-color="#3dd6c4" stop-opacity="0.01" />
+                    <linearGradient
+                      id="population-area-gradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stop-color="#3dd6c4"
+                        stop-opacity="0.18"
+                      />
+                      <stop
+                        offset="100%"
+                        stop-color="#3dd6c4"
+                        stop-opacity="0.01"
+                      />
                     </linearGradient>
                   </defs>
-                  <g v-for="grid in populationTrendChart.gridLines" :key="grid.value">
-                    <line class="population-grid-line" :x1="populationTrendChart.left" :x2="populationTrendChart.width - populationTrendChart.right" :y1="grid.y" :y2="grid.y" />
+                  <g
+                    v-for="grid in populationTrendChart.gridLines"
+                    :key="grid.value"
+                  >
+                    <line
+                      class="population-grid-line"
+                      :x1="populationTrendChart.left"
+                      :x2="
+                        populationTrendChart.width - populationTrendChart.right
+                      "
+                      :y1="grid.y"
+                      :y2="grid.y"
+                    />
                   </g>
-                  <path class="population-area" :d="populationTrendChart.areaPath" />
-                  <polyline class="population-line" :points="populationTrendChart.linePoints" />
-                  <g v-for="point in populationTrendChart.points" :key="point.year" class="population-point" tabindex="0" :aria-label="`${point.year}年人口 ${point.populationWan.toFixed(1)}万人`" @pointerenter="activePopulationPoint = point" @pointerleave="activePopulationPoint = null" @focus="activePopulationPoint = point" @blur="activePopulationPoint = null">
-                    <circle class="population-point__hit" :cx="point.x" :cy="point.y" r="8" />
-                    <circle class="population-point__dot" :cx="point.x" :cy="point.y" r="3.5" />
-                    <text v-if="populationLabelYears.has(point.year)" class="population-value-label" :x="point.x" :y="point.y + (point.year === 2020 ? 14 : -9)">
+                  <path
+                    class="population-area"
+                    :d="populationTrendChart.areaPath"
+                  />
+                  <polyline
+                    class="population-line"
+                    :points="populationTrendChart.linePoints"
+                  />
+                  <g
+                    v-for="point in populationTrendChart.points"
+                    :key="point.year"
+                    class="population-point"
+                    tabindex="0"
+                    :aria-label="`${point.year}年人口 ${point.populationWan.toFixed(1)}万人`"
+                    @pointerenter="activePopulationPoint = point"
+                    @pointerleave="activePopulationPoint = null"
+                    @focus="activePopulationPoint = point"
+                    @blur="activePopulationPoint = null"
+                  >
+                    <circle
+                      class="population-point__hit"
+                      :cx="point.x"
+                      :cy="point.y"
+                      r="8"
+                    />
+                    <circle
+                      class="population-point__dot"
+                      :cx="point.x"
+                      :cy="point.y"
+                      r="3.5"
+                    />
+                    <text
+                      v-if="populationLabelYears.has(point.year)"
+                      class="population-value-label"
+                      :x="point.x"
+                      :y="point.y + (point.year === 2020 ? 14 : -9)"
+                    >
                       {{ point.populationWan.toFixed(1) }}
                     </text>
-                    <text class="population-year-label" :x="point.x" :y="populationTrendChart.height - 8">
+                    <text
+                      class="population-year-label"
+                      :x="point.x"
+                      :y="populationTrendChart.height - 8"
+                    >
                       {{ point.year }}
                     </text>
                   </g>
-                  <g v-if="activePopulationPoint && activePopulationChartPoint" class="population-tooltip" :transform="`translate(${Math.min(populationTrendChart.width - 43, Math.max(43, activePopulationChartPoint.x))}, ${Math.max(47, activePopulationChartPoint.y - 5)})`" aria-hidden="true">
+                  <g
+                    v-if="activePopulationPoint && activePopulationChartPoint"
+                    class="population-tooltip"
+                    :transform="`translate(${Math.min(populationTrendChart.width - 43, Math.max(43, activePopulationChartPoint.x))}, ${Math.max(47, activePopulationChartPoint.y - 5)})`"
+                    aria-hidden="true"
+                  >
                     <g class="population-tooltip__surface">
                       <rect x="-42" y="-42" width="84" height="34" rx="4" />
-                      <text class="population-tooltip__year" x="0" y="-29">{{ activePopulationPoint.year }}年</text>
-                      <text x="0" y="-16">年末人口：{{ activePopulationPoint.populationWan.toFixed(1) }}万人</text>
+                      <text class="population-tooltip__year" x="0" y="-29">
+                        {{ activePopulationPoint.year }}年
+                      </text>
+                      <text x="0" y="-16">
+                        年末人口：{{
+                          activePopulationPoint.populationWan.toFixed(1)
+                        }}万人
+                      </text>
                     </g>
                   </g>
                 </svg>
               </div>
               <div class="population-trend__summary">
                 <span
-                  ><small>2020—2025</small><strong :class="{ 'is-negative': populationChangeRate < 0 }">{{ populationChangeRate < 0 ? '↓ ' : populationChangeRate > 0 ? '↑ ' : '' }}{{ Math.abs(populationChangeRate).toFixed(1) }}%</strong></span
+                  ><small>2020—2025</small
+                  ><strong :class="{ 'is-negative': populationChangeRate < 0 }"
+                    >{{
+                      populationChangeRate < 0
+                        ? "↓ "
+                        : populationChangeRate > 0
+                          ? "↑ "
+                          : ""
+                    }}{{ Math.abs(populationChangeRate).toFixed(1) }}%</strong
+                  ></span
                 >
                 <span
-                  ><small>人口趋势</small><strong>{{ populationTrendLabel }}</strong></span
+                  ><small>人口趋势</small
+                  ><strong>{{ populationTrendLabel }}</strong></span
                 >
               </div>
             </div>
@@ -975,7 +1422,11 @@ onMounted(async () => {
 
         <PanelCard title="GDP 特征" meta="2020—2025 / 县域统计 / 亿元">
           <div class="gdp-chart">
-            <article v-for="item in gdpTrend" :key="item.year" :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`">
+            <article
+              v-for="item in gdpTrend"
+              :key="item.year"
+              :title="`${item.year}年地区生产总值：${item.gdpYiYuan.toFixed(2)}亿元`"
+            >
               <strong>{{ item.gdpYiYuan.toFixed(1) }}</strong>
               <i :style="{ height: `${item.barPercent}%` }" />
               <span>{{ item.year }}</span>
@@ -984,7 +1435,17 @@ onMounted(async () => {
         </PanelCard>
 
         <PanelCard title="三生综合评价" :meta="sanshengEvaluation.meta">
-          <MasterSanshengRadar v-if="sanshengEvaluation.scores" :area-name="sanshengEvaluation.areaName" :scope="sanshengEvaluation.scope" :scores="sanshengEvaluation.scores" :reference-scores="sanshengEvaluation.scope === 'township' ? COUNTY_SANSHENG_SCORES : null" />
+          <MasterSanshengRadar
+            v-if="sanshengEvaluation.scores"
+            :area-name="sanshengEvaluation.areaName"
+            :scope="sanshengEvaluation.scope"
+            :scores="sanshengEvaluation.scores"
+            :reference-scores="
+              sanshengEvaluation.scope === 'township'
+                ? COUNTY_SANSHENG_SCORES
+                : null
+            "
+          />
           <div v-else class="sansheng-empty" role="status">
             <strong>暂无该区域三生评价数据</strong>
             <span>三生模型当前未配置该行政区指标</span>
@@ -995,8 +1456,20 @@ onMounted(async () => {
       <section class="master-center">
         <section class="map-shell panel-frame master-map">
           <div ref="mapContainer" class="map-container" />
-          <div class="master-theme-tabs" role="tablist" aria-label="主控专题地图">
-            <button v-for="theme in masterMapThemes" :key="theme.key" type="button" role="tab" :aria-selected="activeMapTheme === theme.key" :class="{ active: activeMapTheme === theme.key }" @click="setActiveMapTheme(theme.key)">
+          <div
+            class="master-theme-tabs"
+            role="tablist"
+            aria-label="主控专题地图"
+          >
+            <button
+              v-for="theme in masterMapThemes"
+              :key="theme.key"
+              type="button"
+              role="tab"
+              :aria-selected="activeMapTheme === theme.key"
+              :class="{ active: activeMapTheme === theme.key }"
+              @click="setActiveMapTheme(theme.key)"
+            >
               <strong>{{ theme.label }}</strong>
             </button>
           </div>
@@ -1008,17 +1481,29 @@ onMounted(async () => {
             <p>{{ activeMapThemeConfig.description }}</p>
             <ul>
               <li v-for="item in activeMapLegend" :key="item.label">
-                <i :class="`legend-${item.kind ?? 'area'}`" :style="{ background: item.color }" />
+                <i
+                  :class="`legend-${item.kind ?? 'area'}`"
+                  :style="{ background: item.color }"
+                />
                 <span>{{ item.label }}</span>
                 <b v-if="item.value != null">{{ item.value }} 个</b>
               </li>
             </ul>
-            <div v-if="selectedThemeTownship && selectedTownshipMetric" class="master-map-selection">
+            <div
+              v-if="selectedThemeTownship && selectedTownshipMetric"
+              class="master-map-selection"
+            >
               <span>当前行政区</span>
               <strong>{{ townshipName(selectedThemeTownship) }}</strong>
               <em>{{ selectedTownshipMetric.label }}</em>
-              <div v-if="selectedTownshipMetric.breakdown?.length" class="master-map-breakdown">
-                <span v-for="item in selectedTownshipMetric.breakdown" :key="item.label">
+              <div
+                v-if="selectedTownshipMetric.breakdown?.length"
+                class="master-map-breakdown"
+              >
+                <span
+                  v-for="item in selectedTownshipMetric.breakdown"
+                  :key="item.label"
+                >
                   <i :style="{ background: item.color }" />
                   <b>{{ item.label }}</b>
                   <em>{{ item.value }} 个</em>
@@ -1026,11 +1511,29 @@ onMounted(async () => {
               </div>
             </div>
           </aside>
-          <MapToolbox :map="map" :focus-bounds="focusBounds" :initial-center="config.map.center" :initial-zoom="config.map.zoom" :active-base-map="activeBaseMap" :arcgis-available="arcgisAvailable" :change-base-map="setBaseMap" :reset-selection="resetMapSelection" :reset-to-administrative="resetToAdministrativeView" :clear-theme="clearActiveTheme" export-name="兰考县综合决策地图" />
-          <div v-if="mapError" class="map-error">{{ mapError }}</div>
+          <MapToolbox
+            :map="map"
+            :focus-bounds="focusBounds"
+            :initial-center="config.map.center"
+            :initial-zoom="config.map.zoom"
+            :active-base-map="activeBaseMap"
+            :arcgis-available="arcgisAvailable"
+            :change-base-map="setBaseMap"
+            :reset-selection="resetMapSelection"
+            :reset-to-administrative="resetToAdministrativeView"
+            :clear-theme="clearActiveTheme"
+            export-name="兰考县综合决策地图"
+          />
+          <Transition name="map-toast">
+            <div v-if="mapToast" class="map-error" role="status">{{ mapToast }}</div>
+          </Transition>
         </section>
 
-        <TerrainAnalysisDrawer :summary="demSummary" :loading="demLoading" :error="demError" />
+        <TerrainAnalysisDrawer
+          :summary="demSummary"
+          :loading="demLoading"
+          :error="demError"
+        />
       </section>
 
       <aside class="master-side">
@@ -1042,7 +1545,12 @@ onMounted(async () => {
                 <strong>耕地</strong>
               </div>
               <div class="land-visual" @mouseleave="clearActiveLandUse">
-                <svg class="land-pie" viewBox="0 0 120 120" role="img" aria-label="土地利用结构饼图">
+                <svg
+                  class="land-pie"
+                  viewBox="0 0 120 120"
+                  role="img"
+                  aria-label="土地利用结构饼图"
+                >
                   <path
                     v-for="item in landUseSlices"
                     :key="item.name"
@@ -1088,7 +1596,11 @@ onMounted(async () => {
                   }"
                   aria-hidden="true"
                 >
-                  <span><i :style="{ background: activeLandUse.color }" />{{ activeLandUse.name }}</span>
+                  <span
+                    ><i :style="{ background: activeLandUse.color }" />{{
+                      activeLandUse.name
+                    }}</span
+                  >
                   <strong>{{ activeLandUse.value }}%</strong>
                 </div>
               </div>
@@ -1119,9 +1631,15 @@ onMounted(async () => {
 
         <PanelCard title="治理问题可视化发现" meta="点位 / 热点 / 属性">
           <div class="issue-stack">
-            <article><b>人居环境</b><span>沟渠沿线与村庄边界</span><em>32处</em></article>
-            <article><b>设施短板</b><span>15 分钟服务覆盖不足</span><em>18处</em></article>
-            <article><b>违建疑似</b><span>新增硬化斑块待核查</span><em>9处</em></article>
+            <article>
+              <b>人居环境</b><span>沟渠沿线与村庄边界</span><em>32处</em>
+            </article>
+            <article>
+              <b>设施短板</b><span>15 分钟服务覆盖不足</span><em>18处</em>
+            </article>
+            <article>
+              <b>违建疑似</b><span>新增硬化斑块待核查</span><em>9处</em>
+            </article>
           </div>
         </PanelCard>
 
@@ -1147,7 +1665,9 @@ onMounted(async () => {
               {{ decisionInsight.recommendation }}
             </p>
             <div class="insight-chips" aria-label="研判标签">
-              <span v-for="chip in decisionInsight.chips" :key="chip">{{ chip }}</span>
+              <span v-for="chip in decisionInsight.chips" :key="chip">{{
+                chip
+              }}</span>
             </div>
             <small>{{ decisionInsight.note }}</small>
           </div>
@@ -1155,7 +1675,12 @@ onMounted(async () => {
       </aside>
     </div>
   </main>
-  <DecisionAssistant :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`" :timeout-ms="config.reportTimeoutMs" :context="assistantContext" :prompts="assistantPrompts" />
+  <DecisionAssistant
+    :endpoint="`${config.apiBaseUrl.replace(/\/$/, '')}/assistant/decision`"
+    :timeout-ms="config.reportTimeoutMs"
+    :context="assistantContext"
+    :prompts="assistantPrompts"
+  />
 </template>
 
 <style scoped>
@@ -1271,7 +1796,7 @@ onMounted(async () => {
 }
 
 .population-area {
-  fill: url('#population-area-gradient');
+  fill: url("#population-area-gradient");
 }
 
 .population-line {
@@ -1481,12 +2006,12 @@ onMounted(async () => {
   height: 56px;
   padding: 7px 6px;
   place-items: center;
-  border: 1px solid rgba(122, 203, 190, 0.2);
+  border: 1px solid rgba(92, 133, 125, 0.32);
   border-radius: 7px;
-  color: var(--text-soft);
+  color: #bfd0cc;
   text-align: center;
-  background: linear-gradient(145deg, rgba(5, 20, 21, 0.88), rgba(12, 42, 39, 0.74));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+  background: rgba(37, 67, 63, 0.9);
+  box-shadow: 0 4px 12px rgba(24, 48, 44, 0.12);
   cursor: pointer;
   backdrop-filter: blur(10px);
   transition:
@@ -1496,11 +2021,20 @@ onMounted(async () => {
 }
 
 .master-theme-tabs button:hover,
-.master-theme-tabs button:focus-visible,
+.master-theme-tabs button:focus-visible {
+  color: #f1f7f4;
+  border-color: rgba(103, 174, 160, 0.58);
+  background: rgba(48, 92, 84, 0.94);
+  transform: translateY(-1px);
+}
+
 .master-theme-tabs button.active {
-  color: #eafffb;
-  border-color: rgba(61, 214, 196, 0.68);
-  background: linear-gradient(145deg, rgba(16, 78, 73, 0.92), rgba(5, 30, 30, 0.88));
+  color: #fff;
+  border-color: #69b5a7;
+  background: #43877c;
+  box-shadow:
+    0 0 0 1px rgba(105, 181, 167, 0.22),
+    0 5px 14px rgba(29, 86, 76, 0.18);
   transform: translateY(-1px);
 }
 
@@ -1508,7 +2042,7 @@ onMounted(async () => {
   overflow: hidden;
   color: currentColor;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1522,10 +2056,10 @@ onMounted(async () => {
   width: min(258px, calc(100% - 92px));
   gap: 9px;
   padding: 11px;
-  border: 1px solid rgba(122, 203, 190, 0.22);
+  border: 1px solid rgba(78, 143, 128, 0.45);
   border-radius: 8px;
   color: var(--text-soft);
-  background: linear-gradient(145deg, rgba(5, 20, 21, 0.91), rgba(12, 42, 39, 0.82));
+  background: rgba(12, 37, 33, 0.9);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(12px);
   pointer-events: auto;
@@ -1538,14 +2072,14 @@ onMounted(async () => {
 }
 
 .master-map-legend header strong {
-  color: var(--text);
+  color: #f1f5e9;
   font-size: 13px;
   grid-column: 1;
 }
 
 .master-map-legend header small {
   align-self: start;
-  color: var(--text-soft);
+  color: #a8bdb4;
   font-size: 9px;
   grid-column: 2;
   grid-row: 1 / span 2;
@@ -1553,7 +2087,7 @@ onMounted(async () => {
 
 .master-map-legend p {
   margin: 0;
-  color: var(--text-soft);
+  color: #a8bdb4;
   font-size: 9px;
   line-height: 1.45;
 }
@@ -1576,8 +2110,8 @@ onMounted(async () => {
 }
 
 .master-map-legend li i {
-  width: 8px;
-  height: 8px;
+  width: 11px;
+  height: 11px;
   flex: 0 0 auto;
   border: 1px solid rgba(234, 255, 251, 0.34);
   border-radius: 999px;

@@ -28,7 +28,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  content: '';
+  content: "";
   opacity: 0.38;
   background-image:
     linear-gradient(rgba(121, 188, 177, 0.06) 1px, transparent 1px),
@@ -234,7 +234,7 @@ button {
   bottom: 0;
   left: 18%;
   height: 1px;
-  content: '';
+  content: "";
   background: linear-gradient(90deg, transparent, var(--cyan), transparent);
 }
 
@@ -302,7 +302,7 @@ button {
   width: 3px;
   height: 12px;
   margin-right: 8px;
-  content: '';
+  content: "";
   vertical-align: -1px;
   background: var(--cyan);
   box-shadow: 0 0 10px rgba(61, 214, 196, 0.6);
@@ -412,13 +412,16 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: #f0f5e8;
+  color: #f8fbf7;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0.04em;
   pointer-events: none;
-  text-shadow: -1px 0 2px #04110f, 1px 0 2px #04110f, 0 -1px 2px #04110f, 0 1px 2px #04110f;
+  text-shadow:
+    0 1px 2px rgba(18, 54, 50, 1),
+    0 0 3px rgba(18, 54, 50, 0.92),
+    0 0 6px rgba(18, 54, 50, 0.58);
   white-space: nowrap;
   transition:
     color 160ms ease,
@@ -439,7 +442,11 @@ button {
   color: #f5f8e8;
   font-size: 14px;
   font-weight: 700;
-  text-shadow: -1px 0 3px #031411, 1px 0 3px #031411, 0 -1px 3px #031411, 0 1px 3px #031411;
+  text-shadow:
+    -1px 0 3px #031411,
+    1px 0 3px #031411,
+    0 -1px 3px #031411,
+    0 1px 3px #031411;
 }
 
 .leaflet-tooltip.township-map-label--dimmed {
@@ -450,7 +457,10 @@ button {
 .leaflet-tooltip.township-map-label--point-theme {
   color: #f5f8e8;
   font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), -1px 0 2px #04110f, 1px 0 2px #04110f;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.92),
+    -1px 0 2px #04110f,
+    1px 0 2px #04110f;
 }
 
 .leaflet-interactive.township-map-region {
@@ -462,8 +472,12 @@ button {
     opacity 160ms ease;
 }
 
-.map--township-focus .leaflet-baseMap-pane.map-base--natural {
-  filter: brightness(0.9) saturate(0.86) contrast(1.03);
+.map--township-focus .leaflet-baseMap-pane.map-base--navigation,
+.map--township-focus .leaflet-baseMap-pane.map-base--light-gray,
+.map--township-focus .leaflet-baseMap-pane.map-base--dark-gray,
+.map--township-focus .leaflet-baseMap-pane.map-base--outdoor,
+.map--township-focus .leaflet-baseMap-pane.map-base--topographic {
+  filter: saturate(0.86) brightness(0.98);
 }
 
 .map-toolbar {
@@ -491,15 +505,22 @@ button {
 .map-error {
   position: absolute;
   z-index: 700;
-  top: 10px;
-  left: 10px;
-  max-width: 330px;
-  padding: 8px 10px;
-  border: 1px solid rgba(231, 116, 104, 0.45);
-  border-radius: 5px;
-  background: rgba(65, 20, 19, 0.88);
-  color: #ffd7d2;
-  font-size: 11px;
+  top: 82px;
+  left: 20px;
+  max-width: 410px;
+  padding: 10px 14px;
+  border: 1px solid rgba(189, 106, 88, 0.42);
+  border-radius: 8px;
+  background: rgba(91, 42, 35, 0.93);
+  color: #f9eae6;
+  font-size: 13px;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.map-toast-enter-from,
+.map-toast-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .radar-chart {
@@ -555,7 +576,7 @@ button {
   display: block;
   width: var(--value);
   height: 100%;
-  content: '';
+  content: "";
   background: linear-gradient(90deg, var(--cyan), var(--green));
   box-shadow: 0 0 9px rgba(61, 214, 196, 0.5);
 }
