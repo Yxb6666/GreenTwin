@@ -35,6 +35,13 @@ export interface TownshipThemeMetric {
   dataAvailable?: boolean
 }
 
+export interface PoiThemeCounts {
+  publicService: number
+  industry: number
+  cultureTourism: number
+  total: number
+}
+
 export function toggleMasterMapTheme(currentTheme: MasterMapThemeKey | null, nextTheme: MasterMapThemeKey): MasterMapThemeKey | null {
   return currentTheme === nextTheme ? null : nextTheme
 }
@@ -143,7 +150,13 @@ function relatedIssues(feature: TownshipFeature, issues: GovernanceIssue[]) {
   return issues.filter((issue) => issue.town.trim() === featureName)
 }
 
-export function resolveTownshipThemeMetric(themeKey: MasterMapThemeKey, feature: TownshipFeature, index: number, issues: GovernanceIssue[] = []): TownshipThemeMetric {
+export function resolveTownshipThemeMetric(
+  themeKey: MasterMapThemeKey,
+  feature: TownshipFeature,
+  index: number,
+  issues: GovernanceIssue[] = [],
+  poiMetricsByTownship: ReadonlyMap<string, PoiThemeCounts> = new Map(),
+): TownshipThemeMetric {
   const seed = hashFeature(feature, index)
   const sanshengTown = findSanshengTown(feature)
 
@@ -169,19 +182,28 @@ export function resolveTownshipThemeMetric(themeKey: MasterMapThemeKey, feature:
   }
 
   if (themeKey === 'poi') {
-    const publicService = Math.round((sanshengTown?.life.poiDensity ?? 50 + (seed % 28)) * 0.72)
-    const industry = Math.round((sanshengTown?.production.industryPoi ?? 48 + (seed % 26)) * 0.56)
-    const cultureTourism = 6 + (seed % 16)
+    const poiCounts = poiMetricsByTownship.get(feature.code)
+    if (!poiCounts) {
+      return {
+        value: 0,
+        label: '暂无数据',
+        meta: '真实 POI 数据加载中或未匹配到该行政区',
+        color: '#435852',
+        details: ['公共服务 0', '产业节点 0', '文旅资源 0'],
+        breakdown: masterMapThemeLegends.poi.map((item) => ({ ...item, value: 0 })),
+        dataAvailable: false,
+      }
+    }
     const breakdown = [
-      { ...masterMapThemeLegends.poi[0]!, value: publicService },
-      { ...masterMapThemeLegends.poi[1]!, value: industry },
-      { ...masterMapThemeLegends.poi[2]!, value: cultureTourism },
+      { ...masterMapThemeLegends.poi[0]!, value: poiCounts.publicService },
+      { ...masterMapThemeLegends.poi[1]!, value: poiCounts.industry },
+      { ...masterMapThemeLegends.poi[2]!, value: poiCounts.cultureTourism },
     ]
-    const total = publicService + industry + cultureTourism
+    const total = poiCounts.total
     return {
       value: total,
       label: `${total} 个`,
-      meta: 'POI 聚合点',
+      meta: '真实 POI 聚合点',
       color: '#32B7A0',
       radius: clamp(8 + Math.sqrt(total) * 1.1, 11, 21),
       details: breakdown.map((item) => `${item.label} ${item.value}`),
@@ -244,9 +266,14 @@ function applyQuantileColors(metrics: TownshipThemeMetric[], palette: string[]) 
   })
 }
 
-export function resolveTownshipThemeMetrics(themeKey: MasterMapThemeKey | null, features: TownshipFeature[], issues: GovernanceIssue[] = []): TownshipThemeMetric[] {
+export function resolveTownshipThemeMetrics(
+  themeKey: MasterMapThemeKey | null,
+  features: TownshipFeature[],
+  issues: GovernanceIssue[] = [],
+  poiMetricsByTownship: ReadonlyMap<string, PoiThemeCounts> = new Map(),
+): TownshipThemeMetric[] {
   if (themeKey == null) return []
-  const metrics = features.map((feature, index) => resolveTownshipThemeMetric(themeKey, feature, index, issues))
+  const metrics = features.map((feature, index) => resolveTownshipThemeMetric(themeKey, feature, index, issues, poiMetricsByTownship))
   if (themeKey === 'population') applyQuantileColors(metrics, populationPalette)
   if (themeKey === 'sansheng') applyQuantileColors(metrics, sanshengPalette)
   return metrics
