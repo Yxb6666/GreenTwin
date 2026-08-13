@@ -34,8 +34,10 @@ const poiRecordsByTownship = shallowRef<ReadonlyMap<string, readonly PoiRecord[]
 const poiLoading = ref(true)
 const poiIndexing = ref(false)
 const poiError = ref('')
+const pendingPoiFocusTownshipCode = ref<string | null>(null)
 let thematicLayer: L.LayerGroup | null = null
 let poiIndexRequestId = 0
+let cancelPendingPoiReveal: (() => void) | null = null
 const pointThemeLabelOverrides: Partial<Record<string, PointThemeLabelDirection>> = {
   惠安街道: 'right',
 }
@@ -43,6 +45,11 @@ const poiBucketLegend: Record<PoiRecord['bucket'], ThemeLegendItem> = {
   publicService: masterMapThemeLegends.poi[0]!,
   industry: masterMapThemeLegends.poi[1]!,
   cultureTourism: masterMapThemeLegends.poi[2]!,
+}
+const poiLegendClassByBucket: Record<PoiRecord['bucket'], string> = {
+  publicService: 'master-poi-breakdown-icon--public-service',
+  industry: 'master-poi-breakdown-icon--industry',
+  cultureTourism: 'master-poi-breakdown-icon--culture-tourism',
 }
 const populationLabelYears = new Set([2020, 2021, 2025])
 const activePopulationPoint = ref<(typeof populationTrend)[number] | null>(null)
@@ -167,6 +174,25 @@ const activeMapLegend = computed(() => {
   }
   return legend
 })
+
+function poiBreakdownIconClass(item: { label: string }) {
+  const bucket = (Object.keys(poiBucketLegend) as PoiRecord['bucket'][]).find((key) => poiBucketLegend[key].label === item.label)
+  return bucket ? ['master-poi-breakdown-icon', poiLegendClassByBucket[bucket]] : null
+}
+
+function poiBreakdownIconStyle(item: { color: string }) {
+  return { '--poi-icon-color': item.color }
+}
+
+function mapLegendIconClass(item: ThemeLegendItem) {
+  const poiIconClass = activeMapTheme.value === 'poi' ? poiBreakdownIconClass(item) : null
+  return poiIconClass ?? `legend-${item.kind ?? 'area'}`
+}
+
+function mapLegendIconStyle(item: ThemeLegendItem) {
+  return activeMapTheme.value === 'poi' && poiBreakdownIconClass(item) ? poiBreakdownIconStyle(item) : { background: item.color }
+}
+
 const selectedTownshipMetric = computed(() => {
   if (!selectedThemeTownship.value) return null
   const index = townshipFeatures.value.findIndex((feature) => feature.code === selectedThemeTownship.value?.code)
@@ -564,10 +590,183 @@ function tooltipContent(feature: TownshipFeature, metric: TownshipThemeMetric) {
   return `<strong>${escapeHtml(townshipName(feature))}</strong><em>${escapeHtml(activeMapThemeConfig.value.label)}：${escapeHtml(metric.label)}</em><small>${escapeHtml(metric.meta)}</small>${details}`
 }
 
+function tracePoiGear(context: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+  const teeth = 8
+  for (let index = 0; index < teeth * 2; index += 1) {
+    const angle = -Math.PI / 2 + (Math.PI * index) / teeth
+    const gearRadius = index % 2 === 0 ? radius : radius * 0.72
+    const pointX = x + Math.cos(angle) * gearRadius
+    const pointY = y + Math.sin(angle) * gearRadius
+    if (index === 0) context.moveTo(pointX, pointY)
+    else context.lineTo(pointX, pointY)
+  }
+  context.closePath()
+}
+
+function tracePoiTreeCanopy(context: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+  context.moveTo(x, y - radius * 0.82)
+  context.bezierCurveTo(x + radius * 0.44, y - radius * 0.86, x + radius * 0.76, y - radius * 0.54, x + radius * 0.72, y - radius * 0.18)
+  context.bezierCurveTo(x + radius * 0.98, y - radius * 0.02, x + radius * 0.82, y + radius * 0.36, x + radius * 0.52, y + radius * 0.34)
+  context.bezierCurveTo(x + radius * 0.28, y + radius * 0.58, x - radius * 0.28, y + radius * 0.58, x - radius * 0.52, y + radius * 0.34)
+  context.bezierCurveTo(x - radius * 0.82, y + radius * 0.36, x - radius * 0.98, y - radius * 0.02, x - radius * 0.72, y - radius * 0.18)
+  context.bezierCurveTo(x - radius * 0.76, y - radius * 0.54, x - radius * 0.44, y - radius * 0.86, x, y - radius * 0.82)
+  context.closePath()
+}
+
+function drawPoiPublicServiceSymbols(
+  context: CanvasRenderingContext2D,
+  records: readonly PoiRecord[],
+  mapInstance: L.Map,
+  radius: number,
+  color: string,
+) {
+  context.lineJoin = 'round'
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.rect(point.x - radius * 0.62, point.y - radius * 0.08, radius * 1.24, radius * 0.88)
+  })
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.9)'
+  context.lineWidth = 1
+  context.fill()
+  context.stroke()
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.moveTo(point.x - radius * 0.82, point.y - radius * 0.05)
+    context.lineTo(point.x, point.y - radius * 0.82)
+    context.lineTo(point.x + radius * 0.82, point.y - radius * 0.05)
+    context.closePath()
+  })
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.9)'
+  context.lineWidth = 1
+  context.fill()
+  context.stroke()
+
+  const windowSize = Math.max(1.25, radius * 0.32)
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.rect(point.x - windowSize / 2, point.y + radius * 0.2, windowSize, radius * 0.58)
+  })
+  context.fillStyle = 'rgba(255, 255, 255, 0.92)'
+  context.fill()
+}
+
+function drawPoiIndustrySymbols(
+  context: CanvasRenderingContext2D,
+  records: readonly PoiRecord[],
+  mapInstance: L.Map,
+  radius: number,
+  color: string,
+) {
+  context.lineJoin = 'round'
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.moveTo(point.x + radius, point.y)
+    tracePoiGear(context, point.x, point.y, radius)
+  })
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.85)'
+  context.lineWidth = 1
+  context.fill()
+  context.stroke()
+
+  context.fillStyle = 'rgba(7, 19, 19, 0.72)'
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.moveTo(point.x + radius * 0.36, point.y)
+    context.arc(point.x, point.y, radius * 0.36, 0, Math.PI * 2)
+  })
+  context.fill()
+}
+
+function drawPoiCultureTourismSymbols(
+  context: CanvasRenderingContext2D,
+  records: readonly PoiRecord[],
+  mapInstance: L.Map,
+  radius: number,
+  color: string,
+) {
+  context.lineJoin = 'round'
+  const treeRadius = radius * 1.08
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.rect(point.x - treeRadius * 0.15, point.y + treeRadius * 0.18, treeRadius * 0.3, treeRadius * 0.78)
+  })
+  context.fillStyle = 'rgba(104, 71, 38, 0.92)'
+  context.fill()
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    tracePoiTreeCanopy(context, point.x, point.y - treeRadius * 0.06, treeRadius * 0.72)
+  })
+  context.fillStyle = color
+  context.strokeStyle = 'rgba(234, 255, 251, 0.84)'
+  context.lineWidth = 1
+  context.fill()
+  context.stroke()
+
+  context.beginPath()
+  records.forEach((record) => {
+    const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
+    context.moveTo(point.x - treeRadius * 0.4, point.y + treeRadius * 0.98)
+    context.lineTo(point.x + treeRadius * 0.4, point.y + treeRadius * 0.98)
+  })
+  context.strokeStyle = 'rgba(234, 255, 251, 0.78)'
+  context.lineWidth = 1.2
+  context.stroke()
+}
+
+function drawPoiSymbols(
+  context: CanvasRenderingContext2D,
+  records: readonly PoiRecord[],
+  mapInstance: L.Map,
+  bucket: PoiRecord['bucket'],
+  radius: number,
+) {
+  const color = poiBucketLegend[bucket].color
+  if (bucket === 'publicService') {
+    drawPoiPublicServiceSymbols(context, records, mapInstance, radius, color)
+    return
+  }
+  if (bucket === 'industry') {
+    drawPoiIndustrySymbols(context, records, mapInstance, radius, color)
+    return
+  }
+  drawPoiCultureTourismSymbols(context, records, mapInstance, radius, color)
+}
+
+function resolvePoiCanvasIconRadius(totalRecordCount: number, visibleRecordCount: number, zoom: number) {
+  const densityRadius = visibleRecordCount > 1800 ? 5.2 : visibleRecordCount > 800 ? 6 : visibleRecordCount > 300 ? 6.8 : 7.6
+  const zoomRadius = zoom >= 17 ? 9.2 : zoom >= 16 ? 8.6 : zoom >= 15 ? 8 : zoom >= 14 ? 7.2 : zoom >= 13 ? 6.5 : 5.8
+  const crowdedCap = totalRecordCount > 2500 && visibleRecordCount > 1200 ? 6.4 : 9.2
+  return Math.min(Math.max(densityRadius, zoomRadius), crowdedCap)
+}
+
+function isPoiMapAnimating(mapInstance: L.Map) {
+  const animatedMap = mapInstance as L.Map & {
+    _animatingZoom?: boolean
+    _panAnim?: { _inProgress?: boolean }
+  }
+  return Boolean(animatedMap._animatingZoom || animatedMap._panAnim?._inProgress)
+}
+
 interface PoiCanvasLayerState {
   _canvas?: HTMLCanvasElement
   _poiMap?: L.Map
   _records: readonly PoiRecord[]
+  _hide: () => void
   _draw: () => void
 }
 
@@ -578,20 +777,27 @@ const PoiCanvasLayerClass = L.Layer.extend({
   },
   onAdd(mapInstance: L.Map) {
     const layer = this as unknown as PoiCanvasLayerState
-    const canvas = L.DomUtil.create('canvas', 'master-poi-canvas leaflet-zoom-animated') as HTMLCanvasElement
+    const canvas = L.DomUtil.create('canvas', 'master-poi-canvas') as HTMLCanvasElement
     layer._poiMap = mapInstance
     layer._canvas = canvas
     canvas.style.pointerEvents = 'none'
+    canvas.style.opacity = '0'
     mapInstance.getPanes().overlayPane.appendChild(canvas)
+    mapInstance.on('movestart zoomstart move zoom', layer._hide, layer)
     mapInstance.on('moveend zoomend resize viewreset', layer._draw, layer)
     layer._draw()
   },
   onRemove(mapInstance: L.Map) {
     const layer = this as unknown as PoiCanvasLayerState
     if (layer._canvas?.parentElement) layer._canvas.parentElement.removeChild(layer._canvas)
+    mapInstance.off('movestart zoomstart move zoom', layer._hide, layer)
     mapInstance.off('moveend zoomend resize viewreset', layer._draw, layer)
     layer._canvas = undefined
     layer._poiMap = undefined
+  },
+  _hide() {
+    const layer = this as unknown as PoiCanvasLayerState
+    if (layer._canvas) layer._canvas.style.opacity = '0'
   },
   _draw() {
     const layer = this as unknown as PoiCanvasLayerState
@@ -614,27 +820,27 @@ const PoiCanvasLayerClass = L.Layer.extend({
     context.clearRect(0, 0, size.x, size.y)
     context.globalAlpha = 0.86
 
-    const radius = layer._records.length > 1500 ? 2.4 : layer._records.length > 600 ? 2.9 : 3.4
     const bounds = mapInstance.getBounds().pad(0.04)
     const recordsByBucket = new Map<PoiRecord['bucket'], PoiRecord[]>()
+    let visibleRecordCount = 0
     layer._records.forEach((record) => {
       const latLng = L.latLng(record.latitude, record.longitude)
       if (!bounds.contains(latLng)) return
+      visibleRecordCount += 1
       const bucketRecords = recordsByBucket.get(record.bucket) ?? []
       bucketRecords.push(record)
       recordsByBucket.set(record.bucket, bucketRecords)
     })
+    if (visibleRecordCount === 0) return
+
+    const radius = resolvePoiCanvasIconRadius(layer._records.length, visibleRecordCount, mapInstance.getZoom())
 
     recordsByBucket.forEach((records, bucket) => {
-      context.beginPath()
-      records.forEach((record) => {
-        const point = mapInstance.latLngToContainerPoint([record.latitude, record.longitude])
-        context.moveTo(point.x + radius, point.y)
-        context.arc(point.x, point.y, radius, 0, Math.PI * 2)
-      })
-      context.fillStyle = poiBucketLegend[bucket].color
-      context.fill()
+      drawPoiSymbols(context, records, mapInstance, bucket, radius)
     })
+    if (!isPoiMapAnimating(mapInstance)) {
+      canvas.style.opacity = '1'
+    }
   },
 })
 
@@ -722,18 +928,81 @@ function clearThematicLayer() {
   thematicLayer = null
 }
 
+function clearPendingPoiReveal() {
+  cancelPendingPoiReveal?.()
+  cancelPendingPoiReveal = null
+  pendingPoiFocusTownshipCode.value = null
+}
+
+function revealPoiAfterFocusSettles(feature: TownshipFeature, instance: L.Map) {
+  clearPendingPoiReveal()
+  pendingPoiFocusTownshipCode.value = feature.code
+
+  let finished = false
+  let settleTimer: number | null = null
+  const earliestPoiRevealAt = Date.now() + 980
+
+  const fallbackTimer = window.setTimeout(finish, 2600)
+
+  function finish() {
+    if (finished) return
+    finished = true
+    instance.off('movestart', handleFocusActivity)
+    instance.off('zoomstart', handleFocusActivity)
+    instance.off('move', handleFocusActivity)
+    instance.off('zoom', handleFocusActivity)
+    instance.off('moveend', handleFocusActivity)
+    instance.off('zoomend', handleFocusActivity)
+    window.clearTimeout(fallbackTimer)
+    if (settleTimer !== null) window.clearTimeout(settleTimer)
+    if (cancelPendingPoiReveal === cancel) cancelPendingPoiReveal = null
+    if (pendingPoiFocusTownshipCode.value === feature.code) {
+      pendingPoiFocusTownshipCode.value = null
+    }
+  }
+
+  function cancel() {
+    if (finished) return
+    finished = true
+    instance.off('movestart', handleFocusActivity)
+    instance.off('zoomstart', handleFocusActivity)
+    instance.off('move', handleFocusActivity)
+    instance.off('zoom', handleFocusActivity)
+    instance.off('moveend', handleFocusActivity)
+    instance.off('zoomend', handleFocusActivity)
+    window.clearTimeout(fallbackTimer)
+    if (settleTimer !== null) window.clearTimeout(settleTimer)
+  }
+
+  function handleFocusActivity() {
+    if (settleTimer !== null) window.clearTimeout(settleTimer)
+    settleTimer = window.setTimeout(finish, Math.max(180, earliestPoiRevealAt - Date.now()))
+  }
+
+  cancelPendingPoiReveal = cancel
+  instance.on('movestart', handleFocusActivity)
+  instance.on('zoomstart', handleFocusActivity)
+  instance.on('move', handleFocusActivity)
+  instance.on('zoom', handleFocusActivity)
+  instance.on('moveend', handleFocusActivity)
+  instance.on('zoomend', handleFocusActivity)
+}
+
 function resetMapSelection() {
+  clearPendingPoiReveal()
   selectedThemeTownship.value = null
   clearSelectedTownship()
 }
 
 function clearActiveTheme() {
   if (activeMapTheme.value == null) return false
+  clearPendingPoiReveal()
   activeMapTheme.value = null
   return true
 }
 
 function resetToAdministrativeView() {
+  clearPendingPoiReveal()
   activeMapTheme.value = null
   selectedThemeTownship.value = null
   clearSelectedTownship()
@@ -795,7 +1064,9 @@ function renderThematicMap() {
 
   if (activeMapTheme.value === 'poi') {
     if (selectedThemeTownship.value) {
-      addPoiPointMarkers(selectedThemeTownship.value)
+      if (pendingPoiFocusTownshipCode.value !== selectedThemeTownship.value.code) {
+        addPoiPointMarkers(selectedThemeTownship.value)
+      }
     } else {
       townshipFeatures.value.forEach((feature, index) => {
         const metric = activeTownshipMetrics.value[index]
@@ -817,11 +1088,19 @@ function setActiveMapTheme(themeKey: MasterMapThemeKey) {
 }
 
 function focusTownship(feature: TownshipFeature) {
+  const instance = map.value
+  if (activeMapTheme.value === 'poi' && instance) {
+    revealPoiAfterFocusSettles(feature, instance)
+  } else {
+    clearPendingPoiReveal()
+  }
+
   selectedThemeTownship.value = feature
+  renderThematicMap()
   const name = townshipName(feature)
   if (focusTownshipByName(name)) return
   selectedTownship.value = name
-  map.value?.flyToBounds(townshipBounds(feature), {
+  instance?.flyToBounds(townshipBounds(feature), {
     animate: true,
     duration: 0.85,
     padding: [58, 58],
@@ -830,7 +1109,12 @@ function focusTownship(feature: TownshipFeature) {
 }
 
 watch(selectedTownship, (name) => {
-  selectedThemeTownship.value = name ? (townshipFeatures.value.find((feature) => townshipName(feature) === name) ?? null) : null
+  const feature = name ? (townshipFeatures.value.find((item) => townshipName(item) === name) ?? null) : null
+  if (feature && activeMapTheme.value === 'poi' && map.value && pendingPoiFocusTownshipCode.value !== feature.code) {
+    revealPoiAfterFocusSettles(feature, map.value)
+  }
+  if (!feature) clearPendingPoiReveal()
+  selectedThemeTownship.value = feature
 })
 
 async function refreshPoiMetrics() {
@@ -851,8 +1135,9 @@ async function refreshPoiMetrics() {
 }
 
 watch([poiRecords, townshipFeatures], refreshPoiMetrics, { flush: 'post' })
-watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship, poiRecordsByTownship], renderThematicMap, { flush: 'post' })
+watch([map, townshipFeatures, activeMapTheme, selectedThemeTownship, governanceIssues, poiMetricsByTownship, poiRecordsByTownship, pendingPoiFocusTownshipCode], renderThematicMap, { flush: 'post' })
 onBeforeUnmount(() => {
+  clearPendingPoiReveal()
   clearThematicLayer()
   resetTownshipLabelPlacements()
 })
@@ -1008,7 +1293,7 @@ onMounted(async () => {
             <p>{{ activeMapThemeConfig.description }}</p>
             <ul>
               <li v-for="item in activeMapLegend" :key="item.label">
-                <i :class="`legend-${item.kind ?? 'area'}`" :style="{ background: item.color }" />
+                <i :class="mapLegendIconClass(item)" :style="mapLegendIconStyle(item)" />
                 <span>{{ item.label }}</span>
                 <b v-if="item.value != null">{{ item.value }} 个</b>
               </li>
@@ -1019,7 +1304,7 @@ onMounted(async () => {
               <em>{{ selectedTownshipMetric.label }}</em>
               <div v-if="selectedTownshipMetric.breakdown?.length" class="master-map-breakdown">
                 <span v-for="item in selectedTownshipMetric.breakdown" :key="item.label">
-                  <i :style="{ background: item.color }" />
+                  <i :class="poiBreakdownIconClass(item)" :style="poiBreakdownIconStyle(item)" />
                   <b>{{ item.label }}</b>
                   <em>{{ item.value }} 个</em>
                 </span>
@@ -1650,8 +1935,87 @@ onMounted(async () => {
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
+  background: var(--poi-icon-color, currentColor);
   border: 1px solid rgba(234, 255, 251, 0.34);
   border-radius: 999px;
+}
+
+.master-map-legend li i.master-poi-breakdown-icon,
+.master-map-breakdown i.master-poi-breakdown-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.master-poi-breakdown-icon::before,
+.master-poi-breakdown-icon::after {
+  position: absolute;
+  display: block;
+  content: '';
+}
+
+.master-map-legend li i.master-poi-breakdown-icon--public-service,
+.master-map-breakdown i.master-poi-breakdown-icon--public-service {
+  background: var(--poi-icon-color);
+  border-radius: 0;
+  clip-path: polygon(50% 4%, 96% 41%, 86% 41%, 86% 100%, 14% 100%, 14% 41%, 4% 41%);
+  filter: drop-shadow(0 0 0.8px rgba(234, 255, 251, 0.82));
+}
+
+.master-poi-breakdown-icon--public-service::before {
+  left: 5px;
+  top: 8px;
+  z-index: 1;
+  width: 4px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 0;
+  border-radius: 1px 1px 0 0;
+}
+
+.master-poi-breakdown-icon--public-service::after {
+  display: none;
+}
+
+.master-poi-breakdown-icon--industry::before {
+  inset: 1px;
+  background: var(--poi-icon-color);
+  clip-path: polygon(50% 0%, 64% 17%, 85% 15%, 83% 36%, 100% 50%, 83% 64%, 85% 85%, 64% 83%, 50% 100%, 36% 83%, 15% 85%, 17% 64%, 0% 50%, 17% 36%, 15% 15%, 36% 17%);
+}
+
+.master-poi-breakdown-icon--industry::after {
+  left: 5px;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  background: rgba(7, 19, 19, 0.78);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(234, 255, 251, 0.45);
+}
+
+.master-poi-breakdown-icon--culture-tourism::before {
+  left: 2px;
+  top: 1px;
+  width: 10px;
+  height: 9px;
+  background: var(--poi-icon-color);
+  border: 1px solid rgba(234, 255, 251, 0.76);
+  border-radius: 50% 50% 44% 44%;
+  box-shadow:
+    -3px 2px 0 -1px var(--poi-icon-color),
+    3px 2px 0 -1px var(--poi-icon-color);
+}
+
+.master-poi-breakdown-icon--culture-tourism::after {
+  left: 6px;
+  top: 8px;
+  width: 2px;
+  height: 5px;
+  background: rgba(104, 71, 38, 0.95);
+  border-radius: 1px;
 }
 
 .master-map-breakdown b {
