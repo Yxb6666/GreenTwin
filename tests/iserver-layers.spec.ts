@@ -122,7 +122,9 @@ describe('iServer 数据图层', () => {
       },
     )
 
-    expect(fetchImpl.mock.calls[0]?.[0]).toContain('/queryResults.json')
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      'http://iserver/services/Laokao_POI_2025/rest/maps/Lankao_POI_2025/queryResults.json',
+    )
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
     expect(body.queryParameters.queryParams[0]).toMatchObject({
       name: 'Lankao_POI_2025',
