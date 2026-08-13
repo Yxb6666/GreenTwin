@@ -1,6 +1,7 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
 import { loadSuperMapLeaflet, type LeafletSuperMapNamespace } from './loadSdk'
+import { ReprojectedImageTileLayer } from './reprojectedImageTileLayer'
 import {
   buildArcGisTileUrl,
   DEFAULT_BASE_MAP_MODE,
@@ -70,9 +71,8 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let resizeObserver: ResizeObserver | null = null
   let superMapBaseLayer: L.TileLayer | null = null
   let activeBaseLayer: L.TileLayer | null = null
-  let landUseRasterLayer: L.TileLayer | null = null
+  let landUseRasterLayer: L.GridLayer | null = null
   let superMapNamespace: LeafletSuperMapNamespace | null = null
-  let pendingLandUseRaster: LandUseRasterOverlay | null = null
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   const townshipLayers: TownshipLayerEntry[] = []
@@ -288,24 +288,18 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     const instance = map.value
     if (!instance) return false
     if (!active) {
-      pendingLandUseRaster = null
       landUseRasterLayer?.remove()
       landUseRasterLayer = null
       return true
     }
-    pendingLandUseRaster = overlay
     if (landUseRasterLayer) return true
-    if (!superMapNamespace) return true
 
-    landUseRasterLayer = new superMapNamespace.ImageTileLayer(overlay.serviceUrl, {
+    landUseRasterLayer = new ReprojectedImageTileLayer({
+      serviceUrl: overlay.serviceUrl,
       collectionId: overlay.collectionId,
       renderingRule: overlay.renderingRule,
-      transparent: true,
-      cacheEnabled: false,
-      format: 'png',
       pane: 'landUseRasterPane',
       opacity: overlay.opacity,
-      crossOrigin: true,
       maxZoom: 20,
       className: 'landuse-raster-tile',
     })
@@ -386,7 +380,6 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
           if (getBaseMapOption(activeBaseMap.value)?.source === 'supermap') {
             activateBaseLayer(superMapBaseLayer, activeBaseMap.value)
           }
-          if (pendingLandUseRaster) setLandUseRaster(true, pendingLandUseRaster)
 
           const addDemLayer = () => {
             if (!demOverlay || disposed) return
@@ -486,7 +479,6 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     townshipFeatures.value = []
     landUseRasterLayer = null
     superMapNamespace = null
-    pendingLandUseRaster = null
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()

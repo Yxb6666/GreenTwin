@@ -2,16 +2,6 @@ import L from 'leaflet'
 
 export interface LeafletSuperMapNamespace {
   tiledMapLayer: (url: string, options?: L.TileLayerOptions & { transparent?: boolean }) => L.TileLayer
-  ImageTileLayer: new (
-    url: string,
-    options: L.TileLayerOptions & {
-      collectionId: string
-      renderingRule: Record<string, unknown>
-      transparent?: boolean
-      cacheEnabled?: boolean
-      format?: 'png' | 'jpg' | 'webp'
-    },
-  ) => L.TileLayer
 }
 
 export type LeafletWithSuperMap = typeof L & { supermap?: LeafletSuperMapNamespace }
@@ -21,7 +11,7 @@ let sdkPromise: Promise<LeafletWithSuperMap> | null = null
 export function loadSuperMapLeaflet(scriptUrl: string) {
   const target = window as typeof window & { L?: LeafletWithSuperMap }
   target.L = L as LeafletWithSuperMap
-  if (target.L.supermap?.tiledMapLayer && target.L.supermap.ImageTileLayer) return Promise.resolve(target.L)
+  if (target.L.supermap?.tiledMapLayer) return Promise.resolve(target.L)
   if (sdkPromise) return sdkPromise
 
   sdkPromise = new Promise<LeafletWithSuperMap>((resolve, reject) => {
@@ -36,9 +26,9 @@ export function loadSuperMapLeaflet(scriptUrl: string) {
     }, 15_000)
     script.onload = () => {
       window.clearTimeout(timeout)
-      if (!target.L?.supermap?.tiledMapLayer || !target.L.supermap.ImageTileLayer) {
+      if (!target.L?.supermap?.tiledMapLayer) {
         sdkPromise = null
-        reject(new Error('SuperMap iClient Leaflet SDK 已加载，但未找到地图或影像图层接口。'))
+        reject(new Error('SuperMap iClient Leaflet SDK 已加载，但未找到 tiledMapLayer。'))
         return
       }
       resolve(target.L)
