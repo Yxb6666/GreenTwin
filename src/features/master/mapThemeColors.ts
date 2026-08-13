@@ -1,0 +1,55 @@
+export const GREENTWIN_MAP_COLORS = {
+  admin: {
+    baseFill: "#3F8D86",
+    townshipStroke: "#2E6F69",
+    countyStroke: "#2E6F69",
+    hoverFill: "#92D7CA",
+    hoverStroke: "#29A99D",
+    selectedFill: "#92D7CA",
+    selectedStroke: "#23786F",
+    thematicStroke: "#3F8583",
+    landUseTownshipStroke: "#3F8583",
+  },
+  population: ["#FCE5CF", "#F8C497", "#F29A63", "#DE7040", "#B94E2A"],
+  gdp: ["#DCECF7", "#ADD4EA", "#72B5D8", "#428FBA", "#23648E"],
+  sansheng: ["#DCEAD8", "#A9D19E", "#68AE75", "#367B4C"],
+  boundaries: {
+    population: { county: "#A94A2B", township: "#B65B38", hover: "#D86B3C", selected: "#8F3D24" },
+    gdp: { county: "#205C84", township: "#347AA4", hover: "#3A8FC2", selected: "#174F77" },
+    sansheng: { county: "#2E6842", township: "#4D855C", hover: "#4B9B64", selected: "#245C37" },
+    governance: { county: "#397B75", township: "#4E8D86", hover: "#29A99D", selected: "#23786F" },
+  },
+  landUse: {
+    farmland: "#E7C85D",
+    forest: "#57B982",
+    construction: "#DF746C",
+    water: "#56A7D4",
+    other: "#93A7A2",
+  },
+  poi: {
+    aggregate: "#20A996",
+    publicService: "#20B7A5",
+    industry: "#438FD1",
+    cultureTourism: "#E77A6F",
+    hover: "#20C5A5",
+    selected: "#BFD85A",
+    stroke: "#D6FFF7",
+    hoverStroke: "#FFFFFF",
+    selectedStroke: "#BFD85A",
+  },
+  governance: {
+    low: "#E0B85A",
+    medium: "#D28A46",
+    high: "#B9633F",
+    critical: "#B94755",
+    stroke: "#FFF4E8",
+    hoverStroke: "#FFF2D9",
+  },
+  noData: "#B8C2BC",
+} as const;
+
+export const POI_CATEGORY_COLORS = {
+  publicService: GREENTWIN_MAP_COLORS.poi.publicService,
+  industry: GREENTWIN_MAP_COLORS.poi.industry,
+  cultureTourism: GREENTWIN_MAP_COLORS.poi.cultureTourism,
+} as const;

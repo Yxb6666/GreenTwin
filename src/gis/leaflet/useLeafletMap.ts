@@ -1,5 +1,6 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
+import { GREENTWIN_MAP_COLORS } from '@/features/master/mapThemeColors'
 import { loadSuperMapLeaflet, type LeafletSuperMapNamespace } from './loadSdk'
 import { ReprojectedImageTileLayer } from './reprojectedImageTileLayer'
 import {
@@ -72,6 +73,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let superMapBaseLayer: L.TileLayer | null = null
   let activeBaseLayer: L.TileLayer | null = null
   let landUseRasterLayer: L.GridLayer | null = null
+  let countyOutlineLayer: L.Polyline | null = null
   let superMapNamespace: LeafletSuperMapNamespace | null = null
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
@@ -135,18 +137,22 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     const outlineRings = getCountyOuterBoundaryRings(boundaryRings)
     if (outlineRings.length === 0) return false
 
-    L.polyline(outlineRings, {
+    countyOutlineLayer = L.polyline(outlineRings, {
       pane: 'countyOutlinePane',
       interactive: false,
-      color: '#dceb72',
-      weight: 2.8,
-      opacity: 1,
+      color: GREENTWIN_MAP_COLORS.admin.countyStroke,
+      weight: 2.05,
+      opacity: 0.92,
       lineCap: 'round',
       lineJoin: 'round',
       className: 'county-map-outline',
     }).addTo(instance)
 
     return true
+  }
+
+  function setCountyOutlineStyle(style: Pick<L.PathOptions, 'color' | 'weight' | 'opacity'>) {
+    countyOutlineLayer?.setStyle(style)
   }
 
   function setTownshipLabelPlacement(name: string, options: Pick<L.TooltipOptions, 'direction' | 'offset' | 'className'>, position?: L.LatLngExpression) {
@@ -497,6 +503,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     initialize,
     setBaseMap,
     setLandUseRaster,
+    setCountyOutlineStyle,
     clearSelectedTownship,
     focusTownshipByName,
     setTownshipLabelPlacement,

@@ -59,7 +59,7 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.supermap.landuseRaster).toEqual({
       serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoLand/restjsr',
       collectionId: 'Lankao-Land',
-      opacity: 0.82,
+      opacity: 0.87,
       renderingRule: {
         displayMode: 'STRETCHED',
         displayBands: '0',

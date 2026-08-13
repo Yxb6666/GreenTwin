@@ -68,7 +68,7 @@ describe('主控专题地图指标', () => {
     expect(metric).toMatchObject({
       value: 0,
       label: '暂无数据',
-      color: '#435852',
+      color: '#B8C2BC',
       dataAvailable: false,
     })
   })
@@ -171,7 +171,7 @@ describe('主控专题地图指标', () => {
     expect(metric).toMatchObject({
       value: 0,
       label: '暂无数据',
-      color: '#435852',
+      color: '#B8C2BC',
       dataAvailable: false,
     })
   })
