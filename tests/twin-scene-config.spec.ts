@@ -54,4 +54,21 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain("mapName: 'Lankao_Water'")
     expect(source).toContain("key: 'poiLayer'")
   })
+
+  it('场景覆盖物使用 Cesium 原生颜色材质避免回退为白色', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('Color.fromCssColorString')
+    expect(source).toContain("cesiumColor('#12e1d3')")
+    expect(source).toContain("cesiumColor('#f0b85c')")
+  })
+
+  it('排水沟与抬升路面使用带立面的三维示意几何', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('corridor: {')
+    expect(source).toContain('wall: {')
+    expect(source).toContain('roadVisualScale = 8')
+    expect(source).toContain('ditchVisualScale = 5')
+  })
 })

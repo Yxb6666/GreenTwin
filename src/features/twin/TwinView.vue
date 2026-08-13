@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
 import RadarChart from '@/shared/components/RadarChart.vue'
@@ -11,9 +11,7 @@ import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
 import AiBuilderAssistant, {
   type AiBuilderStyle,
 } from './AiBuilderAssistant.vue'
-import SceneToolbox, {
-  type SceneMeasureType,
-} from './SceneToolbox.vue'
+import SceneToolbox, { type SceneMeasureType } from './SceneToolbox.vue'
 import {
   clampModelScale,
   formatPointLabel,
@@ -44,10 +42,17 @@ import {
   waitForAgentJob,
   type AgentJob,
 } from './agentSimulation'
+import {
+  applyTreatmentScoreRules,
+  offsetTreatmentLine,
+  selectTreatmentRoad,
+  type TreatmentMeasureKey,
+} from './treatmentSimulation'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
 type MeasureKey = 'ditch' | 'outlet' | 'pump' | 'road'
+type PointTreatmentKey = Extract<TreatmentMeasureKey, 'outlet' | 'pump'>
 
 interface SceneLayer {
   visible: boolean
@@ -65,8 +70,15 @@ interface CesiumMovement {
 }
 
 interface CesiumEventHandler {
-  setInputAction: (action: (movement: CesiumMovement) => void, type: number) => void
+  setInputAction: (
+    action: (movement: CesiumMovement) => void,
+    type: number,
+  ) => void
   destroy: () => void
+}
+
+interface CesiumColor {
+  withAlpha: (alpha: number) => CesiumColor
 }
 
 interface SuperMapViewer {
@@ -125,6 +137,9 @@ interface CesiumRuntime {
     distance: (left: unknown, right: unknown) => number
   }
   Cartesian2: new (x: number, y: number) => unknown
+  Color: {
+    fromCssColorString: (color: string) => CesiumColor
+  }
   Cartographic: {
     fromCartesian: (cartesian: unknown) => {
       longitude: number
@@ -168,7 +183,11 @@ interface CesiumRuntime {
       result?: unknown,
     ) => unknown
   }
-  HeadingPitchRoll: new (heading: number, pitch: number, roll: number) => unknown
+  HeadingPitchRoll: new (
+    heading: number,
+    pitch: number,
+    roll: number,
+  ) => unknown
   Ellipsoid: { WGS84: unknown }
   Math: {
     toRadians: (degrees: number) => number
@@ -181,7 +200,7 @@ const cesiumContainer = ref<HTMLElement | null>(null)
 const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
-const activeMeasure = ref<MeasureKey>('ditch')
+const selectedMeasures = ref<TreatmentMeasureKey[]>([])
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
 const generatedJob = ref<SimulationJob | AgentJob | null>(null)
@@ -194,21 +213,28 @@ const modelScale = ref(1)
 const modelHeading = ref(0)
 const selectedPoint = ref<PickedPoint | null>(null)
 const measurementMode = ref<SceneMeasureType | null>(null)
+const treatmentPointMode = ref<PointTreatmentKey | null>(null)
 const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
+const outletPoints = ref<PickedPoint[]>([])
+const pumpPoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
-const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
+const operationMessage = ref(
+  '点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模',
+)
 const layerVisibility = ref({
-  buildingLayer: true,
+  buildingLayer: false,
   roadLayer: true,
   waterLayer: true,
-  issueLayer: true,
-  poiLayer: true,
+  issueLayer: false,
+  poiLayer: false,
 })
 const parameters = ref({
   ditchWidth: 0.5,
   ditchDepth: 0.7,
-  outletCount: 4,
+  outletCount: 0,
+  outletDiameter: 500,
+  pumpCapacity: 1000,
   roadRaiseHeight: 0.25,
 })
 
@@ -221,13 +247,22 @@ let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
+let treatmentRoad: ParsedLayerFeature | null = null
+let treatmentEntities: unknown[] = []
 
-const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
+const constructionStages = [
+  '场地准备',
+  '基础施工',
+  '主体搭建',
+  '屋顶封顶',
+  '装饰完成',
+]
 
 function inferBuildingStyle(
   instruction: string,
 ): NonNullable<SimulationParameters['buildingStyle']> {
-  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction)) return 'traditional-chinese'
+  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction))
+    return 'traditional-chinese'
   if (/现代|办公|商业|玻璃|公寓|高层|科技/.test(instruction)) return 'modern'
   return 'rural'
 }
@@ -277,13 +312,13 @@ const measures: Array<{
     key: 'outlet',
     icon: '口',
     label: '增加排水口',
-    description: '设置 4 处汇水节点',
+    description: '地图选点布置汇水节点',
   },
   {
     key: 'pump',
     icon: '泵',
     label: '配置临时泵站',
-    description: '低洼点应急排水',
+    description: '地图选点布置应急排水',
   },
   {
     key: 'road',
@@ -359,7 +394,33 @@ const currentScenario = computed(
     scenarioTemplates.find((item) => item.key === activeScenario.value) ??
     scenarioTemplates[0]!,
 )
-const currentPlan = computed(() => planData[activePlan.value])
+const treatmentRuleParameters = computed(() => ({
+  ...parameters.value,
+  outletCount: outletPoints.value.length,
+  pumpCount: pumpPoints.value.length,
+}))
+const currentPlan = computed(() => {
+  const basePlan = planData[activePlan.value]
+  const scoreRules = applyTreatmentScoreRules(
+    basePlan.scores,
+    planData.current.scores,
+    selectedMeasures.value,
+    treatmentRuleParameters.value,
+  )
+  return { ...basePlan, ...scoreRules }
+})
+const selectedMeasureLabels = computed(() =>
+  measures
+    .filter((measure) =>
+      selectedMeasures.value.includes(measure.key as TreatmentMeasureKey),
+    )
+    .map((measure) => measure.label),
+)
+const appliedMeasureSummary = computed(() =>
+  selectedMeasureLabels.value.length
+    ? `参数联动估算 · 已应用${selectedMeasureLabels.value.join('、')}`
+    : '规则估算 · 尚未启用治理措施',
+)
 const isGenerating = computed(() => buildState.value === 'running')
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
@@ -382,12 +443,11 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
       production: currentPlan.value.scores[2] ?? 0,
     },
     recommendation: currentPlan.value.recommendation,
-    parameters: parameters.value,
+    parameters: treatmentRuleParameters.value,
     visibleLayers: layers
       .filter((item) => layerVisibility.value[item.key])
       .map((item) => item.label),
-    selectedMeasure:
-      measures.find((item) => item.key === activeMeasure.value)?.label ?? '',
+    selectedMeasure: selectedMeasureLabels.value.join('、'),
     buildProgress: buildProgress.value,
     compareMode: false,
   },
@@ -403,6 +463,11 @@ function cesium(): CesiumRuntime {
   return (window as typeof window & { Cesium: CesiumRuntime }).Cesium
 }
 
+function cesiumColor(color: string, alpha = 1) {
+  const value = cesium().Color.fromCssColorString(color)
+  return alpha < 1 ? value.withAlpha(alpha) : value
+}
+
 function selectScenario(key: ScenarioKey) {
   activeScenario.value = key
   operationMessage.value = `已切换至“${currentScenario.value.label}”模板，可从治理问题或地图范围创建模拟任务`
@@ -413,10 +478,84 @@ function selectPlan(key: PlanKey) {
   operationMessage.value = `当前查看：${planData[key].label}`
 }
 
+function isPointTreatment(key: MeasureKey): key is PointTreatmentKey {
+  return key === 'outlet' || key === 'pump'
+}
+
+function getFacilityPoints(key: PointTreatmentKey) {
+  return key === 'outlet' ? outletPoints.value : pumpPoints.value
+}
+
+function syncFacilityCounts() {
+  parameters.value.outletCount = outletPoints.value.length
+}
+
+function beginTreatmentPointPlacement(key: PointTreatmentKey) {
+  measurementMode.value = null
+  pickMode.value = false
+  treatmentPointMode.value = key
+  operationMessage.value = `请在地图上点击布置${key === 'outlet' ? '排水口' : '临时泵站'}，可连续添加多个点位`
+}
+
+function finishTreatmentPointPlacement() {
+  const key = treatmentPointMode.value
+  treatmentPointMode.value = null
+  if (!key) return
+  operationMessage.value = `${key === 'outlet' ? '排水口' : '临时泵站'}布点完成，共 ${getFacilityPoints(key).length} 处，指标已按参数联动更新`
+}
+
+function clearFacilityPoints(key: PointTreatmentKey) {
+  if (key === 'outlet') outletPoints.value = []
+  else pumpPoints.value = []
+  syncFacilityCounts()
+  renderTreatmentMeasures()
+  operationMessage.value = `已清空${key === 'outlet' ? '排水口' : '临时泵站'}点位`
+}
+
+function removeLastFacilityPoint(key: PointTreatmentKey) {
+  const points = getFacilityPoints(key)
+  if (!points.length) return
+  points.pop()
+  syncFacilityCounts()
+  renderTreatmentMeasures()
+  operationMessage.value = `已撤销最后一个${key === 'outlet' ? '排水口' : '临时泵站'}点位`
+}
+
 function selectMeasure(key: MeasureKey) {
-  activeMeasure.value = key
   const measure = measures.find((item) => item.key === key)
-  operationMessage.value = `正在配置治理措施：${measure?.label ?? ''}`
+  const enabled = selectedMeasures.value.includes(key)
+  selectedMeasures.value = enabled
+    ? selectedMeasures.value.filter((item) => item !== key)
+    : [...selectedMeasures.value, key]
+  if (isPointTreatment(key)) {
+    if (enabled) {
+      treatmentPointMode.value = null
+      clearFacilityPoints(key)
+    } else beginTreatmentPointPlacement(key)
+  }
+  renderTreatmentMeasures()
+  if (!enabled && !isPointTreatment(key)) focusTreatmentRoad()
+  operationMessage.value = enabled
+    ? `已取消${measure?.label ?? ''}，三生指标已恢复`
+    : isPointTreatment(key)
+      ? `已启用${measure?.label ?? ''}，请在地图上点击添加设施点位`
+      : `已启用${measure?.label ?? ''}，场景与三生指标已按规则更新`
+}
+
+function isMeasureSelected(key: MeasureKey) {
+  return selectedMeasures.value.includes(key as TreatmentMeasureKey)
+}
+
+function isMeasureSupported(key: MeasureKey) {
+  return measures.some((measure) => measure.key === key)
+}
+
+function measureDescription(key: MeasureKey, fallback: string) {
+  if (key === 'outlet')
+    return `已布置 ${outletPoints.value.length} 处 · 点击后地图选点`
+  if (key === 'pump')
+    return `已布置 ${pumpPoints.value.length} 处 · 点击后地图选点`
+  return fallback
 }
 
 async function loadGeneratedModel(
@@ -454,18 +593,19 @@ async function loadGeneratedModel(
   if (generatedModel.readyPromise) await generatedModel.readyPromise
   applyModelTransform()
   upsertMarker(selectedPoint.value)
-  if (focus) viewer.camera.flyTo({
-    destination: sdk.Cartesian3.fromDegrees(
-      placement.longitude,
-      placement.latitude - 0.00028,
-      65,
-    ),
-    orientation: {
-      heading: 0,
-      pitch: sdk.Math.toRadians(-52),
-      roll: 0,
-    },
-  })
+  if (focus)
+    viewer.camera.flyTo({
+      destination: sdk.Cartesian3.fromDegrees(
+        placement.longitude,
+        placement.latitude - 0.00028,
+        65,
+      ),
+      orientation: {
+        heading: 0,
+        pitch: sdk.Math.toRadians(-52),
+        roll: 0,
+      },
+    })
 }
 
 async function playConstruction(
@@ -568,8 +708,10 @@ function togglePointPicking() {
     operationMessage.value = '已取消选点'
     return
   }
+  treatmentPointMode.value = null
   pickMode.value = true
-  operationMessage.value = '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
+  operationMessage.value =
+    '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
 }
 
 function cancelPointPicking() {
@@ -589,11 +731,29 @@ function handleSceneClick(position: { x: number; y: number }) {
   operationMessage.value = `已确定建造位置：${point.label}，请在 AI 建造对话框中输入提示词`
 }
 
+function handleTreatmentPointClick(position: { x: number; y: number }) {
+  const key = treatmentPointMode.value
+  if (!key) return
+  const point = pickGroundPoint(position)
+  if (!point) {
+    operationMessage.value = '未拾取到地图表面，请点击有地形或底图的位置'
+    return
+  }
+  getFacilityPoints(key).push(point)
+  syncFacilityCounts()
+  renderTreatmentMeasures()
+  const count = getFacilityPoints(key).length
+  const label = key === 'outlet' ? '排水口' : '临时泵站'
+  operationMessage.value = `已添加第 ${count} 处${label}，可继续点击布点或点击“完成布点”`
+  notifyScene(`${label} ${count} 已添加，右侧指标已更新`)
+}
+
 function selectModel() {
   if (!generatedModel) return
   modelSelected.value = true
   if (selectedPoint.value) upsertMarker(selectedPoint.value)
-  operationMessage.value = '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
+  operationMessage.value =
+    '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
 }
 
 function startModelDrag(movement: CesiumMovement) {
@@ -604,7 +764,8 @@ function startModelDrag(movement: CesiumMovement) {
     id?: unknown
   }
   const hitModel =
-    picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+    picked &&
+    (picked.primitive === generatedModel || picked.id === generatedModel)
   if (!hitModel) return
   isDraggingModel.value = true
   suppressClickAfterDrag = true
@@ -655,6 +816,7 @@ function startMeasurement(type: SceneMeasureType) {
   clearMeasurementOverlays()
   measurementMode.value = type
   pickMode.value = false
+  treatmentPointMode.value = null
   notifyScene(
     type === 'distance'
       ? '单击依次取点，双击或右键完成距离测量'
@@ -760,9 +922,7 @@ function finishMeasurement() {
     message = `面积测量完成：${formatArea(area)}`
   } else {
     message =
-      type === 'distance'
-        ? '距离测量至少需要两个点'
-        : '面积测量至少需要三个点'
+      type === 'distance' ? '距离测量至少需要两个点' : '面积测量至少需要三个点'
     clearMeasurementOverlays()
     measurementMode.value = null
     notifyScene(message)
@@ -895,8 +1055,8 @@ function createPoiEntities(features: ParsedLayerFeature[]) {
         ),
         point: {
           pixelSize: 7,
-          color: '#f0b85c',
-          outlineColor: '#04201d',
+          color: cesiumColor('#f0b85c'),
+          outlineColor: cesiumColor('#04201d'),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
@@ -905,9 +1065,9 @@ function createPoiEntities(features: ParsedLayerFeature[]) {
               label: {
                 text: feature.name,
                 font: '10px sans-serif',
-                fillColor: '#eafffb',
+                fillColor: cesiumColor('#eafffb'),
                 showBackground: true,
-                backgroundColor: '#051011',
+                backgroundColor: cesiumColor('#051011', 0.9),
                 backgroundPadding: { x: 5, y: 3 },
                 pixelOffset: new sdk.Cartesian2(0, -16),
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -939,7 +1099,7 @@ function createLineEntities(
         polyline: {
           positions,
           width,
-          material: color,
+          material: cesiumColor(color),
           clampToGround: true,
         },
         show: layerVisibility.value[layerKey],
@@ -947,6 +1107,312 @@ function createLineEntities(
     ]
   })
 }
+
+function clearTreatmentEntities() {
+  if (!viewer) return
+  for (const entity of treatmentEntities) viewer.entities.remove(entity)
+  treatmentEntities = []
+}
+
+function treatmentPositions(
+  points: ParsedLayerFeature['points'],
+  height = 0.6,
+) {
+  const sdk = cesium()
+  return points.map((point) =>
+    sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, height),
+  )
+}
+
+function addTreatmentLine(
+  points: ParsedLayerFeature['points'],
+  width: number,
+  material: unknown,
+  height = 0.6,
+  clampToGround = true,
+) {
+  if (!viewer || points.length < 2) return
+  treatmentEntities.push(
+    viewer.entities.add({
+      polyline: {
+        positions: treatmentPositions(points, height),
+        width,
+        material,
+        clampToGround,
+      },
+    }),
+  )
+}
+
+function addTreatmentCorridor(
+  points: ParsedLayerFeature['points'],
+  width: number,
+  height: number,
+  extrudedHeight: number,
+  material: unknown,
+  outlineColor: unknown,
+) {
+  if (!viewer || points.length < 2) return
+  treatmentEntities.push(
+    viewer.entities.add({
+      corridor: {
+        positions: treatmentPositions(points, height),
+        width,
+        height,
+        extrudedHeight,
+        material,
+        outline: true,
+        outlineColor,
+      },
+    }),
+  )
+}
+
+function addTreatmentWall(
+  points: ParsedLayerFeature['points'],
+  maximumHeight: number,
+  minimumHeight: number,
+  material: unknown,
+  outlineColor: unknown,
+) {
+  if (!viewer || points.length < 2) return
+  treatmentEntities.push(
+    viewer.entities.add({
+      wall: {
+        positions: treatmentPositions(points, minimumHeight),
+        maximumHeights: points.map(() => maximumHeight),
+        minimumHeights: points.map(() => minimumHeight),
+        material,
+        outline: true,
+        outlineColor,
+      },
+    }),
+  )
+}
+
+function addTreatmentLabel(
+  point: ParsedLayerFeature['points'][number],
+  text: string,
+  color: unknown,
+  pixelOffsetY: number,
+  height = 6,
+) {
+  if (!viewer) return
+  const sdk = cesium()
+  treatmentEntities.push(
+    viewer.entities.add({
+      position: sdk.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude,
+        height,
+      ),
+      label: {
+        text,
+        font: '600 12px sans-serif',
+        fillColor: color,
+        showBackground: true,
+        backgroundColor: cesiumColor('#041714', 0.92),
+        backgroundPadding: { x: 8, y: 5 },
+        pixelOffset: new sdk.Cartesian2(0, pixelOffsetY),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    }),
+  )
+}
+
+function addFacilityPoint(
+  point: PickedPoint,
+  index: number,
+  key: PointTreatmentKey,
+) {
+  if (!viewer) return
+  const sdk = cesium()
+  const isOutlet = key === 'outlet'
+  const color = cesiumColor(isOutlet ? '#38bdf8' : '#f0b85c')
+  const radius = isOutlet
+    ? 8 + parameters.value.outletDiameter / 100
+    : 55 + parameters.value.pumpCapacity / 25
+  const label = isOutlet
+    ? `排水口 ${index + 1} · DN${parameters.value.outletDiameter}`
+    : `临时泵站 ${index + 1} · ${parameters.value.pumpCapacity} m³/h`
+  treatmentEntities.push(
+    viewer.entities.add({
+      position: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 2),
+      ellipse: {
+        semiMajorAxis: radius,
+        semiMinorAxis: radius,
+        material: cesiumColor(
+          isOutlet ? '#38bdf8' : '#f0b85c',
+          isOutlet ? 0.3 : 0.16,
+        ),
+        outline: true,
+        outlineColor: color,
+        height: 0.5,
+      },
+      point: {
+        pixelSize: isOutlet ? 13 : 16,
+        color,
+        outlineColor: cesiumColor('#041714'),
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: label,
+        font: '600 12px sans-serif',
+        fillColor: cesiumColor(isOutlet ? '#9ee8ff' : '#ffd48b'),
+        showBackground: true,
+        backgroundColor: cesiumColor('#041714', 0.92),
+        backgroundPadding: { x: 8, y: 5 },
+        pixelOffset: new sdk.Cartesian2(0, index % 2 === 0 ? -28 : 28),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    }),
+  )
+}
+
+function renderTreatmentMeasures() {
+  clearTreatmentEntities()
+  if (!viewer || selectedMeasures.value.length === 0) {
+    viewer?.scene.requestRender?.()
+    return
+  }
+  if (treatmentRoad) {
+    const points = treatmentRoad.points
+    const roadLabelPoint =
+      points[Math.min(points.length - 1, Math.floor(points.length * 0.38))]
+    if (selectedMeasures.value.includes('road') && roadLabelPoint) {
+      const roadBaseHeight = 0.8
+      const roadVisualScale = 8
+      const roadTopHeight =
+        roadBaseHeight + parameters.value.roadRaiseHeight * roadVisualScale
+      addTreatmentCorridor(
+        points,
+        10,
+        roadTopHeight,
+        roadBaseHeight,
+        cesiumColor('#f0b85c'),
+        cesiumColor('#ffd48b'),
+      )
+      addTreatmentLine(
+        points,
+        2.5,
+        cesiumColor('#fff0c9'),
+        roadTopHeight + 0.08,
+        false,
+      )
+      addTreatmentLabel(
+        roadLabelPoint,
+        `局部抬升路面 +${parameters.value.roadRaiseHeight.toFixed(2)} m`,
+        cesiumColor('#ffd48b'),
+        -38,
+        roadTopHeight + 5,
+      )
+    }
+    if (selectedMeasures.value.includes('ditch')) {
+      const ditchPoints = offsetTreatmentLine(points, 8)
+      const ditchVisualWidth = Math.max(5, parameters.value.ditchWidth * 10)
+      const ditchHalfWidth = ditchVisualWidth / 2
+      const ditchLeftEdge = offsetTreatmentLine(ditchPoints, ditchHalfWidth)
+      const ditchRightEdge = offsetTreatmentLine(ditchPoints, -ditchHalfWidth)
+      const ditchBottomHeight = 0.75
+      const ditchVisualScale = 5
+      const ditchRimHeight =
+        ditchBottomHeight + parameters.value.ditchDepth * ditchVisualScale
+      addTreatmentCorridor(
+        ditchPoints,
+        ditchVisualWidth * 0.55,
+        ditchBottomHeight + 0.12,
+        ditchBottomHeight,
+        cesiumColor('#075d61', 0.94),
+        cesiumColor('#12e1d3'),
+      )
+      addTreatmentWall(
+        ditchLeftEdge,
+        ditchRimHeight,
+        ditchBottomHeight,
+        cesiumColor('#12e1d3', 0.42),
+        cesiumColor('#7cfff2'),
+      )
+      addTreatmentWall(
+        ditchRightEdge,
+        ditchRimHeight,
+        ditchBottomHeight,
+        cesiumColor('#12e1d3', 0.42),
+        cesiumColor('#7cfff2'),
+      )
+      addTreatmentLine(
+        ditchLeftEdge,
+        2.5,
+        cesiumColor('#12e1d3'),
+        ditchRimHeight + 0.05,
+        false,
+      )
+      addTreatmentLine(
+        ditchRightEdge,
+        2.5,
+        cesiumColor('#12e1d3'),
+        ditchRimHeight + 0.05,
+        false,
+      )
+      const ditchLabelPoint =
+        ditchPoints[
+          Math.min(
+            ditchPoints.length - 1,
+            Math.floor(ditchPoints.length * 0.64),
+          )
+        ]
+      if (ditchLabelPoint) {
+        addTreatmentLabel(
+          ditchLabelPoint,
+          `增设排水沟 ${parameters.value.ditchWidth.toFixed(1)}×${parameters.value.ditchDepth.toFixed(1)} m`,
+          cesiumColor('#7cfff2'),
+          18,
+          ditchRimHeight + 4,
+        )
+      }
+    }
+  }
+  if (selectedMeasures.value.includes('outlet'))
+    outletPoints.value.forEach((point, index) =>
+      addFacilityPoint(point, index, 'outlet'),
+    )
+  if (selectedMeasures.value.includes('pump'))
+    pumpPoints.value.forEach((point, index) =>
+      addFacilityPoint(point, index, 'pump'),
+    )
+  viewer.scene.requestRender?.()
+}
+
+function focusTreatmentRoad() {
+  if (!viewer || !treatmentRoad) return
+  const point =
+    treatmentRoad.points[Math.floor(treatmentRoad.points.length / 2)]
+  if (!point) return
+  const sdk = cesium()
+  viewer.camera.flyTo({
+    destination: sdk.Cartesian3.fromDegrees(
+      point.longitude,
+      point.latitude - 0.0018,
+      420,
+    ),
+    orientation: {
+      heading: 0,
+      pitch: sdk.Math.toRadians(-52),
+      roll: 0,
+    },
+  })
+}
+
+watch(
+  [
+    () => parameters.value.ditchWidth,
+    () => parameters.value.ditchDepth,
+    () => parameters.value.outletDiameter,
+    () => parameters.value.pumpCapacity,
+    () => parameters.value.roadRaiseHeight,
+  ],
+  renderTreatmentMeasures,
+)
 
 function createPolygonEntities(features: ParsedLayerFeature[]) {
   if (!viewer) return []
@@ -960,9 +1426,9 @@ function createPolygonEntities(features: ParsedLayerFeature[]) {
       viewer!.entities.add({
         polygon: {
           hierarchy: positions,
-          material: 'rgba(58, 168, 255, 0.28)',
+          material: cesiumColor('#3aa8ff', 0.28),
           outline: true,
-          outlineColor: '#3aa8ff',
+          outlineColor: cesiumColor('#3aa8ff'),
           clampToGround: true,
         },
         show: layerVisibility.value.waterLayer,
@@ -984,12 +1450,7 @@ async function loadDataLayers() {
             datasetName: 'Lankao_POI_2025',
           },
           {
-            attributeFilter: buildWgs84BoundsFilter(
-              114.9,
-              34.9,
-              115.03,
-              35.0,
-            ),
+            attributeFilter: buildWgs84BoundsFilter(114.9, 34.9, 115.03, 35.0),
           },
         ),
         fetchIServerFeatures({
@@ -1016,13 +1477,13 @@ async function loadDataLayers() {
         ...createPolygonEntities(waterPolygons),
       ],
     }
+    treatmentRoad = selectTreatmentRoad(roadFeatures, simulationFocus)
+    renderTreatmentMeasures()
     engineStatus.value = `数据图层已加载：POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}`
     notifyScene('水系、路网与 POI 数据图层已加载，可在图层菜单中切换')
   } catch (error) {
     engineStatus.value = '水系、路网或 POI 数据图层加载失败'
-    notifyScene(
-      error instanceof Error ? error.message : '数据图层加载失败',
-    )
+    notifyScene(error instanceof Error ? error.message : '数据图层加载失败')
     console.error('数据图层加载失败', error)
   }
 }
@@ -1041,6 +1502,10 @@ function setupSceneInteractions() {
       addMeasurePoint(movement.position)
       return
     }
+    if (treatmentPointMode.value) {
+      handleTreatmentPointClick(movement.position)
+      return
+    }
     if (pickMode.value) {
       handleSceneClick(movement.position)
       return
@@ -1050,28 +1515,29 @@ function setupSceneInteractions() {
       id?: unknown
     }
     const hitModel =
-      picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+      picked &&
+      (picked.primitive === generatedModel || picked.id === generatedModel)
     if (hitModel) selectModel()
     else if (!isDraggingModel.value && selectedPoint.value) {
       modelSelected.value = false
       upsertMarker(selectedPoint.value)
     }
   }, sdk.ScreenSpaceEventType.LEFT_CLICK)
-  eventHandler.setInputAction(startModelDrag, sdk.ScreenSpaceEventType.LEFT_DOWN)
-  eventHandler.setInputAction(moveModelDrag, sdk.ScreenSpaceEventType.MOUSE_MOVE)
+  eventHandler.setInputAction(
+    startModelDrag,
+    sdk.ScreenSpaceEventType.LEFT_DOWN,
+  )
+  eventHandler.setInputAction(
+    moveModelDrag,
+    sdk.ScreenSpaceEventType.MOUSE_MOVE,
+  )
   eventHandler.setInputAction(endModelDrag, sdk.ScreenSpaceEventType.LEFT_UP)
-  eventHandler.setInputAction(
-    () => {
-      if (measurementMode.value) finishMeasurement()
-    },
-    sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-  )
-  eventHandler.setInputAction(
-    () => {
-      if (measurementMode.value) finishMeasurement()
-    },
-    sdk.ScreenSpaceEventType.RIGHT_CLICK,
-  )
+  eventHandler.setInputAction(() => {
+    if (measurementMode.value) finishMeasurement()
+  }, sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
+  eventHandler.setInputAction(() => {
+    if (measurementMode.value) finishMeasurement()
+  }, sdk.ScreenSpaceEventType.RIGHT_CLICK)
 }
 
 async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
@@ -1143,17 +1609,13 @@ async function buildWithAgent(prompt: string) {
       placement: toSimulationPlacement(point),
       buildingStyle: inferBuildingStyle(prompt),
     })
-    const completedJob = await waitForAgentJob(
-      config.apiBaseUrl,
-      initialJob,
-      {
-        timeoutMs: config.reportTimeoutMs,
-        onProgress: (job) => {
-          buildProgress.value = job.progress
-          engineStatus.value = job.message
-        },
+    const completedJob = await waitForAgentJob(config.apiBaseUrl, initialJob, {
+      timeoutMs: config.reportTimeoutMs,
+      onProgress: (job) => {
+        buildProgress.value = job.progress
+        engineStatus.value = job.message
       },
-    )
+    })
     await playConstruction(completedJob)
     generatedJob.value = completedJob
     buildState.value = 'ready'
@@ -1327,6 +1789,7 @@ async function initializeViewer() {
 function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   cancelMeasurement()
+  finishTreatmentPointPlacement()
 }
 
 onMounted(() => {
@@ -1412,25 +1875,41 @@ onBeforeUnmount(() => {
           </div>
         </PanelCard>
 
-        <PanelCard title="治理措施" meta="参数化场景构建">
+        <PanelCard
+          class="treatment-card"
+          title="治理措施"
+          meta="参数化场景构建"
+        >
           <div class="measure-list">
             <button
               v-for="measure in measures"
               :key="measure.key"
               type="button"
-              :class="{ active: activeMeasure === measure.key }"
+              :class="{
+                active: isMeasureSelected(measure.key),
+                unavailable: !isMeasureSupported(measure.key),
+              }"
+              :aria-pressed="isMeasureSelected(measure.key)"
+              :disabled="!isMeasureSupported(measure.key)"
               @click="selectMeasure(measure.key)"
             >
               <i>{{ measure.icon }}</i>
               <span
                 ><strong>{{ measure.label }}</strong
-                ><small>{{ measure.description }}</small></span
+                ><small>{{
+                  isMeasureSupported(measure.key)
+                    ? measureDescription(measure.key, measure.description)
+                    : '待接入场景演示'
+                }}</small></span
               >
             </button>
           </div>
 
-          <div class="parameter-panel">
-            <label>
+          <div
+            v-if="selectedMeasures.length"
+            class="parameter-panel scroll-region"
+          >
+            <label v-if="selectedMeasures.includes('ditch')">
               <span
                 >排水沟宽度
                 <strong>{{ parameters.ditchWidth.toFixed(1) }} m</strong></span
@@ -1443,7 +1922,7 @@ onBeforeUnmount(() => {
                 step="0.1"
               />
             </label>
-            <label>
+            <label v-if="selectedMeasures.includes('ditch')">
               <span
                 >排水沟深度
                 <strong>{{ parameters.ditchDepth.toFixed(1) }} m</strong></span
@@ -1456,30 +1935,118 @@ onBeforeUnmount(() => {
                 step="0.1"
               />
             </label>
-            <label>
+            <label v-if="selectedMeasures.includes('outlet')">
               <span
-                >排水口数量
-                <strong>{{ parameters.outletCount }} 处</strong></span
+                >排水口管径
+                <strong>DN{{ parameters.outletDiameter }}</strong></span
               >
               <input
-                v-model.number="parameters.outletCount"
+                v-model.number="parameters.outletDiameter"
                 type="range"
-                min="1"
-                max="8"
-                step="1"
+                min="300"
+                max="800"
+                step="100"
+              />
+            </label>
+            <div
+              v-if="selectedMeasures.includes('outlet')"
+              class="facility-actions"
+            >
+              <span>排水口 {{ outletPoints.length }} 处</span>
+              <button
+                type="button"
+                @click="beginTreatmentPointPlacement('outlet')"
+              >
+                继续布点
+              </button>
+              <button
+                type="button"
+                :disabled="!outletPoints.length"
+                @click="removeLastFacilityPoint('outlet')"
+              >
+                撤销末点
+              </button>
+              <button
+                type="button"
+                :disabled="!outletPoints.length"
+                @click="clearFacilityPoints('outlet')"
+              >
+                清空
+              </button>
+            </div>
+            <label v-if="selectedMeasures.includes('pump')">
+              <span
+                >单站排水能力
+                <strong>{{ parameters.pumpCapacity }} m³/h</strong></span
+              >
+              <input
+                v-model.number="parameters.pumpCapacity"
+                type="range"
+                min="500"
+                max="3000"
+                step="250"
+              />
+            </label>
+            <div
+              v-if="selectedMeasures.includes('pump')"
+              class="facility-actions"
+            >
+              <span>临时泵站 {{ pumpPoints.length }} 处</span>
+              <button
+                type="button"
+                @click="beginTreatmentPointPlacement('pump')"
+              >
+                继续布点
+              </button>
+              <button
+                type="button"
+                :disabled="!pumpPoints.length"
+                @click="removeLastFacilityPoint('pump')"
+              >
+                撤销末点
+              </button>
+              <button
+                type="button"
+                :disabled="!pumpPoints.length"
+                @click="clearFacilityPoints('pump')"
+              >
+                清空
+              </button>
+            </div>
+            <label v-if="selectedMeasures.includes('road')">
+              <span
+                >道路抬升高度
+                <strong
+                  >{{ parameters.roadRaiseHeight.toFixed(2) }} m</strong
+                ></span
+              >
+              <input
+                v-model.number="parameters.roadRaiseHeight"
+                type="range"
+                min="0.1"
+                max="0.6"
+                step="0.05"
               />
             </label>
           </div>
+          <div v-else class="treatment-empty">
+            选择线性措施可沿道路展示，选择排水口或泵站后可在地图上布点
+          </div>
 
-          <div class="layer-chips" aria-label="场景要素图层">
-            <label v-for="layer in layers" :key="layer.key">
-              <input
-                v-model="layerVisibility[layer.key]"
-                type="checkbox"
-                @change="toggleLayer(layer.key)"
-              />
-              <span>{{ layer.label }}</span>
-            </label>
+          <div class="treatment-footer">
+            <div class="layer-chips" aria-label="场景要素图层">
+              <label v-for="layer in layers" :key="layer.key">
+                <input
+                  v-model="layerVisibility[layer.key]"
+                  type="checkbox"
+                  @change="toggleLayer(layer.key)"
+                />
+                <span>{{ layer.label }}</span>
+              </label>
+            </div>
+            <p v-if="selectedMeasures.includes('ditch') || selectedMeasures.includes('road')">
+              场景高度已做视觉增强，仅作方案示意；参数与指标仍按实际数值展示。
+            </p>
           </div>
         </PanelCard>
       </aside>
@@ -1489,13 +2056,33 @@ onBeforeUnmount(() => {
           ref="cesiumContainer"
           class="cesium-container"
           :class="{
-            'is-picking': pickMode,
+            'is-picking': pickMode || treatmentPointMode,
             'is-dragging-model': isDraggingModel,
           }"
         />
         <div v-if="pickMode" class="pick-mode-hint">
           <span>请在地图上点击确定建造位置</span>
           <button type="button" @click="cancelPointPicking">取消</button>
+        </div>
+        <div
+          v-if="treatmentPointMode"
+          class="pick-mode-hint treatment-pick-hint"
+        >
+          <span>
+            点击地图布置{{
+              treatmentPointMode === 'outlet' ? '排水口' : '临时泵站'
+            }}
+            · 已选
+            {{
+              treatmentPointMode === 'outlet'
+                ? outletPoints.length
+                : pumpPoints.length
+            }}
+            处
+          </span>
+          <button type="button" @click="finishTreatmentPointPlacement">
+            完成布点
+          </button>
         </div>
         <SceneToolbox
           :measuring="measurementMode"
@@ -1514,7 +2101,7 @@ onBeforeUnmount(() => {
       </section>
 
       <aside class="twin-right">
-        <PanelCard title="三生影响评估" meta="方案实时关联">
+        <PanelCard title="三生影响评估" meta="参数联动估算">
           <div class="impact-layout">
             <RadarChart
               :labels="['生产保障', '生活改善', '生态安全']"
@@ -1524,7 +2111,7 @@ onBeforeUnmount(() => {
             <div class="impact-score">
               <span>{{ currentPlan.label }}</span>
               <strong>{{ currentPlan.composite }}</strong>
-              <small>三生协同指数</small>
+              <small>{{ appliedMeasureSummary }}</small>
             </div>
             <div class="impact-deltas">
               <article>
@@ -1773,6 +2360,11 @@ onBeforeUnmount(() => {
   background: rgba(61, 214, 196, 0.1);
 }
 
+.measure-list button.unavailable {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
 .scenario-list button > i,
 .measure-list button > i {
   display: grid;
@@ -1828,10 +2420,20 @@ onBeforeUnmount(() => {
   font-size: 8px;
 }
 
+.treatment-card :deep(.panel-card__body) {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
 .parameter-panel {
   display: grid;
+  min-height: 0;
   margin-top: 9px;
   padding-top: 8px;
+  padding-right: 2px;
+  overflow-y: auto;
+  align-content: start;
   gap: 7px;
   border-top: 1px solid rgba(122, 203, 190, 0.12);
 }
@@ -1854,6 +2456,42 @@ onBeforeUnmount(() => {
   height: 3px;
   accent-color: var(--cyan);
   cursor: pointer;
+}
+
+.facility-actions {
+  display: grid;
+  align-items: center;
+  gap: 4px;
+  grid-template-columns: minmax(74px, 1fr) repeat(3, auto);
+}
+.facility-actions span {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+.facility-actions button {
+  min-height: 22px;
+  padding: 0 6px;
+  color: var(--cyan);
+  border: 1px solid rgba(61, 214, 196, 0.28);
+  border-radius: 4px;
+  background: rgba(61, 214, 196, 0.06);
+  font-size: 7px;
+  cursor: pointer;
+}
+.facility-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.treatment-empty {
+  margin-top: 10px;
+  padding: 10px;
+  color: var(--text-soft);
+  font-size: 8px;
+  line-height: 1.55;
+  text-align: center;
+  border: 1px dashed rgba(122, 203, 190, 0.2);
+  background: rgba(61, 214, 196, 0.025);
 }
 
 .layer-chips {
@@ -1882,6 +2520,12 @@ onBeforeUnmount(() => {
   color: var(--cyan);
   border-color: rgba(61, 214, 196, 0.42);
   background: rgba(61, 214, 196, 0.1);
+}
+.treatment-footer p {
+  margin: 6px 0 0;
+  color: rgba(185, 211, 203, 0.62);
+  font-size: 7px;
+  line-height: 1.4;
 }
 
 .twin-scene {
@@ -1941,6 +2585,10 @@ onBeforeUnmount(() => {
   background: transparent;
   font-size: 8px;
   cursor: pointer;
+}
+.treatment-pick-hint {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.52);
 }
 .scene-legend,
 .simulation-pin {
