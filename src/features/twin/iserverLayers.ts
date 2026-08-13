@@ -24,6 +24,7 @@ export interface ParsedLayerFeature {
   kind: 'point' | 'line' | 'polygon'
   points: Array<{ longitude: number; latitude: number }>
   name?: string
+  height?: number
 }
 
 export interface IServerLayerSource {
@@ -41,6 +42,22 @@ export function buildWgs84BoundsFilter(
   return `WGS84_X > ${minLongitude} AND WGS84_X < ${maxLongitude} AND WGS84_Y > ${minLatitude} AND WGS84_Y < ${maxLatitude}`
 }
 
+export interface IServerQueryBounds {
+  minLongitude: number
+  minLatitude: number
+  maxLongitude: number
+  maxLatitude: number
+}
+
+function readNumericField(feature: IServerFeature, fieldName: string) {
+  const fieldIndex = feature.fieldNames?.findIndex(
+    (name) => name.toLowerCase() === fieldName.toLowerCase(),
+  ) ?? -1
+  if (fieldIndex < 0) return undefined
+  const value = Number(feature.fieldValues?.[fieldIndex])
+  return Number.isFinite(value) ? value : undefined
+}
+
 export function parseIServerFeatures(
   recordsets: IServerRecordset[],
 ): ParsedLayerFeature[] {
@@ -55,6 +72,7 @@ export function parseIServerFeatures(
           ? String(feature.fieldValues?.[nameIndex] ?? '').trim()
           : undefined
       const type = String(geometry.type ?? '').toUpperCase()
+      const height = readNumericField(feature, 'Height')
       const rawPoints = geometry.points.map((point) => ({
         longitude: Number(point.x),
         latitude: Number(point.y),
@@ -81,7 +99,12 @@ export function parseIServerFeatures(
         const segment = rawPoints.slice(offset, offset + part)
         offset += part
         if (segment.length < 2) continue
-        result.push({ kind, points: segment, name: name || undefined })
+        result.push({
+          kind,
+          points: segment,
+          name: name || undefined,
+          height,
+        })
       }
     }
   }
@@ -92,6 +115,8 @@ export async function fetchIServerFeatures(
   source: IServerLayerSource,
   options: {
     attributeFilter?: string
+    bounds?: IServerQueryBounds
+    expectCount?: number
     fetchImpl?: typeof fetch
     timeoutMs?: number
   } = {},
@@ -101,8 +126,28 @@ export async function fetchIServerFeatures(
   const baseUrl = `${source.serviceUrl.replace(/\/$/, '')}/rest/maps/${source.mapName}`
   const queryUrl = `${baseUrl}/queryResults.json`
   const body = {
-    queryMode: 'SqlQuery',
+    queryMode: options.bounds ? 'BoundsQuery' : 'SqlQuery',
+    ...(options.bounds
+      ? {
+          bounds: {
+            left: options.bounds.minLongitude,
+            bottom: options.bounds.minLatitude,
+            right: options.bounds.maxLongitude,
+            top: options.bounds.maxLatitude,
+            leftBottom: {
+              x: options.bounds.minLongitude,
+              y: options.bounds.minLatitude,
+            },
+            rightTop: {
+              x: options.bounds.maxLongitude,
+              y: options.bounds.maxLatitude,
+            },
+          },
+        }
+      : {}),
     queryParameters: {
+      startRecord: 0,
+      ...(options.expectCount ? { expectCount: options.expectCount } : {}),
       queryParams: [
         {
           name: source.datasetName,

@@ -1003,12 +1003,52 @@ function createPolygonEntities(features: ParsedLayerFeature[]) {
   })
 }
 
+function createBuildingEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.kind !== 'polygon' || feature.points.length < 3) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polygon: {
+          hierarchy: positions,
+          height: 0,
+          extrudedHeight: Math.max(1, feature.height ?? 3),
+          material: 'rgba(245, 248, 248, 0.92)',
+          outline: true,
+          outlineColor: '#aab4b4',
+          closeTop: true,
+          closeBottom: true,
+        },
+        show: layerVisibility.value.buildingLayer,
+      }),
+    ]
+  })
+}
+
 async function loadDataLayers() {
   if (!viewer) return
-  engineStatus.value = '正在加载水系、路网与 POI 数据图层'
-  try {
-    const [poiFeatures, roadFeatures, waterLines, waterPolygons] =
-      await Promise.all([
+  engineStatus.value = '正在加载建筑白膜、水系、路网与 POI 数据图层'
+  const results = await Promise.allSettled([
+        fetchIServerFeatures(
+          {
+            serviceUrl: config.supermap.mapServices.buildingFootprints,
+            mapName: 'Lankao_3D_GloBFP_SHP',
+            datasetName: 'Lankao_3D_GloBFP',
+          },
+          {
+            bounds: {
+              minLongitude: 114.94,
+              minLatitude: 34.93,
+              maxLongitude: 114.99,
+              maxLatitude: 34.97,
+            },
+            expectCount: 6000,
+          },
+        ),
         fetchIServerFeatures(
           {
             serviceUrl: config.supermap.mapServices.poi,
@@ -1040,23 +1080,28 @@ async function loadDataLayers() {
           datasetName: 'Laokao_Water_Polygon',
         }),
       ])
-    dataLayerEntities.value = {
+  if (!viewer) return
+  const [buildingResult, poiResult, roadResult, waterLineResult, waterPolygonResult] = results
+  const buildingFeatures = buildingResult.status === 'fulfilled' ? buildingResult.value : []
+  const poiFeatures = poiResult.status === 'fulfilled' ? poiResult.value : []
+  const roadFeatures = roadResult.status === 'fulfilled' ? roadResult.value : []
+  const waterLines = waterLineResult.status === 'fulfilled' ? waterLineResult.value : []
+  const waterPolygons = waterPolygonResult.status === 'fulfilled' ? waterPolygonResult.value : []
+  dataLayerEntities.value = {
+      buildingLayer: createBuildingEntities(buildingFeatures),
       poiLayer: createPoiEntities(poiFeatures),
       roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
       waterLayer: [
         ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
         ...createPolygonEntities(waterPolygons),
       ],
-    }
-    engineStatus.value = `数据图层已加载：POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}`
-    notifyScene('水系、路网与 POI 数据图层已加载，可在图层菜单中切换')
-  } catch (error) {
-    engineStatus.value = '水系、路网或 POI 数据图层加载失败'
-    notifyScene(
-      error instanceof Error ? error.message : '数据图层加载失败',
-    )
-    console.error('数据图层加载失败', error)
   }
+  const failedCount = results.filter((result) => result.status === 'rejected').length
+  engineStatus.value = `数据图层已加载：白膜 ${buildingFeatures.length} · POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}${failedCount ? ` · ${failedCount} 项失败` : ''}`
+  notifyScene(`建筑白膜已按 Height 字段拉伸，共加载 ${buildingFeatures.length} 个要素`)
+  results.forEach((result) => {
+    if (result.status === 'rejected') console.error('数据图层加载失败', result.reason)
+  })
 }
 
 function setupSceneInteractions() {

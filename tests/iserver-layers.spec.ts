@@ -48,6 +48,8 @@ describe('iServer 数据图层', () => {
         datasetName: 'WaterPolygon',
         features: [
           {
+            fieldNames: ['Height'],
+            fieldValues: ['7.200774'],
             geometry: {
               type: 'REGION',
               points: [
@@ -71,7 +73,45 @@ describe('iServer 数据图层', () => {
     expect(features[1]).toMatchObject({ kind: 'line' })
     expect(features[1]!.points).toHaveLength(2)
     expect(features[2]).toMatchObject({ kind: 'polygon' })
+    expect(features[2]?.height).toBeCloseTo(7.200774)
     expect(features[2]!.points).toHaveLength(4)
+  })
+
+  it('使用范围查询限制建筑白膜加载区域和数量', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ newResourceLocation: 'http://iserver/query/job.json' }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ recordsets: [] }), { status: 200 }))
+
+    await fetchIServerFeatures(
+      {
+        serviceUrl: 'http://iserver/services/buildings/rest',
+        mapName: 'buildings',
+        datasetName: 'footprints',
+      },
+      {
+        bounds: {
+          minLongitude: 114.94,
+          minLatitude: 34.93,
+          maxLongitude: 114.99,
+          maxLatitude: 34.97,
+        },
+        expectCount: 6000,
+        fetchImpl,
+      },
+    )
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+    expect(body).toMatchObject({
+      queryMode: 'BoundsQuery',
+      bounds: { left: 114.94, bottom: 34.93, right: 114.99, top: 34.97 },
+      queryParameters: { startRecord: 0, expectCount: 6000 },
+    })
   })
 
   it('两步读取 iServer 查询结果并携带过滤条件', async () => {

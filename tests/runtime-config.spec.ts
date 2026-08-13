@@ -17,6 +17,7 @@ interface RuntimeConfigFixture {
       poi: string
       roadNetwork: string
       water: string
+      buildingFootprints: string
     }
     dem: {
       serviceUrl: string
@@ -49,6 +50,7 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.supermap.mapServices.poi).toBe('http://118.89.55.214:8090/iserver/services/Laokao_POI_2025/rest')
     expect(config.supermap.mapServices.roadNetwork).toBe('http://118.89.55.214:8090/iserver/services/Lankao_Road_Network/rest')
     expect(config.supermap.mapServices.water).toBe('http://118.89.55.214:8090/iserver/services/Lankao_Water/rest')
+    expect(config.supermap.mapServices.buildingFootprints).toBe('http://118.89.55.214:8090/iserver/services/Lankao_3D_GloBFP_SHP/rest')
     expect(config.supermap.dem).toEqual({
       serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoDem/restjsr',
       collectionId: 'Lankao-DEM',

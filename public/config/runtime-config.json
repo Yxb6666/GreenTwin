@@ -19,6 +19,7 @@
       "poi": "http://118.89.55.214:8090/iserver/services/Laokao_POI_2025/rest",
       "roadNetwork": "http://118.89.55.214:8090/iserver/services/Lankao_Road_Network/rest",
       "water": "http://118.89.55.214:8090/iserver/services/Lankao_Water/rest",
+      "buildingFootprints": "http://118.89.55.214:8090/iserver/services/Lankao_3D_GloBFP_SHP/rest",
       "population": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/population_density",
       "gdp": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/gdp_grid",
       "landuse": "http://127.0.0.1:8090/iserver/services/map-lankao/rest/maps/land_use"
