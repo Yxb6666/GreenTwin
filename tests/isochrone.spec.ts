@@ -3,6 +3,7 @@ import {
   buildIsochroneUrl,
   normalizeIsochroneMinutes,
   requestIsochrones,
+  resolveIsochroneRenderStyle,
 } from '@/features/twin/isochrone'
 
 describe('Mapbox 公园等时圈分析', () => {
@@ -32,6 +33,20 @@ describe('Mapbox 公园等时圈分析', () => {
         minutes: [5],
       }),
     ).toThrow('Mapbox Access Token')
+  })
+
+  it('使用高对比半透明圈层且不回退为白色', () => {
+    expect(resolveIsochroneRenderStyle(0)).toEqual({
+      fill: 'rgba(41, 78, 128, 0.78)',
+      outline: '#203f6c',
+    })
+    expect(resolveIsochroneRenderStyle(2).fill).toBe(
+      'rgba(218, 220, 136, 0.82)',
+    )
+    expect(resolveIsochroneRenderStyle(99)).toEqual(
+      resolveIsochroneRenderStyle(3),
+    )
+    expect(resolveIsochroneRenderStyle(0).fill).not.toContain('#ffffff')
   })
 
   it('返回 Mapbox 错误信息', async () => {

@@ -52,8 +52,8 @@ import {
   type AgentJob,
 } from './agentSimulation'
 import {
-  ISOCHRONE_COLORS,
   requestIsochrones,
+  resolveIsochroneRenderStyle,
   type IsochroneGeometry,
   type IsochroneProfile,
 } from './isochrone'
@@ -259,6 +259,7 @@ let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
 let parkModel: ModelPrimitive | null = null
 let isochroneEntities: unknown[] = []
+let parkOriginEntity: unknown = null
 let isochroneRequest: AbortController | null = null
 
 const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
@@ -507,6 +508,8 @@ function clearIsochroneEntities() {
     isochroneEntities.forEach((entity) => viewer?.entities.remove(entity))
   }
   isochroneEntities = []
+  if (viewer && parkOriginEntity) viewer.entities.remove(parkOriginEntity)
+  parkOriginEntity = null
 }
 
 function polygonRings(geometry: IsochroneGeometry) {
@@ -551,7 +554,7 @@ async function analyzeParkAt(point: PickedPoint) {
     )
     ordered.forEach((feature, featureIndex) => {
       const contour = Number(feature.properties?.contour ?? 0)
-      const color = `#${feature.properties?.color || ISOCHRONE_COLORS[featureIndex] || ISOCHRONE_COLORS[0]}`
+      const style = resolveIsochroneRenderStyle(featureIndex)
       polygonRings(feature.geometry).forEach((ring) => {
         if (ring.length < 3) return
         const coordinates = ring.flatMap((coordinate) => [
@@ -563,14 +566,38 @@ async function analyzeParkAt(point: PickedPoint) {
             name: `${contour} 分钟等时圈`,
             polygon: {
               hierarchy: sdk.Cartesian3.fromDegreesArray(coordinates),
-              material: `${color}45`,
+              material: style.fill,
               outline: true,
-              outlineColor: color,
-              height: 1.5 + featureIndex,
+              outlineColor: style.outline,
+              height: 8 + featureIndex * 2,
             },
           }),
         )
       })
+    })
+    parkOriginEntity = viewer.entities.add({
+      position: sdk.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude,
+        point.height + 18,
+      ),
+      point: {
+        pixelSize: 16,
+        color: '#e4543f',
+        outlineColor: '#fff2df',
+        outlineWidth: 4,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: '公园中心',
+        font: 'bold 11px sans-serif',
+        fillColor: '#fff7ea',
+        showBackground: true,
+        backgroundColor: 'rgba(113, 33, 26, 0.86)',
+        backgroundPadding: { x: 7, y: 4 },
+        pixelOffset: new sdk.Cartesian2(0, -28),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
     })
     isochroneStatus.value = `分析完成：${isochroneProfile.value === 'walking' ? '步行' : isochroneProfile.value === 'cycling' ? '骑行' : '驾车'} ${isochroneMinutes.value.join('/')} 分钟可达范围`
     operationMessage.value = `公园等时圈已生成，共 ${result.features.length} 个圈层`

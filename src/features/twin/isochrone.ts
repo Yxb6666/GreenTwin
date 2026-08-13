@@ -12,7 +12,34 @@ export interface IsochroneOptions {
   signal?: AbortSignal
 }
 
-export const ISOCHRONE_COLORS = ['3dd6c4', '4ea7ff', '9b7dff', 'f0b85c']
+export const ISOCHRONE_COLORS = ['d9dc88', '6f91bd', '315f98', '263f70']
+
+export const ISOCHRONE_RENDER_STYLES = [
+  {
+    fill: 'rgba(41, 78, 128, 0.78)',
+    outline: '#203f6c',
+  },
+  {
+    fill: 'rgba(91, 128, 174, 0.72)',
+    outline: '#426b9f',
+  },
+  {
+    fill: 'rgba(218, 220, 136, 0.82)',
+    outline: '#b4b75f',
+  },
+  {
+    fill: 'rgba(238, 184, 92, 0.84)',
+    outline: '#c68b32',
+  },
+] as const
+
+export function resolveIsochroneRenderStyle(index: number) {
+  return (
+    ISOCHRONE_RENDER_STYLES[
+      Math.max(0, Math.min(ISOCHRONE_RENDER_STYLES.length - 1, index))
+    ] ?? ISOCHRONE_RENDER_STYLES[0]
+  )
+}
 
 export function normalizeIsochroneMinutes(minutes: number[]) {
   return [...new Set(minutes.map((value) => Math.round(value)))]
