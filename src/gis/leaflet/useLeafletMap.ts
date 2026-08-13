@@ -56,6 +56,15 @@ export interface LandUseRasterOverlay {
   renderingRule: Record<string, unknown>
 }
 
+export interface TownshipThemePresentation {
+  style: L.PathOptions
+  tooltip?: string
+}
+
+export type TownshipThemeResolver = (
+  name: string,
+) => TownshipThemePresentation | null
+
 export interface LeafletMapInteractionOptions {
   townshipFocus?: boolean
 }
@@ -78,6 +87,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   const townshipLayers: TownshipLayerEntry[] = []
+  let townshipThemeResolver: TownshipThemeResolver | null = null
   let countyFocusContextAdded = false
   let countyFocusContextLoading = false
   let rawTownshipFeatures: TownshipFeature[] = []
@@ -99,7 +109,16 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   function refreshTownshipStyles() {
     townshipLayers.forEach((entry) => {
       const state = getTownshipVisualState(entry)
-      entry.parts.forEach((part) => part.setStyle(getTownshipPathStyle(state, entry.baseStyle)))
+      const presentation = townshipThemeResolver?.(entry.name)
+      const baseStyle = presentation?.style ?? entry.baseStyle
+      const pathStyle = getTownshipPathStyle(state, baseStyle)
+      if (presentation && state === 'dimmed') {
+        Object.assign(pathStyle, {
+          fillColor: baseStyle.fillColor,
+          fillOpacity: 0.38,
+        })
+      }
+      entry.parts.forEach((part) => part.setStyle(pathStyle))
       refreshTownshipLabel(entry, state)
     })
 
@@ -107,6 +126,18 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     townshipLayers
       .find((entry) => entry.name === foregroundName)
       ?.parts.forEach((part) => part.bringToFront())
+  }
+
+  function refreshTownshipTheme() {
+    townshipLayers.forEach((entry) => {
+      entry.labelPart.setTooltipContent(entry.name)
+    })
+    refreshTownshipStyles()
+  }
+
+  function setTownshipTheme(resolver: TownshipThemeResolver | null) {
+    townshipThemeResolver = resolver
+    refreshTownshipTheme()
   }
 
   function clearSelectedTownship() {
@@ -196,8 +227,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       const label = getTownshipLabel(feature)
       const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
       const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
+      const townshipTheme = label ? townshipThemeResolver?.(label) : null
       const polygon = L.polygon([ring], {
         ...townshipBaseStyle,
+        ...townshipTheme?.style,
         className: townshipIsInteractive ? 'township-map-region' : undefined,
         interactive: townshipIsInteractive,
       })
@@ -225,11 +258,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
         polygon.on('mouseover', () => {
           if (isTownshipInteractionBlocked(instance)) return
           hoveredTownship.value = label
+          const themeTooltip = townshipThemeResolver?.(label)?.tooltip
+          if (themeTooltip) entry.labelPart.setTooltipContent(themeTooltip)
           instance.getContainer().style.cursor = 'pointer'
           refreshTownshipStyles()
         })
         polygon.on('mouseout', () => {
           if (hoveredTownship.value === label) hoveredTownship.value = null
+          entry.labelPart.setTooltipContent(entry.name)
           instance.getContainer().style.cursor = ''
           refreshTownshipStyles()
         })
@@ -508,6 +544,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     focusTownshipByName,
     setTownshipLabelPlacement,
     resetTownshipLabelPlacements,
+    setTownshipTheme,
     dispose,
   }
 }

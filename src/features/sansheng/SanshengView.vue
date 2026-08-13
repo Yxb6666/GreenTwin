@@ -22,11 +22,19 @@ import {
   type SanshengReport,
 } from './report'
 import { createReportDocxBlob, createReportDocxFileName } from './reportDocx'
+import {
+  SANSHENG_MAP_METRICS,
+  SANSHENG_SCORE_LEVELS,
+  resolveSanshengScoreLevel,
+  type SanshengMapMetric,
+} from './mapTheme'
 
 const config = useRuntimeConfig()
 const mapContainer = ref<HTMLElement | null>(null)
 const activeDimension = ref<DimensionKey>('ecology')
+const activeMapMetric = ref<SanshengMapMetric>('composite')
 const selectedTownId = ref('410225108')
+const detailOpen = ref(false)
 const report = ref<SanshengReport | null>(null)
 const reportMeta = ref<ReportMeta | null>(null)
 const reportError = ref('')
@@ -44,6 +52,9 @@ const {
   error: mapError,
   initialize,
   setBaseMap,
+  selectedTownship,
+  focusTownshipByName,
+  setTownshipTheme,
 } = useLeafletMap(mapContainer)
 
 const scoredTowns = computed(() =>
@@ -82,6 +93,48 @@ const selectedTownRank = computed(
     scoredTowns.value.findIndex((item) => item.id === selectedTown.value.id) +
     1,
 )
+const mapMetricLabel = computed(
+  () =>
+    SANSHENG_MAP_METRICS.find((item) => item.key === activeMapMetric.value)
+      ?.label ?? '综合',
+)
+
+function selectDimension(dimension: DimensionKey) {
+  activeDimension.value = dimension
+  activeMapMetric.value = dimension
+}
+
+function selectTown(id: string, focus = true) {
+  const town = scoredTowns.value.find((item) => item.id === id)
+  if (!town) return
+  selectedTownId.value = town.id
+  if (focus) focusTownshipByName(town.name)
+}
+
+function applyTownshipTheme() {
+  const metric = activeMapMetric.value
+  const metricRanks = [...scoredTowns.value]
+    .sort((first, second) => second.scores[metric] - first.scores[metric])
+    .map((town) => town.id)
+
+  setTownshipTheme((name) => {
+    const town = scoredTowns.value.find((item) => item.name === name)
+    if (!town) return null
+    const score = town.scores[metric]
+    const level = resolveSanshengScoreLevel(score)
+    const rank = metricRanks.indexOf(town.id) + 1
+    return {
+      style: {
+        fillColor: level.color,
+        fillOpacity: 0.66,
+        color: '#dceb92',
+        opacity: 0.9,
+        weight: 1.35,
+      },
+      tooltip: `<span class="township-theme-label">${town.name}</span><span class="township-theme-detail">${mapMetricLabel.value}指数 ${score.toFixed(1)} · 第 ${rank} 名 · ${level.label}</span>`,
+    }
+  })
+}
 const diagnosisSummary = computed(() => {
   const scores = selectedTown.value.scores
   const entries = [
@@ -187,6 +240,14 @@ watch(
   { deep: true },
 )
 
+watch([activeMapMetric, scoredTowns], applyTownshipTheme, { deep: true })
+
+watch(selectedTownship, (name) => {
+  if (!name) return
+  const town = scoredTowns.value.find((item) => item.name === name)
+  if (town && town.id !== selectedTownId.value) selectedTownId.value = town.id
+})
+
 onMounted(async () => {
   await initialize(
     config.supermap.leafletSdkUrl,
@@ -196,7 +257,11 @@ onMounted(async () => {
     config.map.crs,
     [config.supermap.mapServices.township],
     config.arcgis.accessToken,
+    undefined,
+    { townshipFocus: true },
   )
+  applyTownshipTheme()
+  focusTownshipByName(selectedTown.value.name)
 })
 </script>
 
@@ -216,7 +281,7 @@ onMounted(async () => {
               :key="key"
               :class="{ active: activeDimension === key }"
               type="button"
-              @click="activeDimension = key"
+              @click="selectDimension(key)"
             >
               {{ meta.label }}
             </button>
@@ -273,6 +338,24 @@ onMounted(async () => {
       <section class="sansheng-center">
         <section class="map-shell panel-frame sansheng-map">
           <div ref="mapContainer" class="map-container" />
+          <div class="map-metric-switch" aria-label="地图评价维度">
+            <button
+              v-for="metric in SANSHENG_MAP_METRICS"
+              :key="metric.key"
+              type="button"
+              :class="{ active: activeMapMetric === metric.key }"
+              @click="activeMapMetric = metric.key"
+            >
+              {{ metric.label }}
+            </button>
+          </div>
+          <div class="map-legend">
+            <strong>{{ mapMetricLabel }}指数</strong>
+            <span v-for="level in SANSHENG_SCORE_LEVELS" :key="level.minimum">
+              <i :style="{ backgroundColor: level.color }" />
+              {{ level.range }}
+            </span>
+          </div>
           <MapToolbox
             :map="map"
             :focus-bounds="focusBounds"
@@ -286,8 +369,18 @@ onMounted(async () => {
           <div v-if="mapError" class="map-error">{{ mapError }}</div>
         </section>
 
-        <PanelCard title="评价明细" :meta="selectedTown.name">
-          <table class="indicator-table">
+        <section class="detail-drawer panel-frame" :class="{ open: detailOpen }">
+          <button
+            class="detail-drawer__toggle"
+            type="button"
+            :aria-expanded="detailOpen"
+            @click="detailOpen = !detailOpen"
+          >
+            <span><i />评价明细 <em>{{ selectedTown.name }} · {{ dimensionMeta[activeDimension].label }}</em></span>
+            <b>{{ detailOpen ? '收起' : '展开' }}⌃</b>
+          </button>
+          <div v-show="detailOpen" class="detail-drawer__body">
+            <table class="indicator-table">
             <thead>
               <tr>
                 <th>指标维度</th>
@@ -323,8 +416,9 @@ onMounted(async () => {
                 </td>
               </tr>
             </tbody>
-          </table>
-        </PanelCard>
+            </table>
+          </div>
+        </section>
       </section>
 
       <aside class="sansheng-right">
@@ -355,7 +449,7 @@ onMounted(async () => {
               v-for="(town, index) in scoredTowns"
               :key="town.id"
               :class="{ active: selectedTownId === town.id }"
-              @click="selectedTownId = town.id"
+              @click="selectTown(town.id)"
             >
               <i>{{ String(index + 1).padStart(2, '0') }}</i
               ><span>{{ town.name }}</span
@@ -553,7 +647,7 @@ onMounted(async () => {
   grid-template-rows: 1.2fr 1fr;
 }
 .sansheng-center {
-  grid-template-rows: minmax(360px, 1fr) 230px;
+  grid-template-rows: minmax(420px, 1fr) auto;
 }
 .sansheng-right {
   grid-template-rows: 1.1fr 1.15fr 0.8fr;
@@ -639,6 +733,167 @@ onMounted(async () => {
 .full-button {
   width: 100%;
   height: 30px;
+}
+
+.map-metric-switch {
+  position: absolute;
+  z-index: 620;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  padding: 4px;
+  border: 1px solid rgba(122, 203, 190, 0.35);
+  border-radius: 7px;
+  background: rgba(5, 16, 17, 0.88);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(9px);
+  transform: translateX(-50%);
+}
+
+.map-metric-switch button {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 12px;
+  color: var(--text-soft);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-metric-switch button:hover,
+.map-metric-switch button.active {
+  color: #eafff8;
+  background: rgba(61, 214, 196, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(61, 214, 196, 0.38);
+}
+
+.map-legend {
+  position: absolute;
+  z-index: 620;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  min-width: 118px;
+  padding: 10px 12px;
+  border: 1px solid rgba(122, 203, 190, 0.3);
+  border-radius: 7px;
+  background: rgba(5, 16, 17, 0.86);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  gap: 5px;
+  backdrop-filter: blur(9px);
+}
+
+.map-legend strong {
+  margin-bottom: 3px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  color: var(--text-soft);
+  font: 9px var(--font-data);
+  gap: 7px;
+}
+
+.map-legend i {
+  width: 18px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+:deep(.township-map-label) {
+  padding: 4px 7px;
+  border: 1px solid rgba(214, 237, 159, 0.35);
+  border-radius: 5px;
+  background: rgba(5, 18, 17, 0.82);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.22);
+}
+
+:deep(.township-theme-label),
+:deep(.township-theme-detail) {
+  display: block;
+  white-space: nowrap;
+}
+
+:deep(.township-theme-label) {
+  color: #f1f8d4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:deep(.township-theme-detail) {
+  margin-top: 2px;
+  color: #a8ccc4;
+  font: 9px var(--font-data);
+}
+
+.detail-drawer {
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(6, 21, 21, 0.96);
+  transition: max-height 180ms ease;
+}
+
+.detail-drawer:not(.open) {
+  max-height: 42px;
+}
+
+.detail-drawer.open {
+  max-height: 286px;
+}
+
+.detail-drawer__toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  color: var(--text);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  justify-content: space-between;
+}
+
+.detail-drawer__toggle span {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.detail-drawer__toggle i {
+  width: 3px;
+  height: 14px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(61, 214, 196, 0.7);
+}
+
+.detail-drawer__toggle em,
+.detail-drawer__toggle b {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.detail-drawer__toggle b {
+  transition: color 160ms ease;
+}
+
+.detail-drawer__toggle:hover b {
+  color: var(--cyan);
+}
+
+.detail-drawer__body {
+  max-height: 230px;
+  padding: 0 12px 10px;
+  overflow: auto;
+  border-top: 1px solid rgba(122, 203, 190, 0.13);
 }
 
 .indicator-table {
