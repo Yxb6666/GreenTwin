@@ -98,7 +98,11 @@ export async function fetchIServerFeatures(
 ): Promise<ParsedLayerFeature[]> {
   const fetchImpl = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? 60000
-  const baseUrl = `${source.serviceUrl.replace(/\/$/, '')}/rest/maps/${source.mapName}`
+  const serviceUrl = source.serviceUrl.replace(/\/+$/, '')
+  const restServiceUrl = /\/rest$/i.test(serviceUrl)
+    ? serviceUrl
+    : `${serviceUrl}/rest`
+  const baseUrl = `${restServiceUrl}/maps/${source.mapName}`
   const queryUrl = `${baseUrl}/queryResults.json`
   const body = {
     queryMode: 'SqlQuery',
