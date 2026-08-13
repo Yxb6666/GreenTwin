@@ -61,4 +61,16 @@ describe('三维场景工具条', () => {
       false,
     ])
   })
+
+  it('天气按钮以小插件方式控制天气面板展开与收起', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '', weatherActive: false },
+    })
+
+    const button = wrapper.get('button[aria-label="天气模拟"]')
+    expect(button.attributes('aria-expanded')).toBe('false')
+    await button.trigger('click')
+
+    expect(wrapper.emitted('toggle-weather')).toHaveLength(1)
+  })
 })

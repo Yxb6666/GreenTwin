@@ -7,6 +7,7 @@ const props = defineProps<{
   measuring: SceneMeasureType | null
   layers: Array<{ key: string; label: string; visible: boolean }>
   feedback: string
+  weatherActive?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   'zoom-out': []
   locate: []
   'update-layer': [key: string, visible: boolean]
+  'toggle-weather': []
 }>()
 
 const measurementMenuOpen = ref(false)
@@ -31,6 +33,7 @@ function toggleMeasurementMenu() {
   }
   measurementMenuOpen.value = !measurementMenuOpen.value
   layerMenuOpen.value = false
+  if (props.weatherActive) emit('toggle-weather')
 }
 
 function selectMeasure(type: SceneMeasureType) {
@@ -41,6 +44,13 @@ function selectMeasure(type: SceneMeasureType) {
 function toggleLayerMenu() {
   layerMenuOpen.value = !layerMenuOpen.value
   measurementMenuOpen.value = false
+  if (props.weatherActive) emit('toggle-weather')
+}
+
+function toggleWeather() {
+  measurementMenuOpen.value = false
+  layerMenuOpen.value = false
+  emit('toggle-weather')
 }
 
 function updateLayer(key: string, event: Event) {
@@ -52,6 +62,7 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   measurementMenuOpen.value = false
   layerMenuOpen.value = false
+  if (props.weatherActive) emit('toggle-weather')
 }
 
 window.addEventListener('keydown', onKeyDown)
@@ -121,6 +132,19 @@ onBeforeUnmount(() => {
           <path d="m12 3 9 5-9 5-9-5 9-5Zm-7 9 7 4 7-4M5 16l7 4 7-4" />
         </svg>
         <span>场景图层</span>
+      </button>
+      <button
+        type="button"
+        :class="{ active: weatherActive }"
+        :aria-expanded="weatherActive"
+        aria-label="天气模拟"
+        title="天气模拟"
+        @click="toggleWeather"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 17h10a4 4 0 0 0 .7-7.9A6 6 0 0 0 6.4 8 4.5 4.5 0 0 0 7 17Zm2 3-1 2m5-2-1 2m5-2-1 2" />
+        </svg>
+        <span>{{ weatherActive ? '收起天气' : '天气模拟' }}</span>
       </button>
     </div>
 

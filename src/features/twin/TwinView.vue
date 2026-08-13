@@ -51,6 +51,12 @@ import {
   waitForAgentJob,
   type AgentJob,
 } from './agentSimulation'
+import {
+  ISOCHRONE_COLORS,
+  requestIsochrones,
+  type IsochroneGeometry,
+  type IsochroneProfile,
+} from './isochrone'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -138,6 +144,7 @@ interface CesiumRuntime {
       height: number,
     ) => unknown
     distance: (left: unknown, right: unknown) => number
+    fromDegreesArray: (coordinates: number[]) => unknown
   }
   Cartesian2: new (x: number, y: number) => unknown
   Cartographic: {
@@ -218,8 +225,14 @@ const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
 const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
-const weatherState = ref(createWeatherState('rain'))
+const weatherState = ref(createWeatherState('clear'))
 const nativeWeatherEffects = ref(false)
+const weatherPanelOpen = ref(false)
+const parkPickMode = ref(false)
+const isochroneLoading = ref(false)
+const isochroneProfile = ref<IsochroneProfile>('walking')
+const isochroneMinutes = ref([5, 10, 15])
+const isochroneStatus = ref('点击下方按钮，然后在地图上选择公园落点')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -244,6 +257,16 @@ let measurementEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
+let parkModel: ModelPrimitive | null = null
+let isochroneEntities: unknown[] = []
+let isochroneRequest: AbortController | null = null
+
+const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
+const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
+  { value: 'walking', label: '步行' },
+  { value: 'cycling', label: '骑行' },
+  { value: 'driving', label: '驾车' },
+]
 
 const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
 
@@ -440,11 +463,6 @@ function cesium(): CesiumRuntime {
   return (window as typeof window & { Cesium: CesiumRuntime }).Cesium
 }
 
-function selectScenario(key: ScenarioKey) {
-  activeScenario.value = key
-  operationMessage.value = `已切换至“${currentScenario.value.label}”模板，可从治理问题或地图范围创建模拟任务`
-}
-
 function selectPlan(key: PlanKey) {
   activePlan.value = key
   operationMessage.value = `当前查看：${planData[key].label}`
@@ -454,6 +472,120 @@ function selectMeasure(key: MeasureKey) {
   activeMeasure.value = key
   const measure = measures.find((item) => item.key === key)
   operationMessage.value = `正在配置治理措施：${measure?.label ?? ''}`
+}
+
+function toggleIsochroneMinute(minute: number) {
+  const selected = isochroneMinutes.value.includes(minute)
+  if (selected && isochroneMinutes.value.length === 1) {
+    isochroneStatus.value = '至少保留一个分析时长'
+    return
+  }
+  isochroneMinutes.value = selected
+    ? isochroneMinutes.value.filter((value) => value !== minute)
+    : [...isochroneMinutes.value, minute].sort((left, right) => left - right)
+}
+
+function startParkAnalysis() {
+  if (!viewer) {
+    isochroneStatus.value = '三维地图尚未初始化，请稍后再试'
+    return
+  }
+  parkPickMode.value = true
+  pickMode.value = false
+  cancelMeasurement()
+  isochroneStatus.value = '请在地图上点击公园建设位置'
+  operationMessage.value = '公园等时圈分析：等待选择落点'
+}
+
+function cancelParkPicking() {
+  parkPickMode.value = false
+  isochroneStatus.value = '已取消选点，可重新开始分析'
+}
+
+function clearIsochroneEntities() {
+  if (viewer) {
+    isochroneEntities.forEach((entity) => viewer?.entities.remove(entity))
+  }
+  isochroneEntities = []
+}
+
+function polygonRings(geometry: IsochroneGeometry) {
+  return geometry.type === 'Polygon'
+    ? [geometry.coordinates[0] ?? []]
+    : geometry.coordinates.map((polygon) => polygon[0] ?? [])
+}
+
+async function analyzeParkAt(point: PickedPoint) {
+  if (!viewer) return
+  const sdk = cesium()
+  parkPickMode.value = false
+  isochroneLoading.value = true
+  isochroneStatus.value = '正在加载公园模型…'
+  isochroneRequest?.abort()
+  isochroneRequest = new AbortController()
+  clearIsochroneEntities()
+  if (parkModel) viewer.scene.primitives.remove(parkModel)
+  const origin = sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height)
+  parkModel = viewer.scene.primitives.add(
+    sdk.Model.fromGltf({
+      url: parkModelUrl,
+      modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
+      scale: 2.5,
+      minimumPixelSize: 110,
+      maximumScale: 20,
+    }),
+  )
+  try {
+    if (parkModel.readyPromise) await parkModel.readyPromise
+    isochroneStatus.value = '公园已加载，正在请求 Mapbox 等时圈…'
+    const result = await requestIsochrones({
+      accessToken: config.mapbox.accessToken,
+      longitude: point.longitude,
+      latitude: point.latitude,
+      profile: isochroneProfile.value,
+      minutes: isochroneMinutes.value,
+      signal: isochroneRequest.signal,
+    })
+    const ordered = [...result.features].sort(
+      (left, right) => Number(right.properties?.contour ?? 0) - Number(left.properties?.contour ?? 0),
+    )
+    ordered.forEach((feature, featureIndex) => {
+      const contour = Number(feature.properties?.contour ?? 0)
+      const color = `#${feature.properties?.color || ISOCHRONE_COLORS[featureIndex] || ISOCHRONE_COLORS[0]}`
+      polygonRings(feature.geometry).forEach((ring) => {
+        if (ring.length < 3) return
+        const coordinates = ring.flatMap((coordinate) => [
+          coordinate[0] ?? 0,
+          coordinate[1] ?? 0,
+        ])
+        isochroneEntities.push(
+          viewer!.entities.add({
+            name: `${contour} 分钟等时圈`,
+            polygon: {
+              hierarchy: sdk.Cartesian3.fromDegreesArray(coordinates),
+              material: `${color}45`,
+              outline: true,
+              outlineColor: color,
+              height: 1.5 + featureIndex,
+            },
+          }),
+        )
+      })
+    })
+    isochroneStatus.value = `分析完成：${isochroneProfile.value === 'walking' ? '步行' : isochroneProfile.value === 'cycling' ? '骑行' : '驾车'} ${isochroneMinutes.value.join('/')} 分钟可达范围`
+    operationMessage.value = `公园等时圈已生成，共 ${result.features.length} 个圈层`
+    viewer.camera.flyTo({
+      destination: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude - 0.025, 4200),
+      orientation: { heading: 0, pitch: sdk.Math.toRadians(-70), roll: 0 },
+    })
+  } catch (error) {
+    if ((error as Error).name !== 'AbortError') {
+      isochroneStatus.value = error instanceof Error ? error.message : '公园等时圈分析失败'
+      operationMessage.value = isochroneStatus.value
+    }
+  } finally {
+    isochroneLoading.value = false
+  }
 }
 
 async function loadGeneratedModel(
@@ -1123,6 +1255,15 @@ function setupSceneInteractions() {
       addMeasurePoint(movement.position)
       return
     }
+    if (parkPickMode.value) {
+      const point = pickGroundPoint(movement.position)
+      if (!point) {
+        isochroneStatus.value = '未拾取到地图表面，请重新点击'
+        return
+      }
+      void analyzeParkAt(point)
+      return
+    }
     if (pickMode.value) {
       handleSceneClick(movement.position)
       return
@@ -1367,7 +1508,7 @@ function applyNativeWeatherEffect(state: WeatherState) {
   const collection = viewer.scene.postProcessStages
   if (!stages || !collection) return
 
-  if (state.kind === 'rain' || state.kind === 'storm') {
+  if (state.kind === 'storm') {
     weatherStage = stages.createRainStage()
     weatherStage.uniforms.speed = 8 + state.intensity * 0.24 + state.windSpeed
     weatherStage.uniforms.angle = -0.15 - state.windSpeed * 0.035
@@ -1450,6 +1591,7 @@ async function initializeViewer() {
 function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   cancelMeasurement()
+  if (parkPickMode.value) cancelParkPicking()
 }
 
 onMounted(() => {
@@ -1464,6 +1606,10 @@ onBeforeUnmount(() => {
   eventHandler = null
   cancelMeasurement()
   clearNativeWeatherEffect()
+  isochroneRequest?.abort()
+  clearIsochroneEntities()
+  if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
+  parkModel = null
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -1513,26 +1659,18 @@ onBeforeUnmount(() => {
 
     <div class="twin-layout">
       <aside class="twin-left">
-        <PanelCard title="模拟任务" meta="治理场景模板">
-          <div class="scenario-list">
-            <button
-              v-for="scenario in scenarioTemplates"
-              :key="scenario.key"
-              type="button"
-              :class="{ active: activeScenario === scenario.key }"
-              @click="selectScenario(scenario.key)"
-            >
-              <i>{{ scenario.code }}</i>
-              <span
-                ><strong>{{ scenario.label }}</strong
-                ><small>{{ scenario.domain }}</small></span
-              >
-            </button>
-          </div>
-          <div class="issue-summary">
-            <span>当前问题</span>
-            <strong>连续降雨后道路低洼段积水，影响居民与农产品运输</strong>
-            <small>徐场村东南主路 · 高紧急度 · 待研判</small>
+        <PanelCard title="公园等时圈分析" meta="Mapbox 可达性">
+          <div class="isochrone-panel">
+            <div class="isochrone-step"><i>1</i><span><strong>设置分析参数</strong><small>选择出行方式与时间圈层</small></span></div>
+            <div class="profile-switch" aria-label="等时圈出行方式">
+              <button v-for="option in profileOptions" :key="option.value" type="button" :class="{ active: isochroneProfile === option.value }" @click="isochroneProfile = option.value">{{ option.label }}</button>
+            </div>
+            <div class="minute-switch" aria-label="等时圈时间范围">
+              <button v-for="minute in [5, 10, 15]" :key="minute" type="button" :class="{ active: isochroneMinutes.includes(minute) }" @click="toggleIsochroneMinute(minute)">{{ minute }} 分钟</button>
+            </div>
+            <div class="isochrone-step"><i>2</i><span><strong>放置公园模型</strong><small>地图单击后自动加载公园.glb并分析</small></span></div>
+            <button class="park-pick-button" type="button" :class="{ active: parkPickMode }" :disabled="isochroneLoading" @click="startParkAnalysis">{{ isochroneLoading ? '分析中…' : parkPickMode ? '请点击地图落点' : '选择公园落点并分析' }}</button>
+            <p class="isochrone-status" role="status"><i />{{ isochroneStatus }}</p>
           </div>
         </PanelCard>
 
@@ -1613,7 +1751,7 @@ onBeforeUnmount(() => {
           ref="cesiumContainer"
           class="cesium-container"
           :class="{
-            'is-picking': pickMode,
+            'is-picking': pickMode || parkPickMode,
             'is-dragging-model': isDraggingModel,
           }"
         />
@@ -1621,8 +1759,13 @@ onBeforeUnmount(() => {
           <span>请在地图上点击确定建造位置</span>
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
+        <div v-if="parkPickMode" class="pick-mode-hint">
+          <span>请点击公园落点，随后自动加载模型并分析等时圈</span>
+          <button type="button" @click="cancelParkPicking">取消</button>
+        </div>
         <WeatherSimulation
           v-model="weatherState"
+          v-model:open="weatherPanelOpen"
           :native-effects="nativeWeatherEffects"
           @change="updateWeather"
         />
@@ -1630,6 +1773,7 @@ onBeforeUnmount(() => {
           :measuring="measurementMode"
           :layers="sceneLayers"
           :feedback="toolFeedback"
+          :weather-active="weatherPanelOpen"
           @clear="clearSceneDrawings"
           @measure="startMeasurement"
           @end-measure="cancelMeasurement"
@@ -1639,6 +1783,7 @@ onBeforeUnmount(() => {
           @zoom-out="zoomScene(-1)"
           @locate="locateScene"
           @update-layer="updateSceneLayer"
+          @toggle-weather="weatherPanelOpen = !weatherPanelOpen"
         />
       </section>
 
@@ -1934,6 +2079,93 @@ onBeforeUnmount(() => {
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.isochrone-panel {
+  display: grid;
+  gap: 9px;
+}
+.isochrone-step {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 25px 1fr;
+  gap: 8px;
+}
+.isochrone-step > i {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-content: center;
+  color: var(--cyan);
+  border: 1px solid rgba(61, 214, 196, 0.42);
+  border-radius: 50%;
+  font: normal 10px var(--font-data);
+}
+.isochrone-step span {
+  display: grid;
+  gap: 2px;
+}
+.isochrone-step strong {
+  font-size: 10px;
+}
+.isochrone-step small {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+.profile-switch,
+.minute-switch {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.profile-switch button,
+.minute-switch button,
+.park-pick-button {
+  min-height: 29px;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.16);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 9px;
+  cursor: pointer;
+}
+.profile-switch button.active,
+.minute-switch button.active,
+.park-pick-button.active {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.6);
+  background: rgba(61, 214, 196, 0.12);
+}
+.park-pick-button {
+  min-height: 34px;
+  color: #03201d;
+  border-color: var(--cyan);
+  background: var(--cyan);
+  font-weight: 700;
+}
+.park-pick-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.isochrone-status {
+  display: flex;
+  min-height: 33px;
+  margin: 0;
+  padding: 7px 8px;
+  color: var(--text-soft);
+  border-left: 2px solid var(--cyan);
+  background: rgba(61, 214, 196, 0.045);
+  font-size: 8px;
+  line-height: 1.5;
+}
+.isochrone-status i {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  margin: 3px 6px 0 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
 }
 
 .issue-summary {

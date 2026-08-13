@@ -11,6 +11,9 @@
   "arcgis": {
     "accessToken": "AAPTarYTr7FRZVMcOVB629-uPPw..U6SNQSYqhnL7olEo1Qy9OuDeJMIYhEAosC_4dUFABcA-ZQGDrpP5WdJYCBCdZb5hKxCYi690huNDk2PBWLe9cFPZbanPp175jQSrhhQBT7sec0QWPuMIIThr9v7wnO7PE6kB-7I6Z9ZdAxkMvG80eYFBHtSIuvYt11METdlAHeWRRdWS6aoGtJv_FwuKBKF0a92dY6IXw-FFXAjYD1R4KwzF6kTZlzKQottKxc-DCGOr2RwJ-06joh8.AT1_4QY65mzD"
   },
+  "mapbox": {
+    "accessToken": ""
+  },
   "supermap": {
     "leafletSdkUrl": "https://iclient.supermap.io/dist/leaflet/iclient-leaflet.min.js",
     "mapServices": {

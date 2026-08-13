@@ -10,6 +10,9 @@ interface RuntimeConfigFixture {
   arcgis: {
     accessToken: string
   }
+  mapbox: {
+    accessToken: string
+  }
   supermap: {
     mapServices: {
       base: string
@@ -83,5 +86,6 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.map.center).toEqual([34.82, 114.82])
     expect(config.arcgis.accessToken).toBeTypeOf('string')
     expect(config.arcgis.accessToken).not.toBe('')
+    expect(config.mapbox.accessToken).toBeTypeOf('string')
   })
 })

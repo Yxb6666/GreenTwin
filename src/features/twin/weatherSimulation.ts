@@ -1,4 +1,4 @@
-export type WeatherKind = 'clear' | 'rain' | 'storm' | 'snow' | 'fog'
+export type WeatherKind = 'clear' | 'storm' | 'snow' | 'fog'
 
 export interface WeatherState {
   kind: WeatherKind
@@ -24,7 +24,6 @@ export const weatherPresets: Array<{
   windSpeed: number
 }> = [
   { kind: 'clear', label: '晴', icon: '晴', intensity: 0, windSpeed: 2 },
-  { kind: 'rain', label: '雨', icon: '雨', intensity: 48, windSpeed: 4 },
   { kind: 'storm', label: '暴雨', icon: '暴', intensity: 82, windSpeed: 8 },
   { kind: 'snow', label: '雪', icon: '雪', intensity: 52, windSpeed: 3 },
   { kind: 'fog', label: '雾', icon: '雾', intensity: 62, windSpeed: 1 },
@@ -41,14 +40,6 @@ const weatherBase: Record<
     precipitation: 0,
     visibility: 20000,
     cloudCover: 12,
-  },
-  rain: {
-    label: '持续降雨',
-    icon: '雨',
-    temperature: 20,
-    precipitation: 28,
-    visibility: 9000,
-    cloudCover: 78,
   },
   storm: {
     label: '短时暴雨',

@@ -13,6 +13,9 @@ export interface RuntimeConfig {
   arcgis: {
     accessToken: string
   }
+  mapbox: {
+    accessToken: string
+  }
   supermap: {
     leafletSdkUrl: string
     mapServices: Record<
@@ -67,6 +70,9 @@ function validateConfig(value: unknown): asserts value is RuntimeConfig {
   if (!config.arcgis || typeof config.arcgis.accessToken !== 'string') {
     throw new Error('缺少 ArcGIS accessToken 运行时配置')
   }
+  if (!config.mapbox || typeof config.mapbox.accessToken !== 'string') {
+    throw new Error('缺少 Mapbox accessToken 运行时配置')
+  }
   if (!config.supermap?.leafletSdkUrl || !config.supermap.mapServices?.base || !config.supermap.mapServices.township || !config.supermap.mapServices.poi || !config.supermap.mapServices.buildingFootprints || !config.supermap.dem?.serviceUrl || !config.supermap.dem.collectionId || !config.supermap.dem.itemId || !config.supermap.landuseRaster?.serviceUrl || !config.supermap.landuseRaster.collectionId || !config.supermap.landuseRaster.renderingRule?.colorTable.length) {
     throw new Error('缺少 SuperMap SDK、二维地图、POI 或 DEM 影像服务配置')
   }
@@ -79,12 +85,18 @@ export async function loadRuntimeConfig(): Promise<Readonly<RuntimeConfig>> {
   if (!response.ok) throw new Error(`运行配置请求失败（HTTP ${response.status}）`)
   const config: unknown = await response.json()
   validateConfig(config)
-  const environmentToken = import.meta.env.VITE_ARCGIS_ACCESS_TOKEN?.trim()
-  const resolvedConfig: RuntimeConfig = environmentToken
-    ? {
-        ...config,
-        arcgis: { ...config.arcgis, accessToken: environmentToken },
-      }
-    : config
+  const arcgisToken = import.meta.env.VITE_ARCGIS_ACCESS_TOKEN?.trim()
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN?.trim()
+  const resolvedConfig: RuntimeConfig = {
+    ...config,
+    arcgis: {
+      ...config.arcgis,
+      accessToken: arcgisToken || config.arcgis.accessToken,
+    },
+    mapbox: {
+      ...config.mapbox,
+      accessToken: mapboxToken || config.mapbox.accessToken,
+    },
+  }
   return Object.freeze(resolvedConfig)
 }

@@ -23,11 +23,14 @@ describe('三生模拟天气功能', () => {
       props: {
         modelValue: createWeatherState('clear'),
         nativeEffects: false,
+        open: true,
       },
     })
 
-    expect(wrapper.findAll('.weather-presets button')).toHaveLength(5)
-    await wrapper.findAll('.weather-presets button')[2]!.trigger('click')
+    const presets = wrapper.findAll('.weather-presets button')
+    expect(presets).toHaveLength(4)
+    expect(wrapper.text()).not.toContain('雨雨')
+    await presets[1]!.trigger('click')
 
     const update = wrapper.emitted('update:modelValue')?.at(-1)?.[0]
     expect(update).toMatchObject({ kind: 'storm', intensity: 82 })
@@ -36,11 +39,13 @@ describe('三生模拟天气功能', () => {
   it('原生特效不可用时保留降水可视化回退', () => {
     const wrapper = mount(WeatherSimulation, {
       props: {
-        modelValue: createWeatherState('rain'),
+        modelValue: createWeatherState('storm'),
         nativeEffects: false,
+        open: false,
       },
     })
 
     expect(wrapper.find('.weather-particles').exists()).toBe(true)
+    expect(wrapper.find('.weather-panel').exists()).toBe(false)
   })
 })

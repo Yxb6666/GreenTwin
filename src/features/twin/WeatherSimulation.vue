@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import {
   clampWeatherValue,
   createWeatherState,
@@ -13,14 +13,15 @@ import {
 const props = defineProps<{
   modelValue: WeatherState
   nativeEffects: boolean
+  open: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: WeatherState]
+  'update:open': [value: boolean]
   change: [value: WeatherState]
 }>()
 
-const panelOpen = ref(true)
 const metrics = computed(() => resolveWeatherMetrics(props.modelValue))
 const risk = computed(() => describeWeatherRisk(props.modelValue))
 const particleCount = computed(() =>
@@ -34,7 +35,7 @@ const particles = Array.from({ length: 72 }, (_, index) => ({
   opacity: 0.35 + ((index * 17) % 50) / 100,
 }))
 const isPrecipitating = computed(() =>
-  ['rain', 'storm', 'snow'].includes(props.modelValue.kind),
+  ['storm', 'snow'].includes(props.modelValue.kind),
 )
 
 function update(value: WeatherState) {
@@ -92,29 +93,31 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
       <i /><i /><i />
     </div>
 
-    <section
+    <Transition name="weather-panel">
+      <section
+      v-if="open"
       class="weather-panel"
-      :class="{ 'is-open': panelOpen }"
       aria-label="天气模拟"
     >
-      <button
-        type="button"
-        class="weather-panel__summary"
-        :aria-expanded="panelOpen"
-        aria-controls="weather-panel-controls"
-        @click="panelOpen = !panelOpen"
-      >
+      <header class="weather-panel__summary">
         <i>{{ metrics.icon }}</i>
         <span
           ><strong>{{ metrics.label }}</strong
           ><small>天气模拟</small></span
         >
         <b>{{ metrics.temperature }}℃</b>
-        <em aria-hidden="true">{{ panelOpen ? '×' : '设置' }}</em>
-      </button>
+        <button
+          type="button"
+          class="weather-panel__close"
+          aria-label="收起天气模拟"
+          title="收起"
+          @click="emit('update:open', false)"
+        >
+          ×
+        </button>
+      </header>
 
       <div
-        v-if="panelOpen"
         id="weather-panel-controls"
         class="weather-panel__controls"
       >
@@ -179,7 +182,8 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
         </div>
         <p>{{ risk }}</p>
       </div>
-    </section>
+      </section>
+    </Transition>
   </div>
 </template>
 
@@ -272,18 +276,15 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
 .weather-panel {
   position: absolute;
   z-index: 26;
-  top: 12px;
-  right: 12px;
-  width: 170px;
+  top: 232px;
+  left: 56px;
+  width: 258px;
   pointer-events: auto;
   border: 1px solid rgba(122, 203, 190, 0.26);
   border-radius: 9px;
   background: rgba(5, 16, 17, 0.9);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(12px);
-}
-.weather-panel.is-open {
-  width: 258px;
 }
 .weather-panel button {
   color: inherit;
@@ -296,10 +297,7 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
   min-height: 48px;
   padding: 7px 9px;
   color: var(--text);
-  border: 0;
-  background: transparent;
   text-align: left;
-  cursor: pointer;
   grid-template-columns: 28px 1fr auto auto;
   gap: 7px;
 }
@@ -328,9 +326,22 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
   color: var(--cyan);
   font: 12px var(--font-data);
 }
-.weather-panel__summary em {
+.weather-panel__close {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-content: center;
   color: var(--text-soft);
-  font: normal 8px sans-serif;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 14px sans-serif;
+  cursor: pointer;
+}
+.weather-panel__close:hover {
+  color: var(--cyan);
+  background: rgba(61, 214, 196, 0.1);
 }
 .weather-panel__controls {
   padding: 0 10px 10px;
@@ -339,7 +350,7 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
 .weather-presets {
   display: grid;
   margin: 9px 0;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
   gap: 5px;
 }
 .weather-presets button {
@@ -437,6 +448,17 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
   }
 }
 
+.weather-panel-enter-active,
+.weather-panel-leave-active {
+  transition: 160ms ease;
+  transform-origin: top left;
+}
+.weather-panel-enter-from,
+.weather-panel-leave-to {
+  opacity: 0;
+  transform: translateX(-8px) scale(0.96);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .weather-particles i,
   .weather-fog i {
@@ -445,7 +467,7 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
 }
 
 @media (max-width: 1200px) {
-  .weather-panel.is-open {
+  .weather-panel {
     width: 230px;
   }
 }
