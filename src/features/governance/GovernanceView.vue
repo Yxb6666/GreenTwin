@@ -10,6 +10,7 @@ import GovernanceAssistant from './GovernanceAssistant.vue'
 import GovernanceIssueDetail from './GovernanceIssueDetail.vue'
 import type { GovernanceAssistantAction, GovernanceAssistantContext } from './assistant'
 import { issueStatuses, loadGovernanceIssues, queryIssuesByBounds, queryIssuesByRadius, type GovernanceIssue, type IssueStatus, type QueryBounds } from './data'
+import { createGovernanceShapefileArchive } from './shapefile'
 
 type SpatialQueryMode = 'rectangle' | 'circle'
 
@@ -23,6 +24,7 @@ const selectedId = ref('')
 const detailOpen = ref(false)
 const toast = ref('')
 const dataError = ref('')
+const isExporting = ref(false)
 const aiHighlightedIds = ref<Set<string>>(new Set())
 const spatialIds = ref<Set<string> | null>(null)
 const spatialQueryLabel = ref('全县要素')
@@ -364,7 +366,31 @@ function onSpatialControlChange(event: Event) {
   else if (value === 'rectangle' || value === 'circle') beginSpatialQuery(value)
 }
 
+async function exportIssuesAsShapefile() {
+  if (isExporting.value) return
+  isExporting.value = true
+  try {
+    const archive = await createGovernanceShapefileArchive(filtered.value)
+    const blob = new Blob([archive], { type: 'application/zip' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'governance_issues_SHP.zip'
+    anchor.click()
+    URL.revokeObjectURL(url)
+    notify(`SHP: ${filtered.value.length}`)
+  } catch (cause) {
+    notify(cause instanceof Error ? `SHP: ${cause.message}` : 'SHP export failed')
+  } finally {
+    isExporting.value = false
+  }
+}
+
 function exportIssues() {
+  if (typeof TextEncoder !== 'undefined') {
+    void exportIssuesAsShapefile()
+    return
+  }
   const header = ['编号', '类型', '子类型', '描述', '乡镇代码', '乡镇', '村级代码', '村庄', '详细位置', '经度', '纬度', '紧急程度', '状态', '上报渠道', '数据类别', '上报时间']
   const rows = filtered.value.map((issue) => [issue.id, issue.type, issue.subtype, issue.description, issue.townCode, issue.town, issue.villageCode, issue.village, issue.address, issue.longitude, issue.latitude, issue.urgency, issue.status, issue.channel, issue.dataClass, issue.time])
   const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
