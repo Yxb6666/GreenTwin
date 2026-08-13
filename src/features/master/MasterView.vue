@@ -254,7 +254,7 @@ const baseAdministrativeLegend: ThemeLegendItem[] = [
   },
 ];
 const landUseClassificationReady = computed(
-  () => config.supermap.landuseRaster.rendererType === "UNIQUE_VALUES",
+  () => config.supermap.landuseRaster.renderingRule.colorTable.length > 0,
 );
 const activeMapThemeConfig = computed(() => {
   if (activeMapTheme.value == null) return baseAdministrativeTheme;
@@ -1263,7 +1263,7 @@ onMounted(async () => {
     />
 
     <div class="master-layout">
-      <aside class="master-side">
+      <aside class="master-side master-side--overview">
         <PanelCard title="人口与密度特征" meta="2020—2025 / 县域统计">
           <div class="population-content">
             <div class="metric-grid">
@@ -1700,6 +1700,13 @@ onMounted(async () => {
 
 .master-side {
   grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+.master-side--overview {
+  grid-template-rows:
+    minmax(0, 1fr)
+    minmax(0, 0.9fr)
+    minmax(0, 1.15fr);
 }
 
 .master-center {

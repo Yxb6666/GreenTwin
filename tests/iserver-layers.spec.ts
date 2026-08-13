@@ -1,11 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildIServerMapUrl,
   buildWgs84BoundsFilter,
   fetchIServerFeatures,
   parseIServerFeatures,
 } from '@/features/twin/iserverLayers'
 
 describe('iServer 数据图层', () => {
+  it('服务地址已含 rest 时不重复拼接路径', () => {
+    expect(
+      buildIServerMapUrl({
+        serviceUrl: 'http://iserver/services/buildings/rest/',
+        mapName: 'buildings',
+        datasetName: 'footprints',
+      }),
+    ).toBe('http://iserver/services/buildings/rest/maps/buildings')
+  })
+
   it('生成 WGS84 范围过滤条件', () => {
     expect(buildWgs84BoundsFilter(114.9, 34.9, 115.03, 35)).toBe(
       'WGS84_X > 114.9 AND WGS84_X < 115.03 AND WGS84_Y > 34.9 AND WGS84_Y < 35',
@@ -48,6 +59,8 @@ describe('iServer 数据图层', () => {
         datasetName: 'WaterPolygon',
         features: [
           {
+            fieldNames: ['Height'],
+            fieldValues: ['7.200774'],
             geometry: {
               type: 'REGION',
               points: [
@@ -71,7 +84,45 @@ describe('iServer 数据图层', () => {
     expect(features[1]).toMatchObject({ kind: 'line' })
     expect(features[1]!.points).toHaveLength(2)
     expect(features[2]).toMatchObject({ kind: 'polygon' })
+    expect(features[2]?.height).toBeCloseTo(7.200774)
     expect(features[2]!.points).toHaveLength(4)
+  })
+
+  it('使用范围查询限制建筑白膜加载区域和数量', async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ newResourceLocation: 'http://iserver/query/job.json' }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ recordsets: [] }), { status: 200 }))
+
+    await fetchIServerFeatures(
+      {
+        serviceUrl: 'http://iserver/services/buildings/rest',
+        mapName: 'buildings',
+        datasetName: 'footprints',
+      },
+      {
+        bounds: {
+          minLongitude: 114.94,
+          minLatitude: 34.93,
+          maxLongitude: 114.99,
+          maxLatitude: 34.97,
+        },
+        expectCount: 6000,
+        fetchImpl,
+      },
+    )
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
+    expect(body).toMatchObject({
+      queryMode: 'BoundsQuery',
+      bounds: { left: 114.94, bottom: 34.93, right: 114.99, top: 34.97 },
+      queryParameters: { startRecord: 0, expectCount: 6000 },
+    })
   })
 
   it('两步读取 iServer 查询结果并携带过滤条件', async () => {
@@ -122,7 +173,9 @@ describe('iServer 数据图层', () => {
       },
     )
 
-    expect(fetchImpl.mock.calls[0]?.[0]).toContain('/queryResults.json')
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      'http://iserver/services/Laokao_POI_2025/rest/maps/Lankao_POI_2025/queryResults.json',
+    )
     const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))
     expect(body.queryParameters.queryParams[0]).toMatchObject({
       name: 'Lankao_POI_2025',

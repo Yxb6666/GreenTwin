@@ -14,6 +14,13 @@ import AiBuilderAssistant, {
 import SceneToolbox, {
   type SceneMeasureType,
 } from './SceneToolbox.vue'
+import WeatherSimulation from './WeatherSimulation.vue'
+import {
+  createWeatherState,
+  describeWeatherRisk,
+  resolveWeatherMetrics,
+  type WeatherState,
+} from './weatherSimulation'
 import {
   clampModelScale,
   formatPointLabel,
@@ -59,6 +66,10 @@ interface ModelPrimitive {
   modelMatrix?: unknown
 }
 
+interface WeatherPostProcessStage {
+  uniforms: Record<string, number>
+}
+
 interface CesiumMovement {
   position?: { x: number; y: number }
   endPosition?: { x: number; y: number }
@@ -85,6 +96,10 @@ interface SuperMapViewer {
     primitives: {
       add: (primitive: ModelPrimitive) => ModelPrimitive
       remove: (primitive: ModelPrimitive) => boolean
+    }
+    postProcessStages?: {
+      add: (stage: WeatherPostProcessStage) => WeatherPostProcessStage
+      remove: (stage: WeatherPostProcessStage) => boolean
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
@@ -174,6 +189,11 @@ interface CesiumRuntime {
     toRadians: (degrees: number) => number
     toDegrees: (radians: number) => number
   }
+  PostProcessStageLibrary?: {
+    createRainStage: () => WeatherPostProcessStage
+    createSnowStage: () => WeatherPostProcessStage
+    createFogStage: () => WeatherPostProcessStage
+  }
 }
 
 const config = useRuntimeConfig()
@@ -198,6 +218,8 @@ const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
 const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
+const weatherState = ref(createWeatherState('rain'))
+const nativeWeatherEffects = ref(false)
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -221,6 +243,7 @@ let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
+let weatherStage: WeatherPostProcessStage | null = null
 
 const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
 
@@ -234,9 +257,14 @@ function inferBuildingStyle(
 
 // 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
 const simulationFocus = {
-  longitude: 114.964285,
-  latitude: 34.9511,
-  height: 12000,
+  longitude: 114.965,
+  latitude: 34.95,
+  height: 900,
+}
+
+const simulationFocusOrientation = {
+  heading: 18,
+  pitch: -48,
 }
 
 const scenarioTemplates: Array<{
@@ -360,6 +388,7 @@ const currentScenario = computed(
     scenarioTemplates[0]!,
 )
 const currentPlan = computed(() => planData[activePlan.value])
+const weatherMetrics = computed(() => resolveWeatherMetrics(weatherState.value))
 const isGenerating = computed(() => buildState.value === 'running')
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
@@ -383,6 +412,14 @@ const assistantContext = computed<DecisionAssistantContext>(() => ({
     },
     recommendation: currentPlan.value.recommendation,
     parameters: parameters.value,
+    weather: {
+      type: weatherMetrics.value.label,
+      intensity: `${weatherState.value.intensity}%`,
+      precipitation: `${weatherMetrics.value.precipitation} mm/h`,
+      visibility: `${weatherMetrics.value.visibility} m`,
+      windSpeed: `${weatherState.value.windSpeed} m/s`,
+      risk: describeWeatherRisk(weatherState.value),
+    },
     visibleLayers: layers
       .filter((item) => layerVisibility.value[item.key])
       .map((item) => item.label),
@@ -865,8 +902,8 @@ function locateScene() {
       simulationFocus.height,
     ),
     orientation: {
-      heading: 0,
-      pitch: sdk.Math.toRadians(-90),
+      heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
+      pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
       roll: 0,
     },
   })
@@ -971,12 +1008,52 @@ function createPolygonEntities(features: ParsedLayerFeature[]) {
   })
 }
 
+function createBuildingEntities(features: ParsedLayerFeature[]) {
+  if (!viewer) return []
+  const sdk = cesium()
+  return features.flatMap((feature) => {
+    if (feature.kind !== 'polygon' || feature.points.length < 3) return []
+    const positions = feature.points.map((point) =>
+      sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, 0),
+    )
+    return [
+      viewer!.entities.add({
+        polygon: {
+          hierarchy: positions,
+          height: 0,
+          extrudedHeight: Math.max(1, feature.height ?? 3),
+          material: 'rgba(245, 248, 248, 0.92)',
+          outline: true,
+          outlineColor: '#aab4b4',
+          closeTop: true,
+          closeBottom: true,
+        },
+        show: layerVisibility.value.buildingLayer,
+      }),
+    ]
+  })
+}
+
 async function loadDataLayers() {
   if (!viewer) return
-  engineStatus.value = '正在加载水系、路网与 POI 数据图层'
-  try {
-    const [poiFeatures, roadFeatures, waterLines, waterPolygons] =
-      await Promise.all([
+  engineStatus.value = '正在加载建筑白膜、水系、路网与 POI 数据图层'
+  const results = await Promise.allSettled([
+        fetchIServerFeatures(
+          {
+            serviceUrl: config.supermap.mapServices.buildingFootprints,
+            mapName: 'Lankao_3D_GloBFP_SHP',
+            datasetName: 'Lankao_3D_GloBFP',
+          },
+          {
+            bounds: {
+              minLongitude: 114.94,
+              minLatitude: 34.93,
+              maxLongitude: 114.99,
+              maxLatitude: 34.97,
+            },
+            expectCount: 6000,
+          },
+        ),
         fetchIServerFeatures(
           {
             serviceUrl: config.supermap.mapServices.poi,
@@ -1008,23 +1085,28 @@ async function loadDataLayers() {
           datasetName: 'Laokao_Water_Polygon',
         }),
       ])
-    dataLayerEntities.value = {
+  if (!viewer) return
+  const [buildingResult, poiResult, roadResult, waterLineResult, waterPolygonResult] = results
+  const buildingFeatures = buildingResult.status === 'fulfilled' ? buildingResult.value : []
+  const poiFeatures = poiResult.status === 'fulfilled' ? poiResult.value : []
+  const roadFeatures = roadResult.status === 'fulfilled' ? roadResult.value : []
+  const waterLines = waterLineResult.status === 'fulfilled' ? waterLineResult.value : []
+  const waterPolygons = waterPolygonResult.status === 'fulfilled' ? waterPolygonResult.value : []
+  dataLayerEntities.value = {
+      buildingLayer: createBuildingEntities(buildingFeatures),
       poiLayer: createPoiEntities(poiFeatures),
       roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
       waterLayer: [
         ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
         ...createPolygonEntities(waterPolygons),
       ],
-    }
-    engineStatus.value = `数据图层已加载：POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}`
-    notifyScene('水系、路网与 POI 数据图层已加载，可在图层菜单中切换')
-  } catch (error) {
-    engineStatus.value = '水系、路网或 POI 数据图层加载失败'
-    notifyScene(
-      error instanceof Error ? error.message : '数据图层加载失败',
-    )
-    console.error('数据图层加载失败', error)
   }
+  const failedCount = results.filter((result) => result.status === 'rejected').length
+  engineStatus.value = `数据图层已加载：白膜 ${buildingFeatures.length} · POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}${failedCount ? ` · ${failedCount} 项失败` : ''}`
+  notifyScene(`建筑白膜已按 Height 字段拉伸，共加载 ${buildingFeatures.length} 个要素`)
+  results.forEach((result) => {
+    if (result.status === 'rejected') console.error('数据图层加载失败', result.reason)
+  })
 }
 
 function setupSceneInteractions() {
@@ -1270,6 +1352,46 @@ function toggleLayer(key: keyof typeof layerVisibility.value) {
   }
 }
 
+function clearNativeWeatherEffect() {
+  if (viewer?.scene.postProcessStages && weatherStage) {
+    viewer.scene.postProcessStages.remove(weatherStage)
+  }
+  weatherStage = null
+  nativeWeatherEffects.value = false
+}
+
+function applyNativeWeatherEffect(state: WeatherState) {
+  clearNativeWeatherEffect()
+  if (!viewer || state.kind === 'clear') return
+  const stages = cesium().PostProcessStageLibrary
+  const collection = viewer.scene.postProcessStages
+  if (!stages || !collection) return
+
+  if (state.kind === 'rain' || state.kind === 'storm') {
+    weatherStage = stages.createRainStage()
+    weatherStage.uniforms.speed = 8 + state.intensity * 0.24 + state.windSpeed
+    weatherStage.uniforms.angle = -0.15 - state.windSpeed * 0.035
+  } else if (state.kind === 'snow') {
+    weatherStage = stages.createSnowStage()
+    weatherStage.uniforms.density = 1 + state.intensity * 0.08
+    weatherStage.uniforms.speed = 0.8 + state.windSpeed * 0.35
+    weatherStage.uniforms.angle = state.windDirection / 360
+  } else {
+    weatherStage = stages.createFogStage()
+    weatherStage.uniforms.scale = 0.35 + state.intensity * 0.025
+  }
+
+  collection.add(weatherStage)
+  nativeWeatherEffects.value = true
+  viewer.scene.requestRender?.()
+}
+
+function updateWeather(state: WeatherState) {
+  applyNativeWeatherEffect(state)
+  const metrics = resolveWeatherMetrics(state)
+  operationMessage.value = `天气场景已切换为${metrics.label}：降水 ${metrics.precipitation} mm/h、能见度 ${(metrics.visibility / 1000).toFixed(1)} km；${describeWeatherRisk(state)}`
+}
+
 async function initializeViewer() {
   await nextTick()
   if (!cesiumContainer.value) return
@@ -1310,12 +1432,13 @@ async function initializeViewer() {
         simulationFocus.height,
       ),
       orientation: {
-        heading: 0,
-        pitch: sdk.Math.toRadians(-90),
+        heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
+        pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
         roll: 0,
       },
     })
     setupSceneInteractions()
+    applyNativeWeatherEffect(weatherState.value)
     void loadDataLayers()
     engineStatus.value = 'ArcGIS 导航底图 · SuperMap 兼容模式'
   } catch (error) {
@@ -1340,6 +1463,7 @@ onBeforeUnmount(() => {
   eventHandler?.destroy()
   eventHandler = null
   cancelMeasurement()
+  clearNativeWeatherEffect()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -1497,6 +1621,11 @@ onBeforeUnmount(() => {
           <span>请在地图上点击确定建造位置</span>
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
+        <WeatherSimulation
+          v-model="weatherState"
+          :native-effects="nativeWeatherEffects"
+          @change="updateWeather"
+        />
         <SceneToolbox
           :measuring="measurementMode"
           :layers="sceneLayers"

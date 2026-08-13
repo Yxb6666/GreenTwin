@@ -89,6 +89,18 @@ export const landUseSource = [
   },
 ];
 
+export const landUseRasterClasses = [
+  { id: 1, className: 'Cropland', name: '农田', color: '#FAE39C' },
+  { id: 2, className: 'Forest', name: '森林', color: '#446F33' },
+  { id: 3, className: 'Shrub', name: '灌木', color: '#33A02C' },
+  { id: 4, className: 'Grassland', name: '草原', color: '#ABD37B' },
+  { id: 5, className: 'Water', name: '水域', color: '#1E69B4' },
+  { id: 6, className: 'Snow/Ice', name: '冰雪', color: '#A6CEE3' },
+  { id: 7, className: 'Barren', name: '裸地', color: '#CFBDA3' },
+  { id: 8, className: 'Impervious', name: '不透水面', color: '#E24290' },
+  { id: 9, className: 'Wetland', name: '湿地', color: '#289BE8' },
+]
+
 export const masterMapThemes: MasterMapTheme[] = [
   {
     key: "population",
@@ -137,7 +149,7 @@ export const masterMapThemeLegends: Record<
     { label: "产业节点", color: POI_CATEGORY_COLORS.industry, kind: "dot" },
     { label: "文旅资源", color: POI_CATEGORY_COLORS.cultureTourism, kind: "dot" },
   ],
-  landuse: landUseSource.map((item) => ({
+  landuse: landUseRasterClasses.map((item) => ({
     label: item.name,
     color: item.color,
   })),

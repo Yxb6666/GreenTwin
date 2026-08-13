@@ -227,15 +227,6 @@ onMounted(async () => {
               :key="indicator.key"
             >
               <span :title="indicator.note">{{ indicator.name }}</span>
-              <small :class="`source-${indicator.sourceType}`">
-                {{
-                  indicator.sourceType === 'direct'
-                    ? '直接'
-                    : indicator.sourceType === 'proxy'
-                      ? '代理'
-                      : '替代'
-                }}
-              </small>
               <em>{{
                 indicator.direction === 'positive'
                   ? '正向'
@@ -246,10 +237,6 @@ onMounted(async () => {
               <b>{{ indicator.weight * 100 }}%</b>
             </article>
           </div>
-          <p class="indicator-source-note">
-            直接：按目标口径计算 · 代理：相关数据近似 ·
-            替代：改用可计算的供给指标
-          </p>
         </PanelCard>
 
         <PanelCard title="权重配置" meta="自动归一化">
@@ -591,7 +578,7 @@ onMounted(async () => {
   border-left: 2px solid var(--cyan);
   background: rgba(255, 255, 255, 0.025);
   gap: 5px;
-  grid-template-columns: minmax(0, 1fr) 28px 28px 32px;
+  grid-template-columns: minmax(0, 1fr) 28px 32px;
 }
 
 .indicator-list span {
@@ -599,22 +586,6 @@ onMounted(async () => {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.indicator-list small {
-  padding: 2px 3px;
-  font-size: 8px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  text-align: center;
-}
-.indicator-list small.source-direct {
-  color: var(--cyan);
-}
-.indicator-list small.source-proxy {
-  color: var(--amber);
-}
-.indicator-list small.source-substitute {
-  color: #9cb8ff;
 }
 .indicator-list em {
   color: var(--text-soft);
@@ -625,13 +596,6 @@ onMounted(async () => {
   color: var(--cyan);
   font: 11px var(--font-data);
   text-align: right;
-}
-
-.indicator-source-note {
-  margin: 8px 0 0;
-  color: var(--text-soft);
-  font-size: 8px;
-  line-height: 1.5;
 }
 
 .weight-list {
