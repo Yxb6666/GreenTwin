@@ -290,12 +290,18 @@ function inferBuildingStyle(
 const simulationFocus = {
   longitude: 114.965,
   latitude: 34.95,
-  height: 900,
 }
 
-const simulationFocusOrientation = {
-  heading: 18,
-  pitch: -48,
+// Keep the project focus at the centre of the viewport. The previous camera
+// sat directly above this coordinate and then looked north, shifting the
+// actual focus out of frame. This offset places the camera south-west of the
+// focus so the pitched view converges on the project area.
+const simulationCamera = {
+  longitude: simulationFocus.longitude - 0.00076,
+  latitude: simulationFocus.latitude - 0.00404,
+  height: 650,
+  heading: 10,
+  pitch: -55,
 }
 
 const scenarioTemplates: Array<{
@@ -1072,13 +1078,13 @@ function locateScene() {
   }
   viewer.camera.flyTo({
     destination: sdk.Cartesian3.fromDegrees(
-      simulationFocus.longitude,
-      simulationFocus.latitude,
-      simulationFocus.height,
+      simulationCamera.longitude,
+      simulationCamera.latitude,
+      simulationCamera.height,
     ),
     orientation: {
-      heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
-      pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
+      heading: sdk.Math.toRadians(simulationCamera.heading),
+      pitch: sdk.Math.toRadians(simulationCamera.pitch),
       roll: 0,
     },
   })
@@ -1611,13 +1617,13 @@ async function initializeViewer() {
     viewer.scene.globe.depthTestAgainstTerrain = true
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
-        simulationFocus.longitude,
-        simulationFocus.latitude,
-        simulationFocus.height,
+        simulationCamera.longitude,
+        simulationCamera.latitude,
+        simulationCamera.height,
       ),
       orientation: {
-        heading: sdk.Math.toRadians(simulationFocusOrientation.heading),
-        pitch: sdk.Math.toRadians(simulationFocusOrientation.pitch),
+        heading: sdk.Math.toRadians(simulationCamera.heading),
+        pitch: sdk.Math.toRadians(simulationCamera.pitch),
         roll: 0,
       },
     })
