@@ -10,8 +10,6 @@ const props = defineProps<{
   weatherActive?: boolean
   shadowActive?: boolean
   shadowTime?: string
-  visibilityActive?: boolean
-  visibilityPointCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -27,8 +25,6 @@ const emit = defineEmits<{
   'toggle-weather': []
   'toggle-shadow': []
   'update-shadow-time': [value: string]
-  'start-visibility': []
-  'cancel-visibility': []
 }>()
 
 const measurementMenuOpen = ref(false)
@@ -72,14 +68,13 @@ function toggleAnalysisMenu() {
   if (props.weatherActive) emit('toggle-weather')
 }
 
-function toggleVisibilityAnalysis() {
-  analysisMenuOpen.value = false
-  if (props.visibilityActive) emit('cancel-visibility')
-  else emit('start-visibility')
-}
-
 function updateShadowTime(event: Event) {
   emit('update-shadow-time', (event.target as HTMLInputElement).value)
+}
+
+function setShadowHour(hour: number) {
+  const date = props.shadowTime?.slice(0, 10) || new Date().toISOString().slice(0, 10)
+  emit('update-shadow-time', `${date}T${String(hour).padStart(2, '0')}:00`)
 }
 
 function updateLayer(key: string, event: Event) {
@@ -130,12 +125,10 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        :class="{
-          active: analysisMenuOpen || shadowActive || visibilityActive,
-        }"
+        :class="{ active: analysisMenuOpen || shadowActive }"
         :aria-expanded="analysisMenuOpen"
         aria-label="空间分析"
-        title="阴影与通视分析"
+        title="日照阴影分析"
         @click="toggleAnalysisMenu"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -208,46 +201,49 @@ onBeforeUnmount(() => {
 
     <Transition name="tool-panel">
       <div v-if="analysisMenuOpen" class="scene-toolbox__panel analysis-panel">
-        <header><span>ANALYSIS</span><strong>阴影与通视分析</strong></header>
-        <section>
-          <div class="analysis-panel__title">
-            <span><strong>阴影分析</strong><small>按指定时间模拟建筑投影</small></span>
+        <header>
+          <span>SUNLIGHT</span>
+          <strong>日照阴影分析</strong>
+          <small>查看指定时刻的建筑投影与遮挡关系</small>
+        </header>
+        <section class="shadow-analysis-card">
+          <div class="shadow-analysis-card__status">
+            <i :class="{ active: shadowActive }" aria-hidden="true">☀</i>
+            <span>
+              <strong>{{ shadowActive ? '阴影效果已显示' : '阴影效果未启用' }}</strong>
+              <small>{{ shadowActive ? '调整时间可实时更新场景' : '开启后按当前时间模拟光照' }}</small>
+            </span>
             <button
               type="button"
+              class="shadow-toggle"
               :class="{ active: shadowActive }"
+              :aria-pressed="shadowActive"
               @click="emit('toggle-shadow')"
             >
-              {{ shadowActive ? '关闭' : '启用' }}
+              {{ shadowActive ? '关闭分析' : '开启分析' }}
             </button>
           </div>
-          <label>
-            <span>分析时间</span>
+          <label class="shadow-time-field">
+            <span>分析日期与时间</span>
             <input
               type="datetime-local"
               :value="shadowTime"
               @change="updateShadowTime"
             />
           </label>
-        </section>
-        <section>
-          <div class="analysis-panel__title">
-            <span><strong>通视分析</strong><small>依次选取观察点与目标点</small></span>
+          <div class="shadow-presets" aria-label="常用日照时段">
             <button
+              v-for="hour in [9, 12, 15, 18]"
+              :key="hour"
               type="button"
-              :class="{ active: visibilityActive }"
-              @click="toggleVisibilityAnalysis"
+              :class="{ active: shadowTime?.slice(11, 13) === String(hour).padStart(2, '0') }"
+              @click="setShadowHour(hour)"
             >
-              {{ visibilityActive ? '取消' : '开始' }}
+              {{ String(hour).padStart(2, '0') }}:00
             </button>
           </div>
-          <p>
-            {{
-              visibilityActive
-                ? visibilityPointCount
-                  ? '观察点已设置，请点击目标点'
-                  : '请在场景中点击观察点'
-                : '绿色表示可见，红色表示视线受阻'
-            }}
+          <p class="shadow-analysis-card__tip">
+            阴影结果取决于场景中已加载的建筑与模型数据。
           </p>
         </section>
       </div>
@@ -445,79 +441,137 @@ onBeforeUnmount(() => {
 }
 
 .analysis-panel {
-  width: 230px;
+  width: 248px;
 }
 
-.analysis-panel > section {
+.analysis-panel header small {
+  color: var(--text-soft);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.shadow-analysis-card {
   display: grid;
-  padding: 10px 11px;
-  gap: 8px;
+  padding: 11px;
+  gap: 10px;
 }
 
-.analysis-panel > section + section {
-  border-top: 1px solid rgba(122, 203, 190, 0.1);
-}
-
-.analysis-panel__title {
-  display: flex;
+.shadow-analysis-card__status {
+  display: grid;
   align-items: center;
   gap: 8px;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
 }
 
-.analysis-panel__title > span {
+.shadow-analysis-card__status > i {
   display: grid;
-  flex: 1;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  font: normal 14px var(--font-data);
+}
+
+.shadow-analysis-card__status > i.active {
+  color: var(--amber);
+  border-color: rgba(240, 184, 92, 0.4);
+  background: rgba(240, 184, 92, 0.09);
+  box-shadow: 0 0 14px rgba(240, 184, 92, 0.12);
+}
+
+.shadow-analysis-card__status > span {
+  display: grid;
+  min-width: 0;
   gap: 2px;
 }
 
-.analysis-panel__title strong {
+.shadow-analysis-card__status strong {
   font-size: 9px;
 }
 
-.analysis-panel__title small,
-.analysis-panel label > span,
-.analysis-panel p {
+.shadow-analysis-card__status small,
+.shadow-time-field > span,
+.shadow-analysis-card__tip {
   color: var(--text-soft);
   font-size: 8px;
 }
 
-.analysis-panel__title button {
-  min-width: 48px;
-  min-height: 25px;
+.shadow-toggle {
+  min-width: 56px;
+  min-height: 28px;
+  padding: 0 8px;
   color: var(--text-soft);
   border: 1px solid rgba(122, 203, 190, 0.22);
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   font-size: 8px;
   cursor: pointer;
 }
 
-.analysis-panel__title button:hover,
-.analysis-panel__title button.active {
+.shadow-toggle:hover,
+.shadow-toggle.active {
   color: var(--cyan);
   border-color: rgba(61, 214, 196, 0.52);
   background: rgba(61, 214, 196, 0.1);
 }
 
-.analysis-panel label {
+.shadow-time-field {
   display: grid;
-  gap: 4px;
+  padding-top: 9px;
+  gap: 5px;
+  border-top: 1px solid rgba(122, 203, 190, 0.1);
 }
 
-.analysis-panel input {
+.shadow-time-field input {
   width: 100%;
-  min-height: 28px;
-  padding: 0 6px;
+  min-height: 31px;
+  padding: 0 8px;
   color: var(--text);
   color-scheme: dark;
   border: 1px solid rgba(122, 203, 190, 0.18);
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.18);
   font: 8px var(--font-data);
 }
 
-.analysis-panel p {
+.shadow-time-field input:focus {
+  border-color: rgba(61, 214, 196, 0.5);
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(61, 214, 196, 0.06);
+}
+
+.shadow-presets {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.shadow-presets button {
+  min-height: 25px;
+  padding: 0;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.14);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.02);
+  font: 8px var(--font-data);
+  cursor: pointer;
+}
+
+.shadow-presets button:hover,
+.shadow-presets button.active {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.42);
+  background: rgba(61, 214, 196, 0.08);
+}
+
+.shadow-analysis-card__tip {
   margin: 0;
+  padding: 7px 8px;
+  border-left: 2px solid rgba(61, 214, 196, 0.5);
+  background: rgba(61, 214, 196, 0.035);
   line-height: 1.5;
 }
 

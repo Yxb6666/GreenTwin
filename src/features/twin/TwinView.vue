@@ -56,7 +56,6 @@ import {
   type IsochroneGeometry,
   type IsochroneProfile,
 } from './isochrone'
-import { isLineOfSightBlocked } from './visibilityAnalysis'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -113,11 +112,6 @@ interface SuperMapViewer {
       remove: (stage: WeatherPostProcessStage) => boolean
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
-    pickFromRay?: (
-      ray: unknown,
-      objectsToExclude?: unknown[],
-      width?: number,
-    ) => { position?: unknown; object?: unknown } | undefined
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
     render?: () => void
     requestRender?: () => void
@@ -176,7 +170,6 @@ interface CesiumRuntime {
     }
   }
   ScreenSpaceEventHandler: new (canvas?: HTMLElement) => CesiumEventHandler
-  Ray: new (origin: unknown, direction: unknown) => unknown
   JulianDate?: { fromDate: (date: Date) => unknown }
   ScreenSpaceEventType: {
     LEFT_CLICK: number
@@ -247,8 +240,6 @@ const selectedPoint = ref<PickedPoint | null>(null)
 const measurementMode = ref<SceneMeasureType | null>(null)
 const shadowAnalysisActive = ref(false)
 const shadowAnalysisTime = ref('2026-06-21T15:00')
-const visibilityAnalysisActive = ref(false)
-const visibilityPoints = ref<PickedPoint[]>([])
 const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
@@ -283,7 +274,6 @@ let markerEntity: unknown = null
 let eventHandler: CesiumEventHandler | null = null
 let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
-let visibilityEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
@@ -551,6 +541,19 @@ function clearIsochroneEntities() {
   isochroneEntities = []
   if (viewer && parkOriginEntity) viewer.entities.remove(parkOriginEntity)
   parkOriginEntity = null
+}
+
+function clearParkServiceArea() {
+  isochroneRequest?.abort()
+  isochroneRequest = null
+  parkPickMode.value = false
+  isochroneLoading.value = false
+  clearIsochroneEntities()
+  if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
+  parkModel = null
+  isochronePhase.value = 'idle'
+  isochroneStatus.value = '结果已清除，可重新选择公园位置'
+  operationMessage.value = '公园模型与等时圈已清除'
 }
 
 function polygonRings(geometry: IsochroneGeometry) {
@@ -852,7 +855,6 @@ function startModelDrag(movement: CesiumMovement) {
     !viewer ||
     pickMode.value ||
     measurementMode.value ||
-    visibilityAnalysisActive.value ||
     !movement.position
   )
     return
@@ -1078,142 +1080,10 @@ function updateShadowAnalysisTime(value: string) {
   if (shadowAnalysisActive.value) applyShadowAnalysis(true)
 }
 
-function clearVisibilityOverlays() {
-  if (viewer) {
-    for (const entity of visibilityEntities) viewer.entities.remove(entity)
-  }
-  visibilityEntities = []
-  visibilityPoints.value = []
-  visibilityAnalysisActive.value = false
-}
-
-function cancelVisibilityAnalysis() {
-  clearVisibilityOverlays()
-  notifyScene('通视分析已取消')
-}
-
-function startVisibilityAnalysis() {
-  if (!viewer) {
-    notifyScene('三维场景仍在初始化，请稍后再试')
-    return
-  }
-  if (!viewer.scene.pickFromRay) {
-    notifyScene('当前三维引擎不支持空间射线检测')
-    return
-  }
-  cancelMeasurement()
-  clearVisibilityOverlays()
-  pickMode.value = false
-  parkPickMode.value = false
-  visibilityAnalysisActive.value = true
-  notifyScene('通视分析：请先点击观察点')
-}
-
-function addVisibilityPointEntity(point: PickedPoint, label: string, color: string) {
-  if (!viewer) return
-  const sdk = cesium()
-  const entity = viewer.entities.add({
-    position: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height + 1.7),
-    point: {
-      pixelSize: 10,
-      color,
-      outlineColor: '#effffc',
-      outlineWidth: 2,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-    label: {
-      text: label,
-      font: 'bold 11px sans-serif',
-      fillColor: '#effffc',
-      showBackground: true,
-      backgroundColor: '#051011',
-      backgroundPadding: { x: 7, y: 4 },
-      pixelOffset: new sdk.Cartesian2(0, -24),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-  })
-  visibilityEntities.push(entity)
-}
-
-function completeVisibilityAnalysis(observer: PickedPoint, target: PickedPoint) {
-  if (!viewer?.scene.pickFromRay) return
-  const sdk = cesium()
-  const observerCartesian = sdk.Cartesian3.fromDegrees(
-    observer.longitude,
-    observer.latitude,
-    observer.height + 1.7,
-  )
-  const targetCartesian = sdk.Cartesian3.fromDegrees(
-    target.longitude,
-    target.latitude,
-    target.height + 1.7,
-  )
-  const direction = sdk.Cartesian3.normalize(
-    sdk.Cartesian3.subtract(targetCartesian, observerCartesian, new sdk.Cartesian3()),
-    new sdk.Cartesian3(),
-  )
-  const totalDistance = sdk.Cartesian3.distance(observerCartesian, targetCartesian)
-  const hit = viewer.scene.pickFromRay(
-    new sdk.Ray(observerCartesian, direction),
-    visibilityEntities,
-    0.1,
-  )
-  const hitDistance = hit?.position
-    ? sdk.Cartesian3.distance(observerCartesian, hit.position)
-    : Number.POSITIVE_INFINITY
-  const blocked = isLineOfSightBlocked(totalDistance, hitDistance)
-  const visibleColor = '#45e6b8'
-  const blockedColor = '#ff665f'
-  const addLine = (positions: unknown[], color: string) => {
-    visibilityEntities.push(
-      viewer!.entities.add({
-        polyline: {
-          positions,
-          width: 5,
-          material: color,
-          depthFailMaterial: color,
-        },
-      }),
-    )
-  }
-  if (blocked && hit?.position) {
-    addLine([observerCartesian, hit.position], visibleColor)
-    addLine([hit.position, targetCartesian], blockedColor)
-    addVisibilityPointEntity(target, '目标点 · 不可见', blockedColor)
-  } else {
-    addLine([observerCartesian, targetCartesian], visibleColor)
-    addVisibilityPointEntity(target, '目标点 · 可见', visibleColor)
-  }
-  visibilityAnalysisActive.value = false
-  notifyScene(
-    blocked
-      ? `通视分析完成：视线在 ${formatDistance(hitDistance)} 处受阻`
-      : `通视分析完成：目标可见，视距 ${formatDistance(totalDistance)}`,
-  )
-}
-
-function addVisibilityAnalysisPoint(position: { x: number; y: number }) {
-  const point = pickGroundPoint(position)
-  if (!point) {
-    notifyScene('未拾取到地图表面，请重新点击')
-    return
-  }
-  if (visibilityPoints.value.length === 0) {
-    visibilityPoints.value = [point]
-    addVisibilityPointEntity(point, '观察点', '#39d8ff')
-    notifyScene('观察点已设置，请点击目标点')
-    return
-  }
-  const observer = visibilityPoints.value[0]!
-  visibilityPoints.value = [observer, point]
-  completeVisibilityAnalysis(observer, point)
-}
-
 function clearSceneDrawings() {
   measurementMode.value = null
   clearMeasurementOverlays()
-  clearVisibilityOverlays()
-  notifyScene('标绘、测量与通视分析结果已清除')
+  notifyScene('标绘与测量结果已清除')
 }
 
 function refreshScene() {
@@ -1500,10 +1370,6 @@ function setupSceneInteractions() {
     if (!movement.position) return
     if (suppressClickAfterDrag) {
       suppressClickAfterDrag = false
-      return
-    }
-    if (visibilityAnalysisActive.value) {
-      addVisibilityAnalysisPoint(movement.position)
       return
     }
     if (measurementMode.value) {
@@ -1836,7 +1702,6 @@ async function initializeViewer() {
 function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   cancelMeasurement()
-  if (visibilityAnalysisActive.value) cancelVisibilityAnalysis()
   if (parkPickMode.value) cancelParkPicking()
 }
 
@@ -1851,7 +1716,6 @@ onBeforeUnmount(() => {
   eventHandler?.destroy()
   eventHandler = null
   cancelMeasurement()
-  clearVisibilityOverlays()
   applyShadowAnalysis(false)
   clearNativeWeatherEffect()
   isochroneRequest?.abort()
@@ -1926,24 +1790,35 @@ onBeforeUnmount(() => {
                 <strong>{{ minute }}</strong><small>分钟</small>
               </button>
             </div>
-            <button
-              class="park-pick-button"
-              type="button"
-              :class="{ active: parkPickMode }"
-              :disabled="isochroneLoading"
-              @click="startParkAnalysis"
-            >
-              <span aria-hidden="true">{{ parkPickMode ? '×' : '⌖' }}</span>
-              {{
-                isochroneLoading
-                  ? '正在生成服务圈…'
-                  : parkPickMode
-                    ? '取消地图选点'
-                    : isochronePhase === 'complete'
-                      ? '重新选择公园位置'
-                      : '在地图中选择公园位置'
-              }}
-            </button>
+            <div class="park-analysis-actions">
+              <button
+                class="park-pick-button"
+                type="button"
+                :class="{ active: parkPickMode }"
+                :disabled="isochroneLoading"
+                @click="startParkAnalysis"
+              >
+                <span aria-hidden="true">{{ parkPickMode ? '×' : '⌖' }}</span>
+                {{
+                  isochroneLoading
+                    ? '正在生成服务圈…'
+                    : parkPickMode
+                      ? '取消地图选点'
+                      : isochronePhase === 'complete'
+                        ? '重新选择公园位置'
+                        : '在地图中选择公园位置'
+                }}
+              </button>
+              <button
+                class="park-clear-button"
+                type="button"
+                aria-label="清除公园和等时圈"
+                :disabled="isochronePhase === 'idle'"
+                @click="clearParkServiceArea"
+              >
+                <span aria-hidden="true">⌫</span>清除
+              </button>
+            </div>
             <div class="isochrone-status" :class="`is-${isochronePhase}`" role="status">
               <i /><span>{{ isochroneStatus }}</span>
             </div>
@@ -2027,7 +1902,7 @@ onBeforeUnmount(() => {
           ref="cesiumContainer"
           class="cesium-container"
           :class="{
-            'is-picking': pickMode || parkPickMode || visibilityAnalysisActive,
+            'is-picking': pickMode || parkPickMode,
             'is-dragging-model': isDraggingModel,
           }"
         />
@@ -2038,12 +1913,6 @@ onBeforeUnmount(() => {
         <div v-if="parkPickMode" class="pick-mode-hint">
           <span>请点击公园落点，随后自动加载模型并分析等时圈</span>
           <button type="button" @click="cancelParkPicking">取消</button>
-        </div>
-        <div v-if="visibilityAnalysisActive" class="pick-mode-hint">
-          <span>
-            通视分析：{{ visibilityPoints.length ? '请点击目标点' : '请点击观察点' }}
-          </span>
-          <button type="button" @click="cancelVisibilityAnalysis">取消</button>
         </div>
         <WeatherSimulation
           v-model="weatherState"
@@ -2058,8 +1927,6 @@ onBeforeUnmount(() => {
           :weather-active="weatherPanelOpen"
           :shadow-active="shadowAnalysisActive"
           :shadow-time="shadowAnalysisTime"
-          :visibility-active="visibilityAnalysisActive"
-          :visibility-point-count="visibilityPoints.length"
           @clear="clearSceneDrawings"
           @measure="startMeasurement"
           @end-measure="cancelMeasurement"
@@ -2072,8 +1939,6 @@ onBeforeUnmount(() => {
           @toggle-weather="weatherPanelOpen = !weatherPanelOpen"
           @toggle-shadow="applyShadowAnalysis(!shadowAnalysisActive)"
           @update-shadow-time="updateShadowAnalysisTime"
-          @start-visibility="startVisibilityAnalysis"
-          @cancel-visibility="cancelVisibilityAnalysis"
         />
       </section>
 
@@ -2389,29 +2254,39 @@ onBeforeUnmount(() => {
   font-size: 7px;
 }
 
-.park-pick-button {
+.park-analysis-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.park-pick-button,
+.park-clear-button {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 34px;
   gap: 7px;
-  color: #03201d;
-  border: 1px solid var(--cyan);
   border-radius: 7px;
-  border-color: var(--cyan);
-  background: linear-gradient(100deg, #35c8b7, #4be0ce);
-  box-shadow: 0 5px 16px rgba(34, 178, 160, 0.16);
   font-size: 9px;
-  font-weight: 700;
   cursor: pointer;
   transition: 140ms ease;
+}
+
+.park-pick-button {
+  color: #03201d;
+  border: 1px solid var(--cyan);
+  background: linear-gradient(100deg, #35c8b7, #4be0ce);
+  box-shadow: 0 5px 16px rgba(34, 178, 160, 0.16);
+  font-weight: 700;
 }
 
 .park-pick-button > span {
   font: 15px/1 var(--font-data);
 }
 
-.park-pick-button:hover:not(:disabled) {
+.park-pick-button:hover:not(:disabled),
+.park-clear-button:hover:not(:disabled) {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
@@ -2426,6 +2301,24 @@ onBeforeUnmount(() => {
 .park-pick-button:disabled {
   cursor: wait;
   opacity: 0.7;
+}
+
+.park-clear-button {
+  color: #f19a91;
+  border: 1px solid rgba(239, 123, 110, 0.34);
+  background: rgba(239, 123, 110, 0.06);
+}
+
+.park-clear-button > span {
+  font: 11px/1 var(--font-data);
+}
+
+.park-clear-button:disabled {
+  color: var(--text-soft);
+  border-color: rgba(122, 203, 190, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .isochrone-status {

@@ -51,15 +51,16 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('@update-layer="updateSceneLayer"')
   })
 
-  it('三生模拟场景支持阴影分析与通视分析', async () => {
+  it('三生模拟场景保留阴影分析并移除通视分析', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
     expect(source).toContain('shadowAnalysisActive')
     expect(source).toContain('viewer.scene.shadowMap.enabled = active')
     expect(source).toContain('shadows: sdk.ShadowMode?.ENABLED')
-    expect(source).toContain('viewer.scene.pickFromRay')
-    expect(source).toContain('startVisibilityAnalysis')
     expect(source).toContain('@toggle-shadow="applyShadowAnalysis(!shadowAnalysisActive)"')
+    expect(source).not.toContain('pickFromRay')
+    expect(source).not.toContain('VisibilityAnalysis')
+    expect(source).not.toContain('通视分析')
   })
 
   it('三生模拟页面不再显示顶部方案任务栏', async () => {
@@ -89,6 +90,9 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('生成公园可达服务圈')
     expect(source).toContain('在地图中选择公园位置')
     expect(source).toContain('取消地图选点')
+    expect(source).toContain('clearParkServiceArea')
+    expect(source).toContain('aria-label="清除公园和等时圈"')
+    expect(source).toContain('公园模型与等时圈已清除')
     expect(source).toContain(':aria-pressed="isochroneProfile === option.value"')
     expect(source).not.toContain('放置公园模型')
   })
