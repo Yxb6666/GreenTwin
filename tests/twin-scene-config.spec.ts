@@ -22,8 +22,10 @@ describe('三生模拟场景配置', () => {
   it('使用堌阳镇范围定位且不自动飞向外部模型', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
-    expect(source).toContain('longitude: 114.964285')
-    expect(source).toContain('latitude: 34.9511')
+    expect(source).toContain('longitude: 114.965')
+    expect(source).toContain('latitude: 34.95')
+    expect(source).toContain('height: 900')
+    expect(source).toContain('pitch: -48')
     expect(source).not.toContain('addS3MTilesLayerByScp')
     expect(source).not.toContain('viewer.flyTo')
   })

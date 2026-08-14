@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GovernanceIssue } from '@/features/governance/data'
 import type { TownshipFeature } from '@/gis/leaflet/townshipFeatures'
-import { masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme } from '@/features/master/mapThemes'
+import { landUseRasterClasses, masterMapThemeLegends, masterMapThemes, resolveTownshipThemeMetric, resolveTownshipThemeMetrics, toggleMasterMapTheme } from '@/features/master/mapThemes'
 import { DEFAULT_DIMENSION_WEIGHTS, scoreTown, towns } from '@/features/sansheng/model'
 
 const yifengFeature: TownshipFeature = {
@@ -68,7 +68,7 @@ describe('主控专题地图指标', () => {
     expect(metric).toMatchObject({
       value: 0,
       label: '暂无数据',
-      color: '#435852',
+      color: '#B8C2BC',
       dataAvailable: false,
     })
   })
@@ -78,6 +78,20 @@ describe('主控专题地图指标', () => {
 
     expect(metric).toMatchObject({ label: '真实栅格', color: 'transparent' })
     expect(metric.meta).toContain('Lankao-Land')
+  })
+
+  it('土地利用图例使用 CLCD 的 9 类编码与配色', () => {
+    expect(landUseRasterClasses).toHaveLength(9)
+    expect(masterMapThemeLegends.landuse).toEqual(
+      landUseRasterClasses.map(({ name, color }) => ({ label: name, color })),
+    )
+    expect(landUseRasterClasses).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 1, name: '农田', color: '#FAE39C' }),
+        expect.objectContaining({ id: 5, name: '水域', color: '#1E69B4' }),
+        expect.objectContaining({ id: 8, name: '不透水面', color: '#E24290' }),
+      ]),
+    )
   })
 
   it('按行政区名称聚合治理问题点位', () => {
@@ -157,7 +171,7 @@ describe('主控专题地图指标', () => {
     expect(metric).toMatchObject({
       value: 0,
       label: '暂无数据',
-      color: '#435852',
+      color: '#B8C2BC',
       dataAvailable: false,
     })
   })

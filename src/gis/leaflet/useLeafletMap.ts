@@ -1,6 +1,8 @@
 import { nextTick, onBeforeUnmount, ref, shallowRef, type Ref } from 'vue'
 import L from 'leaflet'
-import { loadSuperMapLeaflet } from './loadSdk'
+import { GREENTWIN_MAP_COLORS } from '@/features/master/mapThemeColors'
+import { loadSuperMapLeaflet, type LeafletSuperMapNamespace } from './loadSdk'
+import { ReprojectedImageTileLayer } from './reprojectedImageTileLayer'
 import {
   buildArcGisTileUrl,
   DEFAULT_BASE_MAP_MODE,
@@ -51,7 +53,17 @@ export interface LandUseRasterOverlay {
   serviceUrl: string
   collectionId: string
   opacity: number
+  renderingRule: Record<string, unknown>
 }
+
+export interface TownshipThemePresentation {
+  style: L.PathOptions
+  tooltip?: string
+}
+
+export type TownshipThemeResolver = (
+  name: string,
+) => TownshipThemePresentation | null
 
 export interface LeafletMapInteractionOptions {
   townshipFocus?: boolean
@@ -69,10 +81,13 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   let resizeObserver: ResizeObserver | null = null
   let superMapBaseLayer: L.TileLayer | null = null
   let activeBaseLayer: L.TileLayer | null = null
-  let landUseRasterLayer: L.TileLayer | null = null
+  let landUseRasterLayer: L.GridLayer | null = null
+  let countyOutlineLayer: L.Polyline | null = null
+  let superMapNamespace: LeafletSuperMapNamespace | null = null
   let arcgisAccessToken = ''
   const arcgisLayers = new Map<BaseMapMode, L.TileLayer>()
   const townshipLayers: TownshipLayerEntry[] = []
+  let townshipThemeResolver: TownshipThemeResolver | null = null
   let countyFocusContextAdded = false
   let countyFocusContextLoading = false
   let rawTownshipFeatures: TownshipFeature[] = []
@@ -94,7 +109,16 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
   function refreshTownshipStyles() {
     townshipLayers.forEach((entry) => {
       const state = getTownshipVisualState(entry)
-      entry.parts.forEach((part) => part.setStyle(getTownshipPathStyle(state, entry.baseStyle)))
+      const presentation = townshipThemeResolver?.(entry.name)
+      const baseStyle = presentation?.style ?? entry.baseStyle
+      const pathStyle = getTownshipPathStyle(state, baseStyle)
+      if (presentation && state === 'dimmed') {
+        Object.assign(pathStyle, {
+          fillColor: baseStyle.fillColor,
+          fillOpacity: 0.38,
+        })
+      }
+      entry.parts.forEach((part) => part.setStyle(pathStyle))
       refreshTownshipLabel(entry, state)
     })
 
@@ -102,6 +126,18 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     townshipLayers
       .find((entry) => entry.name === foregroundName)
       ?.parts.forEach((part) => part.bringToFront())
+  }
+
+  function refreshTownshipTheme() {
+    townshipLayers.forEach((entry) => {
+      entry.labelPart.setTooltipContent(entry.name)
+    })
+    refreshTownshipStyles()
+  }
+
+  function setTownshipTheme(resolver: TownshipThemeResolver | null) {
+    townshipThemeResolver = resolver
+    refreshTownshipTheme()
   }
 
   function clearSelectedTownship() {
@@ -132,18 +168,22 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     const outlineRings = getCountyOuterBoundaryRings(boundaryRings)
     if (outlineRings.length === 0) return false
 
-    L.polyline(outlineRings, {
+    countyOutlineLayer = L.polyline(outlineRings, {
       pane: 'countyOutlinePane',
       interactive: false,
-      color: '#dceb72',
-      weight: 2.8,
-      opacity: 1,
+      color: GREENTWIN_MAP_COLORS.admin.countyStroke,
+      weight: 2.05,
+      opacity: 0.92,
       lineCap: 'round',
       lineJoin: 'round',
       className: 'county-map-outline',
     }).addTo(instance)
 
     return true
+  }
+
+  function setCountyOutlineStyle(style: Pick<L.PathOptions, 'color' | 'weight' | 'opacity'>) {
+    countyOutlineLayer?.setStyle(style)
   }
 
   function setTownshipLabelPlacement(name: string, options: Pick<L.TooltipOptions, 'direction' | 'offset' | 'className'>, position?: L.LatLngExpression) {
@@ -187,8 +227,10 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       const label = getTownshipLabel(feature)
       const townshipIsInteractive = Boolean(interactionOptions.townshipFocus && label)
       const townshipBaseStyle = townshipIsInteractive ? TOWNSHIP_NORMAL_STYLE : TOWNSHIP_LEGACY_STYLE
+      const townshipTheme = label ? townshipThemeResolver?.(label) : null
       const polygon = L.polygon([ring], {
         ...townshipBaseStyle,
+        ...townshipTheme?.style,
         className: townshipIsInteractive ? 'township-map-region' : undefined,
         interactive: townshipIsInteractive,
       })
@@ -216,11 +258,14 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
         polygon.on('mouseover', () => {
           if (isTownshipInteractionBlocked(instance)) return
           hoveredTownship.value = label
+          const themeTooltip = townshipThemeResolver?.(label)?.tooltip
+          if (themeTooltip) entry.labelPart.setTooltipContent(themeTooltip)
           instance.getContainer().style.cursor = 'pointer'
           refreshTownshipStyles()
         })
         polygon.on('mouseout', () => {
           if (hoveredTownship.value === label) hoveredTownship.value = null
+          entry.labelPart.setTooltipContent(entry.name)
           instance.getContainer().style.cursor = ''
           refreshTownshipStyles()
         })
@@ -291,11 +336,12 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     }
     if (landUseRasterLayer) return true
 
-    const collectionUrl = `${overlay.serviceUrl.replace(/\/+$/, '')}/collections/${encodeURIComponent(overlay.collectionId)}`
-    landUseRasterLayer = L.tileLayer(`${collectionUrl}/tile.png?transparent=true&cacheEnabled=true&z={z}&x={x}&y={y}`, {
+    landUseRasterLayer = new ReprojectedImageTileLayer({
+      serviceUrl: overlay.serviceUrl,
+      collectionId: overlay.collectionId,
+      renderingRule: overlay.renderingRule,
       pane: 'landUseRasterPane',
       opacity: overlay.opacity,
-      crossOrigin: true,
       maxZoom: 20,
       className: 'landuse-raster-tile',
     })
@@ -364,7 +410,8 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
       void loadSuperMapLeaflet(sdkUrl)
         .then((superMapLeaflet) => {
           if (disposed) return
-          superMapBaseLayer = superMapLeaflet.supermap!.tiledMapLayer(serviceUrl, {
+          superMapNamespace = superMapLeaflet.supermap!
+          superMapBaseLayer = superMapNamespace.tiledMapLayer(serviceUrl, {
             transparent: false,
             crossOrigin: true,
             pane: 'baseMapPane',
@@ -473,6 +520,7 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     countyFocusContextLoading = false
     townshipFeatures.value = []
     landUseRasterLayer = null
+    superMapNamespace = null
     superMapBaseLayer = null
     activeBaseLayer = null
     arcgisLayers.clear()
@@ -491,10 +539,12 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
     initialize,
     setBaseMap,
     setLandUseRaster,
+    setCountyOutlineStyle,
     clearSelectedTownship,
     focusTownshipByName,
     setTownshipLabelPlacement,
     resetTownshipLabelPlacements,
+    setTownshipTheme,
     dispose,
   }
 }

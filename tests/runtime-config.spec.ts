@@ -10,6 +10,9 @@ interface RuntimeConfigFixture {
   arcgis: {
     accessToken: string
   }
+  mapbox: {
+    accessToken: string
+  }
   supermap: {
     mapServices: {
       base: string
@@ -17,6 +20,7 @@ interface RuntimeConfigFixture {
       poi: string
       roadNetwork: string
       water: string
+      buildingFootprints: string
     }
     dem: {
       serviceUrl: string
@@ -27,7 +31,14 @@ interface RuntimeConfigFixture {
       serviceUrl: string
       collectionId: string
       opacity: number
-      rendererType: string
+      renderingRule: {
+        displayMode: string
+        displayBands: string
+        interpolationMode: string
+        colorTable: string[]
+        noData: string
+        noDataTransparent: boolean
+      }
     }
   }
 }
@@ -42,6 +53,7 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.supermap.mapServices.poi).toBe('http://118.89.55.214:8090/iserver/services/Laokao_POI_2025/rest')
     expect(config.supermap.mapServices.roadNetwork).toBe('http://118.89.55.214:8090/iserver/services/Lankao_Road_Network/rest')
     expect(config.supermap.mapServices.water).toBe('http://118.89.55.214:8090/iserver/services/Lankao_Water/rest')
+    expect(config.supermap.mapServices.buildingFootprints).toBe('http://118.89.55.214:8090/iserver/services/Lankao_3D_GloBFP_SHP/rest')
     expect(config.supermap.dem).toEqual({
       serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoDem/restjsr',
       collectionId: 'Lankao-DEM',
@@ -50,12 +62,30 @@ describe('runtime-config 乡镇地图服务', () => {
     expect(config.supermap.landuseRaster).toEqual({
       serviceUrl: 'http://118.89.55.214:8090/iserver/services/imageservice-LankaoLand/restjsr',
       collectionId: 'Lankao-Land',
-      opacity: 0.82,
-      rendererType: 'STRETCHED',
+      opacity: 0.87,
+      renderingRule: {
+        displayMode: 'STRETCHED',
+        displayBands: '0',
+        interpolationMode: 'NEARESTNEIGHBOR',
+        colorTable: [
+          '1: 250,227,156,255',
+          '2: 68,111,51,255',
+          '3: 51,160,44,255',
+          '4: 171,211,123,255',
+          '5: 30,105,180,255',
+          '6: 166,206,227,255',
+          '7: 207,189,163,255',
+          '8: 226,66,144,255',
+          '9: 40,155,232,255',
+        ],
+        noData: '0',
+        noDataTransparent: true,
+      },
     })
     expect(config.map.crs).toBe('EPSG3857')
     expect(config.map.center).toEqual([34.82, 114.82])
     expect(config.arcgis.accessToken).toBeTypeOf('string')
     expect(config.arcgis.accessToken).not.toBe('')
+    expect(config.mapbox.accessToken).toBeTypeOf('string')
   })
 })

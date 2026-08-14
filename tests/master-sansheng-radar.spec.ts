@@ -21,7 +21,8 @@ describe("主控页面三生诊断雷达", () => {
     expect(wrapper.find(".diagnostic-radar__current").exists()).toBe(true);
     expect(wrapper.find(".diagnostic-radar__reference").exists()).toBe(false);
     expect(wrapper.text()).toContain("生态88.0");
-    expect(wrapper.text()).toContain("综合指数86.7");
+    expect(wrapper.find(".diagnostic-radar__composite").exists()).toBe(false);
+    expect(wrapper.text()).toContain("兰考县综合评价86.7");
     expect(wrapper.text()).toContain("优势生产空间");
     expect(wrapper.text()).toContain("短板生活空间");
   });
@@ -39,9 +40,11 @@ describe("主控页面三生诊断雷达", () => {
     });
 
     expect(wrapper.find(".diagnostic-radar__reference").exists()).toBe(true);
-    expect(wrapper.text()).toContain("当前乡镇（红庙镇）");
     expect(wrapper.text()).toContain("县域参考");
-    expect(wrapper.text()).toContain(`综合指数${scores.composite.toFixed(1)}`);
+    expect(wrapper.find(".diagnostic-radar__composite").exists()).toBe(false);
+    expect(wrapper.text()).toContain(
+      `红庙镇综合评价${scores.composite.toFixed(1)}`,
+    );
     expect(wrapper.text()).toContain("优势生产空间");
     expect(wrapper.text()).toContain("短板生活空间");
   });
