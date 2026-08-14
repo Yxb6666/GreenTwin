@@ -27,6 +27,10 @@ describe('AI 建造助手', () => {
     expect(wrapper.find('[aria-label="关闭 AI 建造助手"]').exists()).toBe(false)
     expect(wrapper.find('.builder-resize-handle').exists()).toBe(false)
     expect(wrapper.text()).toContain('AI 建造助手')
+    expect(wrapper.text()).not.toContain('模板生成')
+    expect(wrapper.findAll('.builder-mode-tabs button')).toHaveLength(1)
+    expect(wrapper.find('.builder-mode-tabs button').text()).toBe('3D Agent')
+    expect(wrapper.find('.builder-style-chips').exists()).toBe(false)
 
     await wrapper.find('.builder-point button').trigger('click')
     expect(wrapper.emitted('toggle-pick')).toHaveLength(1)

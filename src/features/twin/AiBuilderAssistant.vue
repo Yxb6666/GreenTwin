@@ -71,8 +71,8 @@ const {
 
 const draft = ref('')
 const style = ref<AiBuilderStyle>('auto')
-const mode = ref<'template' | 'agent'>('template')
-const lastMode = ref<'template' | 'agent'>('template')
+const mode = ref<'template' | 'agent'>('agent')
+const lastMode = ref<'template' | 'agent'>('agent')
 const messageId = ref(1)
 const messageList = ref<HTMLElement | null>(null)
 const statusMessageId = ref<number | null>(null)
@@ -363,14 +363,6 @@ watch(
 
         <section class="builder-composer">
           <div class="builder-mode-tabs">
-            <button
-              type="button"
-              data-no-drag
-              :class="{ active: mode === 'template' }"
-              @click="selectMode('template')"
-            >
-              模板生成
-            </button>
             <button
               type="button"
               data-no-drag
@@ -944,7 +936,7 @@ watch(
 .builder-mode-tabs {
   display: grid;
   gap: 5px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .builder-mode-tabs button {
