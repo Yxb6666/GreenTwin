@@ -37,16 +37,21 @@ describe('Mapbox 公园等时圈分析', () => {
 
   it('使用高对比半透明圈层且不回退为白色', () => {
     expect(resolveIsochroneRenderStyle(0)).toEqual({
-      fill: 'rgba(41, 78, 128, 0.78)',
-      outline: '#203f6c',
+      fill: [41 / 255, 78 / 255, 128 / 255, 0.78],
+      outline: [32 / 255, 63 / 255, 108 / 255, 1],
     })
-    expect(resolveIsochroneRenderStyle(2).fill).toBe(
-      'rgba(218, 220, 136, 0.82)',
-    )
+    expect(resolveIsochroneRenderStyle(2).fill).toEqual([
+      218 / 255,
+      220 / 255,
+      136 / 255,
+      0.82,
+    ])
     expect(resolveIsochroneRenderStyle(99)).toEqual(
       resolveIsochroneRenderStyle(3),
     )
-    expect(resolveIsochroneRenderStyle(0).fill).not.toContain('#ffffff')
+    expect(resolveIsochroneRenderStyle(0).fill.slice(0, 3)).not.toEqual([
+      1, 1, 1,
+    ])
   })
 
   it('返回 Mapbox 错误信息', async () => {

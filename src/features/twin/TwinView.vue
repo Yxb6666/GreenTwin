@@ -147,6 +147,13 @@ interface CesiumRuntime {
     fromDegreesArray: (coordinates: number[]) => unknown
   }
   Cartesian2: new (x: number, y: number) => unknown
+  Color: new (
+    red?: number,
+    green?: number,
+    blue?: number,
+    alpha?: number,
+  ) => unknown
+  ColorMaterialProperty: new (color?: unknown) => unknown
   Cartographic: {
     fromCartesian: (cartesian: unknown) => {
       longitude: number
@@ -518,6 +525,13 @@ function polygonRings(geometry: IsochroneGeometry) {
     : geometry.coordinates.map((polygon) => polygon[0] ?? [])
 }
 
+function createCesiumColor(
+  sdk: CesiumRuntime,
+  rgba: readonly [number, number, number, number],
+) {
+  return new sdk.Color(rgba[0], rgba[1], rgba[2], rgba[3])
+}
+
 async function analyzeParkAt(point: PickedPoint) {
   if (!viewer) return
   const sdk = cesium()
@@ -566,9 +580,11 @@ async function analyzeParkAt(point: PickedPoint) {
             name: `${contour} 分钟等时圈`,
             polygon: {
               hierarchy: sdk.Cartesian3.fromDegreesArray(coordinates),
-              material: style.fill,
+              material: new sdk.ColorMaterialProperty(
+                createCesiumColor(sdk, style.fill),
+              ),
               outline: true,
-              outlineColor: style.outline,
+              outlineColor: createCesiumColor(sdk, style.outline),
               height: 8 + featureIndex * 2,
             },
           }),
@@ -583,17 +599,17 @@ async function analyzeParkAt(point: PickedPoint) {
       ),
       point: {
         pixelSize: 16,
-        color: '#e4543f',
-        outlineColor: '#fff2df',
+        color: new sdk.Color(228 / 255, 84 / 255, 63 / 255, 1),
+        outlineColor: new sdk.Color(1, 242 / 255, 223 / 255, 1),
         outlineWidth: 4,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: '公园中心',
         font: 'bold 11px sans-serif',
-        fillColor: '#fff7ea',
+        fillColor: new sdk.Color(1, 247 / 255, 234 / 255, 1),
         showBackground: true,
-        backgroundColor: 'rgba(113, 33, 26, 0.86)',
+        backgroundColor: new sdk.Color(113 / 255, 33 / 255, 26 / 255, 0.86),
         backgroundPadding: { x: 7, y: 4 },
         pixelOffset: new sdk.Cartesian2(0, -28),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,

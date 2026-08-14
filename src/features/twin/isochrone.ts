@@ -16,22 +16,25 @@ export const ISOCHRONE_COLORS = ['d9dc88', '6f91bd', '315f98', '263f70']
 
 export const ISOCHRONE_RENDER_STYLES = [
   {
-    fill: 'rgba(41, 78, 128, 0.78)',
-    outline: '#203f6c',
+    fill: [41 / 255, 78 / 255, 128 / 255, 0.78],
+    outline: [32 / 255, 63 / 255, 108 / 255, 1],
   },
   {
-    fill: 'rgba(91, 128, 174, 0.72)',
-    outline: '#426b9f',
+    fill: [91 / 255, 128 / 255, 174 / 255, 0.72],
+    outline: [66 / 255, 107 / 255, 159 / 255, 1],
   },
   {
-    fill: 'rgba(218, 220, 136, 0.82)',
-    outline: '#b4b75f',
+    fill: [218 / 255, 220 / 255, 136 / 255, 0.82],
+    outline: [180 / 255, 183 / 255, 95 / 255, 1],
   },
   {
-    fill: 'rgba(238, 184, 92, 0.84)',
-    outline: '#c68b32',
+    fill: [238 / 255, 184 / 255, 92 / 255, 0.84],
+    outline: [198 / 255, 139 / 255, 50 / 255, 1],
   },
-] as const
+] as const satisfies ReadonlyArray<{
+  fill: readonly [number, number, number, number]
+  outline: readonly [number, number, number, number]
+}>
 
 export function resolveIsochroneRenderStyle(index: number) {
   return (
