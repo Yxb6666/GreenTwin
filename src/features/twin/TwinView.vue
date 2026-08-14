@@ -15,6 +15,7 @@ import SceneToolbox, {
 } from './SceneToolbox.vue'
 import WeatherSimulation from './WeatherSimulation.vue'
 import TwinPlotPreview from './TwinPlotPreview.vue'
+import { SIMULATION_PLOTS } from './plotParcels'
 import {
   createWeatherState,
   describeWeatherRisk,
@@ -248,6 +249,7 @@ const sceneOverview = ref({
 const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
+const activePlotIndex = ref(0)
 const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
@@ -303,6 +305,7 @@ let parkModel: ModelPrimitive | null = null
 let isochroneEntities: unknown[] = []
 let parkOriginEntity: unknown = null
 let isochroneRequest: AbortController | null = null
+let plotEntities: Array<{ entity: unknown; plotKey: string }> = []
 let removeCameraChangedListener: (() => void) | null = null
 let overviewSyncFrame: number | undefined
 
@@ -460,6 +463,7 @@ const currentScenario = computed(
     scenarioTemplates[0]!,
 )
 const currentPlan = computed(() => planData[activePlan.value])
+const currentPlot = computed(() => SIMULATION_PLOTS[activePlotIndex.value]!)
 const weatherMetrics = computed(() => resolveWeatherMetrics(weatherState.value))
 const isGenerating = computed(() => buildState.value === 'running')
 const assistantContext = computed<DecisionAssistantContext>(() => ({
@@ -598,18 +602,63 @@ function focusSceneFromOverview(point: {
   operationMessage.value = `已从区位概览定位至东经 ${point.longitude.toFixed(6)}° · 北纬 ${point.latitude.toFixed(6)}°`
 }
 
-function selectPlan(key: PlanKey) {
-  activePlan.value = key
-  operationMessage.value = `当前查看：${planData[key].label}`
+function renderSimulationPlots() {
+  if (!viewer) return
+  const sdk = cesium()
+  plotEntities.forEach(({ entity }) => viewer?.entities.remove(entity))
+  plotEntities = SIMULATION_PLOTS.map((plot, index) => {
+    const active = index === activePlotIndex.value
+    const hierarchy = sdk.Cartesian3.fromDegreesArray(
+      plot.ring.flatMap(([longitude, latitude]) => [longitude, latitude]),
+    )
+    const entity = viewer!.entities.add({
+      name: plot.label,
+      position: sdk.Cartesian3.fromDegrees(
+        plot.center.longitude,
+        plot.center.latitude,
+        active ? 3 : 1,
+      ),
+      polygon: {
+        hierarchy,
+        height: active ? 1.2 : 0.6,
+        extrudedHeight: active ? 3 : 1.2,
+        material: active
+          ? new sdk.Color(0.92, 0.43, 0.12, 0.52)
+          : new sdk.Color(0.12, 0.68, 0.61, 0.16),
+        outline: true,
+        outlineColor: active
+          ? new sdk.Color(1, 0.72, 0.34, 0.95)
+          : new sdk.Color(0.24, 0.84, 0.76, 0.58),
+        outlineWidth: active ? 3 : 1.5,
+      },
+      label: {
+        text: plot.label,
+        show: active,
+        font: 'bold 11px sans-serif',
+        fillColor: '#fff7e8',
+        showBackground: true,
+        backgroundColor: '#351b0b',
+        backgroundPadding: { x: 8, y: 5 },
+        pixelOffset: new sdk.Cartesian2(0, -18),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+    return { entity, plotKey: plot.key }
+  })
+  viewer.scene.requestRender?.()
 }
 
-const previewPlanOrder: PlanKey[] = ['current', 'planA', 'planB']
+function selectSimulationPlot(index: number, focus = true) {
+  const count = SIMULATION_PLOTS.length
+  activePlotIndex.value = ((index % count) + count) % count
+  renderSimulationPlots()
+  const plot = currentPlot.value
+  if (focus) focusSceneFromOverview(plot.center)
+  operationMessage.value = `已切换至${plot.label}：${plot.description}`
+}
 
-function movePreviewPlan(direction: -1 | 1) {
-  const currentIndex = previewPlanOrder.indexOf(activePlan.value)
-  const nextIndex =
-    (currentIndex + direction + previewPlanOrder.length) % previewPlanOrder.length
-  selectPlan(previewPlanOrder[nextIndex]!)
+function selectAdjacentPlot(direction: -1 | 1) {
+  selectSimulationPlot(activePlotIndex.value + direction)
 }
 
 function selectMeasure(key: MeasureKey) {
@@ -1512,6 +1561,11 @@ function setupSceneInteractions() {
       primitive?: unknown
       id?: unknown
     }
+    const plotIndex = plotEntities.findIndex(({ entity }) => picked?.id === entity)
+    if (plotIndex >= 0) {
+      selectSimulationPlot(plotIndex)
+      return
+    }
     const hitModel =
       picked && (picked.primitive === generatedModel || picked.id === generatedModel)
     if (hitModel) selectModel()
@@ -1813,6 +1867,7 @@ async function initializeViewer() {
     removeCameraChangedListener =
       viewer.camera.changed?.addEventListener(scheduleSceneOverviewSync) ?? null
     syncSceneOverview()
+    renderSimulationPlots()
     setupSceneInteractions()
     applyNativeWeatherEffect(weatherState.value)
     void loadDataLayers()
@@ -2103,8 +2158,12 @@ onBeforeUnmount(() => {
           :overview="sceneOverview"
           :tile-url="buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken)"
           :plan-label="currentPlan.label"
-          @previous="movePreviewPlan(-1)"
-          @next="movePreviewPlan(1)"
+          :plot-label="currentPlot.label"
+          :plot-index="activePlotIndex"
+          :plot-count="SIMULATION_PLOTS.length"
+          :plot-ring="currentPlot.ring"
+          @previous="selectAdjacentPlot(-1)"
+          @next="selectAdjacentPlot(1)"
           @locate="focusSceneFromOverview"
         />
       </aside>

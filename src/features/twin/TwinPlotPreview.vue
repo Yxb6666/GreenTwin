@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import L from 'leaflet'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PickedPoint } from './modelPlacement'
 
 interface SceneOverview {
@@ -17,6 +17,10 @@ const props = defineProps<{
   overview: SceneOverview
   tileUrl: string
   planLabel: string
+  plotLabel: string
+  plotIndex: number
+  plotCount: number
+  plotRing: Array<[longitude: number, latitude: number]>
 }>()
 
 const emit = defineEmits<{
@@ -29,14 +33,12 @@ const previewCanvas = ref<HTMLCanvasElement | null>(null)
 const previewVideo = ref<HTMLVideoElement | null>(null)
 const overviewHost = ref<HTMLElement | null>(null)
 const previewReady = ref(false)
-const locationLabel = computed(() =>
-  props.point ? props.point.label : '堌阳镇治理模拟地块',
-)
 
 let overviewMap: L.Map | null = null
 let extentLayer: L.Polygon | null = null
 let centerMarker: L.CircleMarker | null = null
 let selectedPointMarker: L.CircleMarker | null = null
+let plotLayer: L.Polygon | null = null
 let animationFrame = 0
 let lastCaptureAt = 0
 let resizeObserver: ResizeObserver | null = null
@@ -84,6 +86,12 @@ function updateOverview() {
     animate: false,
   })
   extentLayer?.setLatLngs(corners)
+  plotLayer?.setLatLngs(
+    props.plotRing.map(([plotLongitude, plotLatitude]) => [
+      plotLatitude,
+      plotLongitude,
+    ]),
+  )
   centerMarker?.setLatLng([latitude, longitude])
   if (props.point) {
     selectedPointMarker?.setLatLng([
@@ -171,6 +179,16 @@ onMounted(async () => {
       fillOpacity: 1,
       interactive: false,
     }).addTo(overviewMap)
+    plotLayer = L.polygon(
+      props.plotRing.map(([longitude, latitude]) => [latitude, longitude]),
+      {
+        color: '#ffb45c',
+        weight: 2,
+        fillColor: '#d96720',
+        fillOpacity: 0.36,
+        interactive: false,
+      },
+    ).addTo(overviewMap)
     selectedPointMarker = L.circleMarker([0, 0], {
       radius: 4,
       color: '#fff4d6',
@@ -209,6 +227,7 @@ watch(
   { deep: true },
 )
 watch(() => props.overview, updateOverview, { deep: true })
+watch(() => props.plotRing, updateOverview, { deep: true })
 watch(() => props.sceneCanvas, () => void connectSceneStream())
 
 onBeforeUnmount(() => {
@@ -239,13 +258,13 @@ onBeforeUnmount(() => {
         <span>三维场景同步中</span>
       </div>
       <div class="scene-title">
-        <strong>{{ planLabel }}</strong>
-        <small>{{ locationLabel }}</small>
+        <strong>{{ plotLabel }}</strong>
+        <small>{{ planLabel }}</small>
       </div>
       <button
         type="button"
         class="slide-button slide-button--previous"
-        aria-label="查看上一方案场景"
+        aria-label="查看上一地块"
         @click="$emit('previous')"
       >
         ‹
@@ -253,12 +272,14 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="slide-button slide-button--next"
-        aria-label="查看下一方案场景"
+        aria-label="查看下一地块"
         @click="$emit('next')"
       >
         ›
       </button>
-      <span class="live-badge"><i /> 三维场景</span>
+      <span class="live-badge"
+        ><i /> {{ plotIndex + 1 }} / {{ plotCount }} 地块</span
+      >
     </div>
 
     <div class="overview-preview">

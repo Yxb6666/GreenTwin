@@ -90,11 +90,15 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('viewer.camera.changed?.addEventListener')
     expect(source).toContain('syncSceneOverview()')
     expect(source).toContain('@locate="focusSceneFromOverview"')
+    expect(source).toContain('renderSimulationPlots()')
+    expect(source).toContain('selectAdjacentPlot')
+    expect(source).toContain(':plot-ring="currentPlot.ring"')
     expect(previewSource).toContain('L.polygon')
     expect(previewSource).toContain("overviewMap.on('click'")
     expect(previewSource).toContain('props.overview')
     expect(previewSource).toContain('context.drawImage(source')
     expect(previewSource).toContain('source.captureStream(8)')
+    expect(previewSource).toContain('查看下一地块')
   })
 
   it('三生模拟场景加载水系、路网与 POI 数据图层', async () => {
