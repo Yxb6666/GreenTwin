@@ -131,7 +131,7 @@ function applyTownshipTheme() {
         opacity: 0.9,
         weight: 1.35,
       },
-      tooltip: `<span class="township-theme-label">${town.name}</span><span class="township-theme-detail">${mapMetricLabel.value}指数 ${score.toFixed(1)} · 第 ${rank} 名 · ${level.label}</span>`,
+      tooltip: `<span class="sansheng-theme-tooltip"><span class="township-theme-label">${town.name}</span><span class="township-theme-detail">${mapMetricLabel.value}指数 <b>${score.toFixed(1)}</b><i>·</i> 第 <b>${rank}</b> 名 <i>·</i> ${level.label}</span></span>`,
     }
   })
 }
@@ -810,16 +810,41 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+:deep(.sansheng-theme-tooltip) {
+  display: block;
+  padding: 7px 9px 8px;
+  border: 1px solid rgba(61, 214, 196, 0.72);
+  border-radius: 6px;
+  background: rgba(5, 20, 21, 0.96);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.38),
+    inset 0 0 0 1px rgba(234, 255, 251, 0.04);
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
 :deep(.township-theme-label) {
-  color: #f1f8d4;
-  font-size: 11px;
+  color: #f2fffc;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 :deep(.township-theme-detail) {
-  margin-top: 2px;
-  color: #a8ccc4;
-  font: 9px var(--font-data);
+  margin-top: 4px;
+  color: #c5ded9;
+  font: 10px/1.4 var(--font-data);
+}
+
+:deep(.township-theme-detail b) {
+  color: #50e3d1;
+  font-size: 11px;
+}
+
+:deep(.township-theme-detail i) {
+  margin: 0 3px;
+  color: #789f99;
+  font-style: normal;
 }
 
 .detail-drawer {
