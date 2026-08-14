@@ -594,7 +594,7 @@ onBeforeUnmount(() => {
 <template>
   <main class="screen-page governance-page">
     <ScreenHeader
-      title="乡村治理闭环处置模块"
+      title="三生治理"
       subtitle="群众参与 / 空间落图 / 数据分析 / 闭环处置"
     />
 

@@ -1754,7 +1754,7 @@ onMounted(async () => {
 <template>
   <main class="screen-page master-page">
     <ScreenHeader
-      title="兰考县和美乡村数字孪生决策平台"
+      title="三生空间"
       subtitle="生态 · 生活 · 产业综合评估 / 治理问题发现 / 决策方案辅助研判"
     />
 

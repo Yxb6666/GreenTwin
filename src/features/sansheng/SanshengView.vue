@@ -268,7 +268,7 @@ onMounted(async () => {
 <template>
   <main class="screen-page sansheng-page">
     <ScreenHeader
-      title="三生空间综合分析模块"
+      title="三生评估"
       subtitle="指标建模 / 权重推演 / 空间评价 / 优势短板识别"
     />
 
