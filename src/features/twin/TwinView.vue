@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import ScreenHeader from '@/shared/components/ScreenHeader.vue'
 import PanelCard from '@/shared/components/PanelCard.vue'
-import RadarChart from '@/shared/components/RadarChart.vue'
 import DecisionAssistant from '@/shared/assistant/DecisionAssistant.vue'
 import type { DecisionAssistantContext } from '@/shared/assistant/assistant'
 import { useRuntimeConfig } from '@/config/useRuntimeConfig'
@@ -220,7 +219,6 @@ const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
 const generatedJob = ref<SimulationJob | AgentJob | null>(null)
 const constructionStage = ref(0)
-const builderOpen = ref(false)
 const pickMode = ref(false)
 const isDraggingModel = ref(false)
 const modelSelected = ref(false)
@@ -1520,7 +1518,13 @@ function removeGeneratedModel() {
 }
 
 function openBuilder() {
-  builderOpen.value = true
+  const panel = document.getElementById('ai-builder-panel')
+  panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  if (!selectedPoint.value && !pickMode.value) {
+    togglePointPicking()
+    return
+  }
+  panel?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
 }
 
 function saveDraft() {
@@ -1837,34 +1841,28 @@ onBeforeUnmount(() => {
       </section>
 
       <aside class="twin-right">
-        <PanelCard title="三生影响评估" meta="方案实时关联">
-          <div class="impact-layout">
-            <RadarChart
-              :labels="['生产保障', '生活改善', '生态安全']"
-              :values="currentPlan.scores"
-              :color="activePlan === 'planB' ? '#f0b85c' : '#3dd6c4'"
-            />
-            <div class="impact-score">
-              <span>{{ currentPlan.label }}</span>
-              <strong>{{ currentPlan.composite }}</strong>
-              <small>三生协同指数</small>
-            </div>
-            <div class="impact-deltas">
-              <article>
-                <span>生产</span><strong>{{ currentPlan.scores[0] }}</strong
-                ><small>{{ currentPlan.deltas[0] }}</small>
-              </article>
-              <article>
-                <span>生活</span><strong>{{ currentPlan.scores[1] }}</strong
-                ><small>{{ currentPlan.deltas[1] }}</small>
-              </article>
-              <article>
-                <span>生态</span><strong>{{ currentPlan.scores[2] }}</strong
-                ><small>{{ currentPlan.deltas[2] }}</small>
-              </article>
-            </div>
-          </div>
-        </PanelCard>
+        <AiBuilderAssistant
+          :open="true"
+          embedded
+          :point-ready="selectedPoint !== null"
+          :point-label="selectedPoint?.label ?? ''"
+          :picking="pickMode"
+          :is-building="isGenerating"
+          :build-progress="buildProgress"
+          :build-message="engineStatus"
+          :model-ready="buildState === 'ready' && generatedJob !== null"
+          :model-scale="modelScale"
+          :model-heading="modelHeading"
+          :build-summary="buildSummary"
+          @toggle-pick="togglePointPicking"
+          @cancel-pick="cancelPointPicking"
+          @build="buildFromPrompt"
+          @build-agent="buildWithAgent"
+          @update-scale="updateModelScale"
+          @update-heading="updateModelHeading"
+          @remove-model="removeGeneratedModel"
+          @focus-model="focusGeneratedModel"
+        />
 
         <PanelCard title="方案决策" meta="成本 · 周期 · 受益">
           <div class="plan-switcher">
@@ -1916,27 +1914,6 @@ onBeforeUnmount(() => {
     :timeout-ms="config.reportTimeoutMs"
     :context="assistantContext"
     :prompts="assistantPrompts"
-  />
-  <AiBuilderAssistant
-    v-model:open="builderOpen"
-    :point-ready="selectedPoint !== null"
-    :point-label="selectedPoint?.label ?? ''"
-    :picking="pickMode"
-    :is-building="isGenerating"
-    :build-progress="buildProgress"
-    :build-message="engineStatus"
-    :model-ready="buildState === 'ready' && generatedJob !== null"
-    :model-scale="modelScale"
-    :model-heading="modelHeading"
-    :build-summary="buildSummary"
-    @toggle-pick="togglePointPicking"
-    @cancel-pick="cancelPointPicking"
-    @build="buildFromPrompt"
-    @build-agent="buildWithAgent"
-    @update-scale="updateModelScale"
-    @update-heading="updateModelHeading"
-    @remove-model="removeGeneratedModel"
-    @focus-model="focusGeneratedModel"
   />
 </template>
 
@@ -2048,7 +2025,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 290px minmax(0, 1fr);
 }
 .twin-right {
-  grid-template-rows: minmax(310px, 0.95fr) minmax(280px, 1.05fr);
+  grid-template-rows: minmax(390px, 1.35fr) minmax(250px, 0.65fr);
 }
 
 .scenario-list,
@@ -2462,64 +2439,6 @@ onBeforeUnmount(() => {
   background: var(--amber);
 }
 
-.impact-layout {
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  grid-template-rows: minmax(125px, 1fr) auto auto;
-}
-.impact-layout .radar-chart {
-  min-height: 0;
-}
-.impact-score {
-  display: grid;
-  align-items: center;
-  padding: 4px 8px 7px;
-  text-align: center;
-  grid-template-columns: 1fr auto;
-}
-.impact-score span {
-  color: var(--text-soft);
-  font-size: 9px;
-  text-align: left;
-}
-.impact-score strong {
-  color: var(--cyan);
-  font: 23px var(--font-data);
-  grid-row: span 2;
-}
-.impact-score small {
-  color: var(--text-soft);
-  font-size: 8px;
-  text-align: left;
-}
-.impact-deltas {
-  display: grid;
-  border-top: 1px solid rgba(122, 203, 190, 0.12);
-  grid-template-columns: repeat(3, 1fr);
-}
-.impact-deltas article {
-  display: grid;
-  padding: 8px 5px;
-  text-align: center;
-  gap: 2px;
-}
-.impact-deltas article + article {
-  border-left: 1px solid rgba(122, 203, 190, 0.1);
-}
-.impact-deltas span {
-  color: var(--text-soft);
-  font-size: 8px;
-}
-.impact-deltas strong {
-  color: var(--cyan);
-  font: 15px var(--font-data);
-}
-.impact-deltas small {
-  color: var(--amber);
-  font: 8px var(--font-data);
-}
-
 .plan-switcher {
   display: grid;
   gap: 7px;
@@ -2628,7 +2547,7 @@ onBeforeUnmount(() => {
     grid-template-rows: 270px minmax(0, 1fr);
   }
   .twin-right {
-    grid-template-rows: minmax(280px, 0.95fr) minmax(255px, 1.05fr);
+    grid-template-rows: minmax(360px, 1.35fr) minmax(225px, 0.65fr);
   }
   .simulation-workbar {
     gap: 10px;

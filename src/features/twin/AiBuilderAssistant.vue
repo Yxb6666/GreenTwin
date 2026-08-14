@@ -17,6 +17,7 @@ interface BuilderMessage {
 
 const props = defineProps<{
   open: boolean
+  embedded?: boolean
   pointReady: boolean
   pointLabel: string
   picking: boolean
@@ -194,8 +195,9 @@ watch(
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="embedded">
     <button
+      v-if="!embedded"
       ref="launcherRef"
       class="builder-launcher"
       :class="{
@@ -223,26 +225,27 @@ watch(
 
     <Transition name="builder-panel">
       <section
-        v-if="isOpen"
+        v-if="embedded || isOpen"
         ref="panelRef"
         id="ai-builder-panel"
         class="builder-panel"
         :class="{
+          'is-embedded': embedded,
           'is-dragging': isDragging,
           'is-resizing': isResizing,
         }"
-        :style="panelStyle"
+        :style="embedded ? undefined : panelStyle"
         aria-label="AI 建造助手"
       >
         <header
           class="builder-header"
-          title="拖动标题栏可移动，双击恢复默认位置"
-          @dblclick="resetPosition"
-          @lostpointercapture="onHeaderPointerEnd"
-          @pointercancel="onHeaderPointerEnd"
-          @pointerdown="onHeaderPointerDown"
-          @pointermove="onHeaderPointerMove"
-          @pointerup="onHeaderPointerEnd"
+          :title="embedded ? undefined : '拖动标题栏可移动，双击恢复默认位置'"
+          @dblclick="embedded || resetPosition()"
+          @lostpointercapture="embedded || onHeaderPointerEnd($event)"
+          @pointercancel="embedded || onHeaderPointerEnd($event)"
+          @pointerdown="embedded || onHeaderPointerDown($event)"
+          @pointermove="embedded || onHeaderPointerMove($event)"
+          @pointerup="embedded || onHeaderPointerEnd($event)"
         >
           <div class="builder-identity">
             <span class="builder-mark">建</span>
@@ -252,6 +255,7 @@ watch(
             </div>
           </div>
           <button
+            v-if="!embedded"
             type="button"
             data-no-drag
             aria-label="关闭 AI 建造助手"
@@ -419,18 +423,20 @@ watch(
           </template>
         </p>
 
-        <span
-          v-for="direction in resizeDirections"
-          :key="direction"
-          class="builder-resize-handle"
-          :class="`is-${direction}`"
-          aria-hidden="true"
-          @lostpointercapture="onResizePointerEnd"
-          @pointercancel="onResizePointerEnd"
-          @pointerdown="startResize(direction, $event)"
-          @pointermove="onResizePointerMove"
-          @pointerup="onResizePointerEnd"
-        />
+        <template v-if="!embedded">
+          <span
+            v-for="direction in resizeDirections"
+            :key="direction"
+            class="builder-resize-handle"
+            :class="`is-${direction}`"
+            aria-hidden="true"
+            @lostpointercapture="onResizePointerEnd"
+            @pointercancel="onResizePointerEnd"
+            @pointerdown="startResize(direction, $event)"
+            @pointermove="onResizePointerMove"
+            @pointerup="onResizePointerEnd"
+          />
+        </template>
       </section>
     </Transition>
   </Teleport>
@@ -505,6 +511,73 @@ watch(
     0 0 32px rgba(61, 214, 196, 0.08);
   grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
   backdrop-filter: blur(18px);
+}
+
+.builder-panel.is-embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-color: rgba(122, 203, 190, 0.22);
+  border-radius: 10px;
+  box-shadow: none;
+  grid-template-rows: auto auto minmax(72px, 1fr) auto auto auto;
+  backdrop-filter: none;
+}
+
+.builder-panel.is-embedded .builder-header {
+  min-height: 54px;
+  padding: 8px 11px;
+  cursor: default;
+  touch-action: auto;
+  user-select: auto;
+}
+
+.builder-panel.is-embedded .builder-mark {
+  width: 32px;
+  height: 32px;
+}
+
+.builder-panel.is-embedded .builder-point {
+  padding: 7px 11px;
+}
+
+.builder-panel.is-embedded .builder-messages {
+  padding: 9px 10px;
+}
+
+.builder-panel.is-embedded .builder-message {
+  margin-bottom: 9px;
+}
+
+.builder-panel.is-embedded .builder-message__body {
+  padding: 7px 8px;
+}
+
+.builder-panel.is-embedded .builder-message__body > p {
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.builder-panel.is-embedded .builder-composer {
+  margin: 0 9px;
+  padding: 7px;
+  gap: 6px;
+}
+
+.builder-panel.is-embedded .builder-style-chips {
+  overflow-x: auto;
+}
+
+.builder-panel.is-embedded .builder-style-chips button {
+  flex: 0 0 auto;
+  padding: 0 7px;
+}
+
+.builder-panel.is-embedded .builder-notice {
+  margin: 5px 9px 7px;
 }
 
 .builder-panel.is-dragging,
