@@ -46,6 +46,7 @@ const isOpen = computed({
   get: () => props.open,
   set: (value: boolean) => emit('update:open', value),
 })
+
 const {
   isDragging,
   isLauncherDragging,
@@ -69,69 +70,62 @@ const {
   startResize,
 } = useDraggablePanel(isOpen, { storagePrefix: 'greentwin.ai-builder' })
 
+const promptSuggestions = [
+  '建一座带廊架和座椅的乡村口袋公园',
+  '生成一座两层现代乡村服务站，带坡屋顶',
+  '建一座中式六角亭，包含台阶、围栏和灯笼',
+]
+
 const draft = ref('')
-const style = ref<AiBuilderStyle>('auto')
-const mode = ref<'template' | 'agent'>('agent')
-const lastMode = ref<'template' | 'agent'>('agent')
 const messageId = ref(1)
 const messageList = ref<HTMLElement | null>(null)
 const statusMessageId = ref<number | null>(null)
-const messages = ref<BuilderMessage[]>([
-  {
-    id: messageId.value++,
-    role: 'assistant',
-    content:
-      '你好，我是 AI 建造助手。先在地图上确定建造位置，再输入提示词，我会调用本机 Blender 生成模型，并支持选中、拖拽、缩放和旋转。',
-  },
-])
-
-const styleOptions: Array<{ value: AiBuilderStyle; label: string }> = [
-  { value: 'auto', label: '自动识别' },
-  { value: 'traditional-chinese', label: '古风' },
-  { value: 'modern', label: '现代' },
-  { value: 'rural', label: '乡村' },
-]
+const messages = ref<BuilderMessage[]>([])
 
 const canSend = computed(
   () => props.pointReady && !props.isBuilding && draft.value.trim().length > 0,
 )
+const currentStep = computed(() =>
+  props.isBuilding || props.modelReady ? 3 : props.pointReady ? 2 : 1,
+)
+const builderStatus = computed(() => {
+  if (props.isBuilding) return `生成中 ${props.buildProgress}%`
+  if (props.modelReady) return '模型已就绪'
+  if (props.picking) return '等待地图落点'
+  if (props.pointReady) return '等待描述'
+  return '尚未开始'
+})
 
 async function scrollToLatest() {
   await nextTick()
-  messageList.value?.scrollTo({
-    top: messageList.value.scrollHeight,
-    behavior: 'smooth',
-  })
+  const list = messageList.value
+  if (!list) return
+  if (typeof list.scrollTo === 'function') {
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
+  } else {
+    list.scrollTop = list.scrollHeight
+  }
+}
+
+function usePromptSuggestion(prompt: string) {
+  if (props.isBuilding) return
+  draft.value = prompt
 }
 
 function send() {
   const content = draft.value.trim()
   if (!canSend.value || !content) return
-  lastMode.value = mode.value
+
   messages.value.push({ id: messageId.value++, role: 'user', content })
   statusMessageId.value = messageId.value++
   messages.value.push({
     id: statusMessageId.value,
     role: 'assistant',
-    content: `已收到建造指令，正在 ${props.pointLabel} 准备 Blender 建模任务…`,
+    content: `已收到建造指令，正在 ${props.pointLabel} 准备 Blender 建模任务……`,
   })
   draft.value = ''
-  if (mode.value === 'agent') emit('build-agent', content)
-  else emit('build', content, style.value)
+  emit('build-agent', content)
   void scrollToLatest()
-}
-
-function selectMode(value: 'template' | 'agent') {
-  if (props.isBuilding) return
-  mode.value = value
-  if (value === 'agent') {
-    messages.value.push({
-      id: messageId.value++,
-      role: 'assistant',
-      content:
-        '已切换到 3D Agent 模式：我会把提示词交给 DeepSeek 生成 Blender 脚本，直接构建更贴近描述的模型。',
-    })
-  }
 }
 
 function onComposerKeydown(event: KeyboardEvent) {
@@ -148,7 +142,7 @@ watch(
     messages.value.push({
       id: statusMessageId.value,
       role: 'assistant',
-      content: `正在 ${props.pointLabel} 调用本机 Blender 生成模型…`,
+      content: `正在 ${props.pointLabel} 调用本机 Blender 生成模型……`,
       progress: 0,
     })
   },
@@ -183,10 +177,7 @@ watch(
     messages.value.push({
       id: messageId.value++,
       role: 'assistant',
-      content:
-        lastMode.value === 'agent'
-          ? `3D Agent 已在 ${props.pointLabel} 生成完成。点击模型可选中，在地图上拖拽可移动，使用面板滑杆可缩放与旋转。`
-          : `模型已在 ${props.pointLabel} 生成完成（${props.buildSummary || '参数模板'}）。点击模型可选中，在地图上拖拽可移动，使用面板滑杆可缩放与旋转。`,
+      content: `3D 模型已在 ${props.pointLabel} 生成完成。可在场景中拖动模型，并使用下方控制调整大小和朝向。`,
     })
     statusMessageId.value = null
     void scrollToLatest()
@@ -200,10 +191,7 @@ watch(
       v-if="!embedded"
       ref="launcherRef"
       class="builder-launcher"
-      :class="{
-        'is-open': isOpen,
-        'is-dragging': isLauncherDragging,
-      }"
+      :class="{ 'is-open': isOpen, 'is-dragging': isLauncherDragging }"
       :style="launcherStyle"
       type="button"
       :aria-expanded="isOpen"
@@ -226,8 +214,8 @@ watch(
     <Transition name="builder-panel">
       <section
         v-if="embedded || isOpen"
-        ref="panelRef"
         id="ai-builder-panel"
+        ref="panelRef"
         class="builder-panel"
         :class="{
           'is-embedded': embedded,
@@ -251,9 +239,15 @@ watch(
             <span class="builder-mark">建</span>
             <div>
               <strong>AI 建造助手</strong>
-              <small><i /> 选点 → 提示词 → Blender 建模</small>
+              <small>自然语言生成场景模型</small>
             </div>
           </div>
+          <em
+            class="builder-status-pill"
+            :class="{ 'is-active': picking || isBuilding, 'is-ready': modelReady }"
+          >
+            {{ builderStatus }}
+          </em>
           <button
             v-if="!embedded"
             type="button"
@@ -265,61 +259,104 @@ watch(
           </button>
         </header>
 
-        <section class="builder-point" :class="{ 'is-picking': picking }">
-          <span>第一步 · 确定建造位置</span>
-          <template v-if="picking">
-            <strong>请在地图上点击确定位置</strong>
-            <small>点击底图任意点后自动拾取坐标</small>
-            <button type="button" data-no-drag @click="emit('cancel-pick')">
-              取消选点
-            </button>
-          </template>
-          <template v-else-if="pointReady">
-            <strong class="is-selected">已选点 · {{ pointLabel }}</strong>
-            <small>选中后可在场景中点击模型进行交互</small>
-            <button type="button" data-no-drag @click="emit('toggle-pick')">
-              重新选点
-            </button>
-          </template>
-          <template v-else>
-            <strong>尚未选择建造位置</strong>
-            <small>请先在地图上点击确定模型落点</small>
+        <ol class="builder-steps" aria-label="AI 建造流程">
+          <li
+            v-for="(label, index) in ['选择位置', '描述需求', '生成模型']"
+            :key="label"
+            :class="{
+              'is-current': currentStep === index + 1,
+              'is-complete': currentStep > index + 1,
+            }"
+            :aria-current="currentStep === index + 1 ? 'step' : undefined"
+          >
+            <i>{{ currentStep > index + 1 ? '✓' : index + 1 }}</i>
+            <span>{{ label }}</span>
+          </li>
+        </ol>
+
+        <main class="builder-workspace">
+          <section
+            v-if="!pointReady || picking"
+            class="builder-empty"
+            :class="{ 'is-picking': picking }"
+          >
+            <span class="builder-empty__icon" aria-hidden="true">⌖</span>
+            <strong>{{ picking ? '请在地图中点击落点' : '先确定模型建造位置' }}</strong>
+            <p>
+              {{
+                picking
+                  ? '建议选择建筑旁的空地，落点后即可继续描述模型。'
+                  : '选点后再描述建筑类型、尺寸和风格，操作会更清晰。'
+              }}
+            </p>
             <button
               type="button"
               class="is-primary"
               data-no-drag
-              @click="emit('toggle-pick')"
+              @click="picking ? emit('cancel-pick') : emit('toggle-pick')"
             >
-              在地图上选点
+              {{ picking ? '取消选点' : '在地图上选择位置' }}
             </button>
-          </template>
-        </section>
+            <small v-if="picking">按 Esc 也可取消</small>
+          </section>
 
-        <div ref="messageList" class="builder-messages">
-          <article
-            v-for="message in messages"
-            :key="message.id"
-            class="builder-message"
-            :class="`is-${message.role}`"
-          >
-            <span class="builder-message__role">{{
-              message.role === 'assistant' ? 'AI' : '我'
-            }}</span>
-            <div class="builder-message__body">
-              <p>{{ message.content }}</p>
-              <div
-                v-if="message.progress !== undefined"
-                class="builder-progress"
+          <template v-else>
+            <section class="builder-location">
+              <i aria-hidden="true">✓</i>
+              <span>
+                <small>建造位置</small>
+                <strong>{{ pointLabel }}</strong>
+              </span>
+              <button type="button" data-no-drag @click="emit('toggle-pick')">
+                重新选点
+              </button>
+            </section>
+
+            <div v-if="messages.length" ref="messageList" class="builder-messages">
+              <article
+                v-for="message in messages"
+                :key="message.id"
+                class="builder-message"
+                :class="`is-${message.role}`"
               >
-                <i :style="{ width: `${message.progress}%` }" />
-                <span>{{ message.progress }}%</span>
-              </div>
+                <span class="builder-message__role">
+                  {{ message.role === 'assistant' ? 'AI' : '我' }}
+                </span>
+                <div class="builder-message__body">
+                  <p>{{ message.content }}</p>
+                  <div
+                    v-if="message.progress !== undefined"
+                    class="builder-progress"
+                  >
+                    <i :style="{ width: `${message.progress}%` }" />
+                    <span>{{ message.progress }}%</span>
+                  </div>
+                </div>
+              </article>
             </div>
-          </article>
-        </div>
+
+            <section v-else class="builder-prompt-guide">
+              <span>
+                <strong>描述你想建什么</strong>
+                <small>可选择示例，再按需要修改</small>
+              </span>
+              <div class="builder-suggestions">
+                <button
+                  v-for="prompt in promptSuggestions"
+                  :key="prompt"
+                  type="button"
+                  data-no-drag
+                  @click="usePromptSuggestion(prompt)"
+                >
+                  {{ prompt }}
+                </button>
+              </div>
+            </section>
+          </template>
+        </main>
 
         <section v-if="modelReady" class="builder-transform">
-          <span>第二步 · 模型交互（选中 / 拖拽 / 缩放 / 旋转）</span>
+          <span>模型调整</span>
           <label>
             <span>缩放 <strong>{{ modelScale.toFixed(1) }}×</strong></span>
             <input
@@ -361,58 +398,35 @@ watch(
           </div>
         </section>
 
-        <section class="builder-composer">
-          <div class="builder-mode-tabs">
-            <button
-              type="button"
-              data-no-drag
-              :class="{ active: mode === 'agent' }"
-              @click="selectMode('agent')"
-            >
-              3D Agent
-            </button>
-          </div>
-          <div v-if="mode === 'template'" class="builder-style-chips">
-            <button
-              v-for="option in styleOptions"
-              :key="option.value"
-              type="button"
-              data-no-drag
-              :class="{ active: style === option.value }"
-              @click="style = option.value"
-            >
-              {{ option.label }}
-            </button>
+        <section v-if="pointReady && !picking" class="builder-composer">
+          <div class="builder-composer__heading">
+            <span>
+              <strong>3D Agent</strong>
+              <small>自然语言生成 Blender 模型</small>
+            </span>
+            <em>{{ draft.length }}/240</em>
           </div>
           <textarea
             v-model="draft"
-            rows="2"
+            rows="3"
             maxlength="240"
-            :placeholder="
-              mode === 'agent'
-                ? '例如：建一座三层八角攒尖顶楼阁，带柱廊、斗拱、围栏和灯笼，尺寸 14×12 米，要精致'
-                : '例如：帮我在地图处建造一座古风亭子，带坡屋顶和围栏'
-            "
+            placeholder="描述建筑类型、层数、尺寸、屋顶和细节……"
             :disabled="isBuilding"
             @keydown="onComposerKeydown"
           />
-          <button
-            type="button"
-            data-no-drag
-            :disabled="!canSend"
-            @click="send"
-          >
-            {{ isBuilding ? '构建中…' : '发送建造指令' }}
+          <button type="button" data-no-drag :disabled="!canSend" @click="send">
+            {{
+              isBuilding
+                ? `生成中 ${buildProgress}%`
+                : modelReady
+                  ? '重新生成模型'
+                  : '生成 3D 模型'
+            }}
           </button>
         </section>
 
-        <p class="builder-notice">
-          <template v-if="mode === 'agent'">
-            3D Agent 由 DeepSeek 实时生成受限 Blender 脚本，可表达更复杂的提示词；需配置 DEEPSEEK_API_KEY。
-          </template>
-          <template v-else>
-            模板模式按“古风 / 现代 / 乡村”参数模板生成，支持层数、屋顶、柱廊、围栏等特征解析。
-          </template>
+        <p v-if="pointReady && !picking" class="builder-notice">
+          生成后可在场景中拖动、缩放和旋转模型
         </p>
 
         <template v-if="!embedded">
@@ -448,14 +462,8 @@ watch(
   color: #edfffb;
   border: 1px solid rgba(61, 214, 196, 0.72);
   border-radius: 22px;
-  background: linear-gradient(
-    135deg,
-    rgba(24, 151, 136, 0.96),
-    rgba(20, 104, 99, 0.96)
-  );
-  box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.38),
-    0 0 24px rgba(61, 214, 196, 0.15);
+  background: linear-gradient(135deg, #189788, #146863);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.38);
   font-size: 11px;
   cursor: grab;
   touch-action: none;
@@ -465,7 +473,7 @@ watch(
 .builder-launcher svg {
   width: 21px;
   height: 21px;
-  fill: rgba(234, 255, 251, 0.92);
+  fill: currentcolor;
 }
 
 .builder-launcher.is-open {
@@ -475,10 +483,6 @@ watch(
 
 .builder-launcher.is-dragging {
   cursor: grabbing;
-  transform: scale(1.02);
-  box-shadow:
-    0 16px 42px rgba(0, 0, 0, 0.46),
-    0 0 28px rgba(61, 214, 196, 0.2);
 }
 
 .builder-panel {
@@ -493,14 +497,8 @@ watch(
   color: var(--text);
   border: 1px solid rgba(61, 214, 196, 0.38);
   border-radius: 12px;
-  background: linear-gradient(
-    160deg,
-    rgba(14, 35, 34, 0.985),
-    rgba(5, 18, 19, 0.99)
-  );
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.56),
-    0 0 32px rgba(61, 214, 196, 0.08);
+  background: linear-gradient(160deg, rgba(14, 35, 34, 0.985), rgba(5, 18, 19, 0.99));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56);
   grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
   backdrop-filter: blur(18px);
 }
@@ -515,170 +513,31 @@ watch(
   border-color: rgba(122, 203, 190, 0.22);
   border-radius: 10px;
   box-shadow: none;
-  grid-template-rows: auto auto minmax(72px, 1fr) auto auto auto;
   backdrop-filter: none;
-}
-
-.builder-panel.is-embedded .builder-header {
-  min-height: 54px;
-  padding: 8px 11px;
-  cursor: default;
-  touch-action: auto;
-  user-select: auto;
-}
-
-.builder-panel.is-embedded .builder-mark {
-  width: 32px;
-  height: 32px;
-}
-
-.builder-panel.is-embedded .builder-point {
-  padding: 7px 11px;
-}
-
-.builder-panel.is-embedded .builder-messages {
-  padding: 9px 10px;
-}
-
-.builder-panel.is-embedded .builder-message {
-  margin-bottom: 9px;
-}
-
-.builder-panel.is-embedded .builder-message__body {
-  padding: 7px 8px;
-}
-
-.builder-panel.is-embedded .builder-message__body > p {
-  font-size: 9px;
-  line-height: 1.55;
-}
-
-.builder-panel.is-embedded .builder-composer {
-  margin: 0 9px;
-  padding: 7px;
-  gap: 6px;
-}
-
-.builder-panel.is-embedded .builder-style-chips {
-  overflow-x: auto;
-}
-
-.builder-panel.is-embedded .builder-style-chips button {
-  flex: 0 0 auto;
-  padding: 0 7px;
-}
-
-.builder-panel.is-embedded .builder-notice {
-  margin: 5px 9px 7px;
 }
 
 .builder-panel.is-dragging,
 .builder-panel.is-resizing {
   border-color: rgba(61, 214, 196, 0.58);
-  box-shadow:
-    0 28px 76px rgba(0, 0, 0, 0.65),
-    0 0 38px rgba(61, 214, 196, 0.12);
-}
-
-.builder-resize-handle {
-  position: absolute;
-  z-index: 2;
-  touch-action: none;
-  user-select: none;
-}
-
-.builder-resize-handle.is-n,
-.builder-resize-handle.is-s {
-  right: 12px;
-  left: 12px;
-  height: 7px;
-  cursor: ns-resize;
-}
-
-.builder-resize-handle.is-n {
-  top: 0;
-}
-
-.builder-resize-handle.is-s {
-  bottom: 0;
-}
-
-.builder-resize-handle.is-e,
-.builder-resize-handle.is-w {
-  top: 12px;
-  bottom: 12px;
-  width: 7px;
-  cursor: ew-resize;
-}
-
-.builder-resize-handle.is-e {
-  right: 0;
-}
-
-.builder-resize-handle.is-w {
-  left: 0;
-}
-
-.builder-resize-handle.is-ne,
-.builder-resize-handle.is-se,
-.builder-resize-handle.is-sw,
-.builder-resize-handle.is-nw {
-  width: 14px;
-  height: 14px;
-}
-
-.builder-resize-handle.is-ne,
-.builder-resize-handle.is-sw {
-  cursor: nesw-resize;
-}
-
-.builder-resize-handle.is-se,
-.builder-resize-handle.is-nw {
-  cursor: nwse-resize;
-}
-
-.builder-resize-handle.is-ne,
-.builder-resize-handle.is-nw {
-  top: 0;
-}
-
-.builder-resize-handle.is-se,
-.builder-resize-handle.is-sw {
-  bottom: 0;
-}
-
-.builder-resize-handle.is-ne,
-.builder-resize-handle.is-se {
-  right: 0;
-}
-
-.builder-resize-handle.is-nw,
-.builder-resize-handle.is-sw {
-  left: 0;
-}
-
-.builder-resize-handle.is-se::after {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 6px;
-  height: 6px;
-  border-right: 1px solid rgba(61, 214, 196, 0.52);
-  border-bottom: 1px solid rgba(61, 214, 196, 0.52);
-  content: '';
 }
 
 .builder-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 62px;
-  padding: 10px 13px;
-  border-bottom: 1px solid rgba(122, 203, 190, 0.15);
+  min-height: 58px;
+  padding: 9px 12px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(122, 203, 190, 0.13);
   background: rgba(61, 214, 196, 0.035);
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.is-embedded .builder-header {
+  cursor: default;
+  touch-action: auto;
+  user-select: auto;
 }
 
 .builder-panel.is-dragging .builder-header {
@@ -688,13 +547,31 @@ watch(
 .builder-identity {
   display: flex;
   align-items: center;
-  gap: 10px;
+  min-width: 0;
+  gap: 9px;
+}
+
+.builder-identity > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.builder-identity strong {
+  font-size: 12px;
+}
+
+.builder-identity small {
+  color: var(--text-soft);
+  font-size: 8px;
+  white-space: nowrap;
 }
 
 .builder-mark,
 .builder-message__role {
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   color: var(--cyan);
   border: 1px solid rgba(61, 214, 196, 0.32);
   border-radius: 7px;
@@ -703,99 +580,280 @@ watch(
 }
 
 .builder-mark {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   color: #eafffb;
-  border-radius: 9px;
-  font-size: 11px;
+  font-size: 10px;
 }
 
-.builder-identity div {
-  display: grid;
-  gap: 3px;
-}
-
-.builder-identity strong {
-  font-size: 13px;
-}
-
-.builder-identity small,
-.builder-point span,
-.builder-point small,
-.builder-transform > span,
-.builder-notice {
+.builder-status-pill {
+  margin-left: auto;
+  padding: 4px 7px;
   color: var(--text-soft);
-  font-size: 8px;
+  border: 1px solid rgba(122, 203, 190, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  font: normal 8px var(--font-data);
+  white-space: nowrap;
 }
 
-.builder-identity small i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 4px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 7px var(--green);
+.builder-status-pill.is-active {
+  color: var(--amber);
+  border-color: rgba(245, 190, 76, 0.28);
+  background: rgba(245, 190, 76, 0.07);
+}
+
+.builder-status-pill.is-ready {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.3);
+  background: rgba(61, 214, 196, 0.08);
 }
 
 .builder-header > button {
-  width: 31px;
-  height: 31px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   color: var(--text-soft);
   border: 0;
   background: transparent;
-  font-size: 22px;
+  font-size: 20px;
   cursor: pointer;
 }
 
-.builder-point {
+.builder-steps {
   display: grid;
-  padding: 9px 13px;
-  gap: 3px;
+  margin: 0;
+  padding: 9px 12px 10px;
+  list-style: none;
   border-bottom: 1px solid rgba(122, 203, 190, 0.1);
-  background: rgba(5, 16, 17, 0.52);
+  background: rgba(4, 17, 18, 0.46);
+  grid-template-columns: repeat(3, 1fr);
 }
 
-.builder-point strong {
-  overflow: hidden;
+.builder-steps li {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  color: rgba(190, 212, 207, 0.52);
+  font-size: 8px;
+}
+
+.builder-steps li:not(:last-child)::after {
+  position: absolute;
+  top: 9px;
+  left: calc(50% + 15px);
+  width: calc(100% - 30px);
+  height: 1px;
+  background: rgba(122, 203, 190, 0.18);
+  content: '';
+}
+
+.builder-steps i {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(122, 203, 190, 0.2);
+  border-radius: 50%;
+  background: #0b2221;
+  font: normal 8px var(--font-data);
+}
+
+.builder-steps .is-current {
+  color: #eafffb;
+}
+
+.builder-steps .is-current i {
+  color: #04201d;
+  border-color: var(--cyan);
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(61, 214, 196, 0.24);
+}
+
+.builder-steps .is-complete {
   color: var(--cyan);
+}
+
+.builder-steps .is-complete i,
+.builder-steps .is-complete::after {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.42);
+  background: rgba(61, 214, 196, 0.14);
+}
+
+.builder-workspace {
+  display: grid;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.builder-empty {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 22px 18px;
+  text-align: center;
+}
+
+.builder-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 10px;
+  color: var(--cyan);
+  border: 1px solid rgba(61, 214, 196, 0.28);
+  border-radius: 15px;
+  background: rgba(61, 214, 196, 0.07);
+  font-size: 25px;
+}
+
+.builder-empty.is-picking .builder-empty__icon {
+  color: var(--amber);
+  border-color: rgba(245, 190, 76, 0.3);
+  background: rgba(245, 190, 76, 0.07);
+  animation: builder-pulse 1.8s ease-in-out infinite;
+}
+
+.builder-empty strong {
+  color: #eafffb;
+  font-size: 12px;
+}
+
+.builder-empty p {
+  max-width: 250px;
+  margin: 7px 0 15px;
+  color: var(--text-soft);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.builder-empty button {
+  min-height: 30px;
+  padding: 0 16px;
+  color: #04201d;
+  border: 1px solid var(--cyan);
+  border-radius: 7px;
+  background: var(--cyan);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.builder-empty.is-picking button {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.34);
+  background: rgba(61, 214, 196, 0.08);
+}
+
+.builder-empty small {
+  margin-top: 8px;
+  color: var(--text-soft);
+  font-size: 8px;
+}
+
+.builder-location {
+  display: grid;
+  align-items: center;
+  margin: 10px 10px 0;
+  padding: 8px 9px;
+  gap: 8px;
+  border: 1px solid rgba(61, 214, 196, 0.18);
+  border-radius: 7px;
+  background: rgba(61, 214, 196, 0.045);
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+}
+
+.builder-location > i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #04201d;
+  border-radius: 50%;
+  background: var(--cyan);
+  font: normal 10px var(--font-data);
+}
+
+.builder-location > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.builder-location small,
+.builder-prompt-guide small,
+.builder-composer__heading small {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+
+.builder-location strong {
+  overflow: hidden;
+  color: #eafffb;
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.builder-point strong.is-selected {
-  color: var(--amber);
-}
-
-.builder-point.is-picking strong {
-  color: var(--amber);
-}
-
-.builder-point button {
-  justify-self: start;
+.builder-location button {
   min-height: 24px;
-  margin-top: 3px;
-  padding: 0 10px;
+  padding: 0 8px;
   color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.28);
-  border-radius: 12px;
-  background: rgba(61, 214, 196, 0.07);
+  border: 1px solid rgba(61, 214, 196, 0.24);
+  border-radius: 6px;
+  background: rgba(61, 214, 196, 0.06);
   font-size: 8px;
   cursor: pointer;
 }
 
-.builder-point button.is-primary {
-  color: #04201d;
-  border-color: var(--cyan);
-  background: var(--cyan);
-  font-weight: 700;
+.builder-prompt-guide {
+  display: grid;
+  align-content: center;
+  padding: 16px 10px;
+  gap: 10px;
+}
+
+.builder-prompt-guide > span {
+  display: grid;
+  gap: 3px;
+}
+
+.builder-prompt-guide strong {
+  color: #eafffb;
+  font-size: 10px;
+}
+
+.builder-suggestions {
+  display: grid;
+  gap: 6px;
+}
+
+.builder-suggestions button {
+  min-height: 32px;
+  padding: 6px 9px;
+  color: #cfe5e0;
+  border: 1px solid rgba(122, 203, 190, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+
+.builder-suggestions button:hover {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.35);
+  background: rgba(61, 214, 196, 0.07);
 }
 
 .builder-messages {
   overflow-y: auto;
-  padding: 14px 12px;
+  min-height: 0;
+  padding: 12px 10px;
   scrollbar-color: rgba(61, 214, 196, 0.25) transparent;
   scrollbar-width: thin;
 }
@@ -803,13 +861,13 @@ watch(
 .builder-message {
   display: grid;
   align-items: start;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   gap: 7px;
   grid-template-columns: 26px minmax(0, 1fr);
 }
 
 .builder-message.is-user {
-  padding-left: 42px;
+  padding-left: 34px;
   grid-template-columns: minmax(0, 1fr) 26px;
 }
 
@@ -832,7 +890,7 @@ watch(
 
 .builder-message__body {
   min-width: 0;
-  padding: 10px 11px;
+  padding: 8px 9px;
   border: 1px solid rgba(122, 203, 190, 0.14);
   border-radius: 4px 9px 9px;
   background: rgba(255, 255, 255, 0.025);
@@ -841,18 +899,18 @@ watch(
 .builder-message__body > p {
   margin: 0;
   color: #dcece8;
-  font-size: 11px;
-  line-height: 1.75;
+  font-size: 9px;
+  line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .builder-progress {
   display: grid;
   align-items: center;
-  height: 5px;
+  height: 4px;
   margin-top: 8px;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 32px;
 }
 
 .builder-progress > i {
@@ -860,26 +918,30 @@ watch(
   height: 100%;
   border-radius: 99px;
   background: var(--cyan);
-  box-shadow: 0 0 7px var(--cyan);
-  transition: width 180ms linear;
 }
 
 .builder-progress span {
   color: var(--cyan);
-  font: 9px var(--font-data);
+  font: 8px var(--font-data);
 }
 
 .builder-transform {
   display: grid;
-  padding: 9px 12px;
-  gap: 6px;
+  padding: 8px 11px;
+  gap: 5px;
   border-top: 1px solid rgba(61, 214, 196, 0.12);
   background: rgba(61, 214, 196, 0.035);
 }
 
+.builder-transform > span {
+  color: #dcece8;
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .builder-transform label {
   display: grid;
-  gap: 3px;
+  gap: 2px;
 }
 
 .builder-transform label > span {
@@ -891,7 +953,7 @@ watch(
 .builder-transform label strong {
   margin-left: auto;
   color: var(--cyan);
-  font: 9px var(--font-data);
+  font: 8px var(--font-data);
 }
 
 .builder-transform input {
@@ -908,7 +970,7 @@ watch(
 
 .builder-transform-actions button {
   flex: 1;
-  min-height: 26px;
+  min-height: 25px;
   color: var(--cyan);
   border: 1px solid rgba(61, 214, 196, 0.3);
   border-radius: 6px;
@@ -925,90 +987,130 @@ watch(
 
 .builder-composer {
   display: grid;
-  margin: 0 11px;
+  margin: 0 10px;
   padding: 8px;
   gap: 7px;
   border: 1px solid rgba(122, 203, 190, 0.22);
   border-radius: 8px;
-  background: rgba(3, 13, 14, 0.7);
+  background: rgba(3, 13, 14, 0.72);
 }
 
-.builder-mode-tabs {
-  display: grid;
-  gap: 5px;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.builder-mode-tabs button {
-  min-height: 26px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.15);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
-  font-size: 9px;
-  cursor: pointer;
-}
-
-.builder-mode-tabs button.active {
-  color: #04201d;
-  border-color: var(--cyan);
-  background: var(--cyan);
-  font-weight: 700;
-}
-
-.builder-style-chips {
+.builder-composer__heading {
   display: flex;
-  gap: 5px;
+  align-items: center;
 }
 
-.builder-style-chips button {
-  min-height: 23px;
-  padding: 0 9px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.15);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  font-size: 8px;
-  cursor: pointer;
+.builder-composer__heading > span {
+  display: grid;
+  gap: 1px;
 }
 
-.builder-style-chips button.active {
+.builder-composer__heading strong {
   color: var(--cyan);
-  border-color: rgba(61, 214, 196, 0.45);
-  background: rgba(61, 214, 196, 0.1);
+  font-size: 9px;
+}
+
+.builder-composer__heading em {
+  margin-left: auto;
+  color: var(--text-soft);
+  font: normal 8px var(--font-data);
 }
 
 .builder-composer textarea {
   resize: none;
-  min-height: 42px;
-  padding: 3px;
+  min-height: 48px;
+  padding: 7px 8px;
   color: var(--text);
-  border: 0;
+  border: 1px solid rgba(122, 203, 190, 0.14);
+  border-radius: 6px;
   outline: 0;
-  background: transparent;
-  font-size: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  font: 9px/1.55 inherit;
+}
+
+.builder-composer textarea:focus {
+  border-color: rgba(61, 214, 196, 0.45);
+  box-shadow: 0 0 0 2px rgba(61, 214, 196, 0.07);
 }
 
 .builder-composer > button {
-  min-height: 30px;
+  min-height: 31px;
   color: #eafffb;
   border: 1px solid rgba(61, 214, 196, 0.52);
   border-radius: 7px;
   background: linear-gradient(145deg, #1caa97, #197a70);
   font-size: 9px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .builder-composer > button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.38;
 }
 
 .builder-notice {
-  margin: 7px 11px 9px;
+  margin: 6px 10px 8px;
+  color: var(--text-soft);
+  font-size: 8px;
   line-height: 1.5;
   text-align: center;
 }
+
+.builder-resize-handle {
+  position: absolute;
+  z-index: 2;
+  touch-action: none;
+  user-select: none;
+}
+
+.builder-resize-handle.is-n,
+.builder-resize-handle.is-s {
+  right: 12px;
+  left: 12px;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.builder-resize-handle.is-n { top: 0; }
+.builder-resize-handle.is-s { bottom: 0; }
+
+.builder-resize-handle.is-e,
+.builder-resize-handle.is-w {
+  top: 12px;
+  bottom: 12px;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.builder-resize-handle.is-e { right: 0; }
+.builder-resize-handle.is-w { left: 0; }
+
+.builder-resize-handle.is-ne,
+.builder-resize-handle.is-se,
+.builder-resize-handle.is-sw,
+.builder-resize-handle.is-nw {
+  width: 14px;
+  height: 14px;
+}
+
+.builder-resize-handle.is-ne,
+.builder-resize-handle.is-sw { cursor: nesw-resize; }
+
+.builder-resize-handle.is-se,
+.builder-resize-handle.is-nw { cursor: nwse-resize; }
+
+.builder-resize-handle.is-ne,
+.builder-resize-handle.is-nw { top: 0; }
+
+.builder-resize-handle.is-se,
+.builder-resize-handle.is-sw { bottom: 0; }
+
+.builder-resize-handle.is-ne,
+.builder-resize-handle.is-se { right: 0; }
+
+.builder-resize-handle.is-nw,
+.builder-resize-handle.is-sw { left: 0; }
 
 .builder-panel-enter-active,
 .builder-panel-leave-active {
@@ -1021,6 +1123,10 @@ watch(
   transform: translateY(10px) scale(0.98);
 }
 
+@keyframes builder-pulse {
+  50% { box-shadow: 0 0 18px rgba(245, 190, 76, 0.18); }
+}
+
 @media (max-width: 600px) {
   .builder-panel {
     right: 16px;
@@ -1028,6 +1134,7 @@ watch(
     width: calc(100vw - 32px);
     height: calc(100vh - 76px);
   }
+
   .builder-launcher {
     right: 12px;
     bottom: 66px;
@@ -1037,8 +1144,11 @@ watch(
 @media (prefers-reduced-motion: reduce) {
   .builder-panel-enter-active,
   .builder-panel-leave-active {
-    animation: none;
     transition: none;
+  }
+
+  .builder-empty.is-picking .builder-empty__icon {
+    animation: none;
   }
 }
 </style>
