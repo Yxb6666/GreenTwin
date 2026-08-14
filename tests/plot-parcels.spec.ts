@@ -11,7 +11,7 @@ describe('三生模拟规划地块', () => {
     expect(new Set(SIMULATION_PLOTS.map((plot) => plot.label)).size).toBe(3)
   })
 
-  it('地块中心保持至少 450 米间距', () => {
+  it('地块中心保持至少 1.5 公里间距', () => {
     const distances = SIMULATION_PLOTS.flatMap((plot, index) =>
       SIMULATION_PLOTS.slice(index + 1).map((otherPlot) => {
         const latitudeScale = 111_320
@@ -26,7 +26,7 @@ describe('三生模拟规划地块', () => {
       }),
     )
 
-    expect(Math.min(...distances)).toBeGreaterThanOrEqual(450)
+    expect(Math.min(...distances)).toBeGreaterThanOrEqual(1_500)
   })
 
   it('矩形地块生成闭合且有效的经纬度环', () => {
