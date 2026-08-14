@@ -3,17 +3,26 @@ import L from 'leaflet'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { PickedPoint } from './modelPlacement'
 
+interface SceneOverview {
+  longitude: number
+  latitude: number
+  longitudeRadius: number
+  latitudeRadius: number
+  heading: number
+}
+
 const props = defineProps<{
   sceneCanvas: HTMLCanvasElement | null
   point: PickedPoint | null
-  center: { longitude: number; latitude: number }
+  overview: SceneOverview
   tileUrl: string
   planLabel: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   previous: []
   next: []
+  locate: [point: { longitude: number; latitude: number }]
 }>()
 
 const previewCanvas = ref<HTMLCanvasElement | null>(null)
@@ -25,34 +34,63 @@ const locationLabel = computed(() =>
 )
 
 let overviewMap: L.Map | null = null
-let extentLayer: L.Rectangle | null = null
+let extentLayer: L.Polygon | null = null
 let centerMarker: L.CircleMarker | null = null
+let selectedPointMarker: L.CircleMarker | null = null
 let animationFrame = 0
 let lastCaptureAt = 0
 let resizeObserver: ResizeObserver | null = null
 let sceneStream: MediaStream | null = null
 
-function activeCoordinates() {
-  return props.point
-    ? ([props.point.latitude, props.point.longitude] as L.LatLngTuple)
-    : ([props.center.latitude, props.center.longitude] as L.LatLngTuple)
+function extentCorners() {
+  const { latitude, longitude, latitudeRadius, longitudeRadius, heading } =
+    props.overview
+  const angle = (heading * Math.PI) / 180
+  const cosine = Math.cos(angle)
+  const sine = Math.sin(angle)
+  return [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([x = 0, y = 0]) => {
+    const rotatedX = x * cosine - y * sine
+    const rotatedY = x * sine + y * cosine
+    return [
+      latitude + rotatedY * latitudeRadius,
+      longitude + rotatedX * longitudeRadius,
+    ] as L.LatLngTuple
+  })
+}
+
+function resolveOverviewZoom(radius: number) {
+  if (radius > 0.025) return 11
+  if (radius > 0.01) return 12
+  if (radius > 0.004) return 13
+  if (radius > 0.0015) return 14
+  if (radius > 0.0006) return 15
+  return 16
 }
 
 function updateOverview() {
   if (!overviewMap) return
-  const [latitude, longitude] = activeCoordinates()
-  const latitudeRadius = props.point ? 0.00022 : 0.00034
-  const longitudeRadius = props.point ? 0.00034 : 0.00052
-  const bounds = L.latLngBounds(
-    [latitude - latitudeRadius, longitude - longitudeRadius],
-    [latitude + latitudeRadius, longitude + longitudeRadius],
-  )
+  const { latitude, longitude, latitudeRadius, longitudeRadius } =
+    props.overview
+  const corners = extentCorners()
+  const radius = Math.max(latitudeRadius, longitudeRadius)
+  const zoom = resolveOverviewZoom(radius)
 
-  overviewMap.setView([latitude, longitude], props.point ? 17 : 16, {
+  overviewMap.setView([latitude, longitude], zoom, {
     animate: false,
   })
-  extentLayer?.setBounds(bounds)
+  extentLayer?.setLatLngs(corners)
   centerMarker?.setLatLng([latitude, longitude])
+  if (props.point) {
+    selectedPointMarker?.setLatLng([
+      props.point.latitude,
+      props.point.longitude,
+    ])
+  }
 }
 
 function captureScene(timestamp: number) {
@@ -112,7 +150,7 @@ onMounted(async () => {
       keyboard: false,
     })
     L.tileLayer(props.tileUrl, { minZoom: 0, maxZoom: 19 }).addTo(overviewMap)
-    extentLayer = L.rectangle(
+    extentLayer = L.polygon(
       [
         [0, 0],
         [0, 0],
@@ -133,6 +171,18 @@ onMounted(async () => {
       fillOpacity: 1,
       interactive: false,
     }).addTo(overviewMap)
+    selectedPointMarker = L.circleMarker([0, 0], {
+      radius: 4,
+      color: '#fff4d6',
+      weight: 1.5,
+      fillColor: '#f0b85c',
+      fillOpacity: 1,
+      interactive: false,
+    })
+    if (props.point) selectedPointMarker.addTo(overviewMap)
+    overviewMap.on('click', ({ latlng }) => {
+      emit('locate', { longitude: latlng.lng, latitude: latlng.lat })
+    })
     updateOverview()
     resizeObserver = new ResizeObserver(() =>
       overviewMap?.invalidateSize(false),
@@ -143,7 +193,22 @@ onMounted(async () => {
   animationFrame = window.requestAnimationFrame(captureScene)
 })
 
-watch(() => props.point, updateOverview, { deep: true })
+watch(
+  () => props.point,
+  (point) => {
+    if (!overviewMap || !selectedPointMarker) return
+    if (point) {
+      if (!overviewMap.hasLayer(selectedPointMarker)) {
+        selectedPointMarker.addTo(overviewMap)
+      }
+    } else if (overviewMap.hasLayer(selectedPointMarker)) {
+      selectedPointMarker.removeFrom(overviewMap)
+    }
+    updateOverview()
+  },
+  { deep: true },
+)
+watch(() => props.overview, updateOverview, { deep: true })
 watch(() => props.sceneCanvas, () => void connectSceneStream())
 
 onBeforeUnmount(() => {
@@ -200,9 +265,9 @@ onBeforeUnmount(() => {
       <div ref="overviewHost" class="overview-map" />
       <div class="overview-heading">
         <span>区位概览</span>
-        <strong>{{ point ? '选点已同步' : '治理范围' }}</strong>
+        <strong>主场景实时同步</strong>
       </div>
-      <div class="extent-legend"><i /> 主场景范围</div>
+      <div class="extent-legend"><i /> 当前视域 · 点击地图定位</div>
     </div>
   </section>
 </template>
@@ -425,6 +490,7 @@ onBeforeUnmount(() => {
 
 :deep(.leaflet-container) {
   background: #0a1918;
+  cursor: crosshair;
   font-family: var(--font-body);
 }
 
