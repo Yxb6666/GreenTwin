@@ -49,14 +49,14 @@ export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
     key: 'guyang-industry',
     label: '堌阳东侧产业地块',
     description: '生产空间整理与乡村产业设施提升',
-    center: { longitude: 114.96625, latitude: 34.95058 },
-    ring: createPlotRectangle(114.96625, 34.95058, 142, 88, -14),
+    center: { longitude: 114.9702, latitude: 34.9515 },
+    ring: createPlotRectangle(114.9702, 34.9515, 142, 88, -14),
   },
   {
     key: 'canal-ecology',
     label: '北部河渠生态地块',
     description: '滨水缓冲带与生态修复示范空间',
-    center: { longitude: 114.96392, latitude: 34.95105 },
-    ring: createPlotRectangle(114.96392, 34.95105, 156, 68, 24),
+    center: { longitude: 114.9605, latitude: 34.954 },
+    ring: createPlotRectangle(114.9605, 34.954, 156, 68, 24),
   },
 ]
