@@ -290,16 +290,14 @@ const simulationFocus = {
   latitude: 34.95,
 }
 
-// Keep the project focus at the centre of the viewport. The previous camera
-// sat directly above this coordinate and then looked north, shifting the
-// actual focus out of frame. This offset places the camera south-west of the
-// focus so the pitched view converges on the project area.
+// 采用贴近建筑尺度的西南侧低空机位，让道路和建筑从身旁向远处延伸，
+// 同时保持项目中心位于视线中央，避免重新退回高空鸟瞰效果。
 const simulationCamera = {
-  longitude: simulationFocus.longitude - 0.00076,
-  latitude: simulationFocus.latitude - 0.00404,
-  height: 650,
-  heading: 10,
-  pitch: -55,
+  longitude: simulationFocus.longitude - 0.00097,
+  latitude: simulationFocus.latitude - 0.00128,
+  height: 48,
+  heading: 32,
+  pitch: -16,
 }
 
 const scenarioTemplates: Array<{
