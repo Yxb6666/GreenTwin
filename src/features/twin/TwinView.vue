@@ -258,6 +258,7 @@ const nativeWeatherEffects = ref(false)
 const weatherPanelOpen = ref(false)
 const parkPickMode = ref(false)
 const isochroneLoading = ref(false)
+const isochronePhase = ref<'idle' | 'picking' | 'loading' | 'complete' | 'error'>('idle')
 const isochroneProfile = ref<IsochroneProfile>('walking')
 const isochroneMinutes = ref([5, 10, 15])
 const isochroneStatus = ref('点击下方按钮，然后在地图上选择公园落点')
@@ -520,11 +521,17 @@ function toggleIsochroneMinute(minute: number) {
 }
 
 function startParkAnalysis() {
+  if (parkPickMode.value) {
+    cancelParkPicking()
+    return
+  }
   if (!viewer) {
+    isochronePhase.value = 'error'
     isochroneStatus.value = '三维地图尚未初始化，请稍后再试'
     return
   }
   parkPickMode.value = true
+  isochronePhase.value = 'picking'
   pickMode.value = false
   cancelMeasurement()
   isochroneStatus.value = '请在地图上点击公园建设位置'
@@ -533,6 +540,7 @@ function startParkAnalysis() {
 
 function cancelParkPicking() {
   parkPickMode.value = false
+  isochronePhase.value = 'idle'
   isochroneStatus.value = '已取消选点，可重新开始分析'
 }
 
@@ -563,6 +571,7 @@ async function analyzeParkAt(point: PickedPoint) {
   const sdk = cesium()
   parkPickMode.value = false
   isochroneLoading.value = true
+  isochronePhase.value = 'loading'
   isochroneStatus.value = '正在加载公园模型…'
   isochroneRequest?.abort()
   isochroneRequest = new AbortController()
@@ -643,6 +652,7 @@ async function analyzeParkAt(point: PickedPoint) {
       },
     })
     isochroneStatus.value = `分析完成：${isochroneProfile.value === 'walking' ? '步行' : isochroneProfile.value === 'cycling' ? '骑行' : '驾车'} ${isochroneMinutes.value.join('/')} 分钟可达范围`
+    isochronePhase.value = 'complete'
     operationMessage.value = `公园等时圈已生成，共 ${result.features.length} 个圈层`
     viewer.camera.flyTo({
       destination: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude - 0.025, 4200),
@@ -650,6 +660,7 @@ async function analyzeParkAt(point: PickedPoint) {
     })
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {
+      isochronePhase.value = 'error'
       isochroneStatus.value = error instanceof Error ? error.message : '公园等时圈分析失败'
       operationMessage.value = isochroneStatus.value
     }
@@ -1863,18 +1874,79 @@ onBeforeUnmount(() => {
 
     <div class="twin-layout">
       <aside class="twin-left">
-        <PanelCard title="公园等时圈分析" meta="Mapbox 可达性">
+        <PanelCard title="公园服务圈" meta="可达性分析">
           <div class="isochrone-panel">
-            <div class="isochrone-step"><i>1</i><span><strong>设置分析参数</strong><small>选择出行方式与时间圈层</small></span></div>
+            <div class="isochrone-overview">
+              <i>园</i>
+              <span>
+                <strong>生成公园可达服务圈</strong>
+                <small>选择出行方式与时长，再到地图中确定位置</small>
+              </span>
+              <em :class="`is-${isochronePhase}`">
+                {{
+                  isochronePhase === 'picking'
+                    ? '等待落点'
+                    : isochronePhase === 'loading'
+                      ? '生成中'
+                      : isochronePhase === 'complete'
+                        ? '已完成'
+                        : isochronePhase === 'error'
+                          ? '需重试'
+                          : '待分析'
+                }}
+              </em>
+            </div>
+            <div class="isochrone-field-heading">
+              <strong>出行方式</strong><small>选择一种</small>
+            </div>
             <div class="profile-switch" aria-label="等时圈出行方式">
-              <button v-for="option in profileOptions" :key="option.value" type="button" :class="{ active: isochroneProfile === option.value }" @click="isochroneProfile = option.value">{{ option.label }}</button>
+              <button
+                v-for="option in profileOptions"
+                :key="option.value"
+                type="button"
+                :class="{ active: isochroneProfile === option.value }"
+                :aria-pressed="isochroneProfile === option.value"
+                @click="isochroneProfile = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <div class="isochrone-field-heading">
+              <strong>服务时长</strong><small>支持多选</small>
             </div>
             <div class="minute-switch" aria-label="等时圈时间范围">
-              <button v-for="minute in [5, 10, 15]" :key="minute" type="button" :class="{ active: isochroneMinutes.includes(minute) }" @click="toggleIsochroneMinute(minute)">{{ minute }} 分钟</button>
+              <button
+                v-for="minute in [5, 10, 15]"
+                :key="minute"
+                type="button"
+                :class="{ active: isochroneMinutes.includes(minute) }"
+                :aria-pressed="isochroneMinutes.includes(minute)"
+                @click="toggleIsochroneMinute(minute)"
+              >
+                <strong>{{ minute }}</strong><small>分钟</small>
+              </button>
             </div>
-            <div class="isochrone-step"><i>2</i><span><strong>放置公园模型</strong><small>地图单击后自动加载公园.glb并分析</small></span></div>
-            <button class="park-pick-button" type="button" :class="{ active: parkPickMode }" :disabled="isochroneLoading" @click="startParkAnalysis">{{ isochroneLoading ? '分析中…' : parkPickMode ? '请点击地图落点' : '选择公园落点并分析' }}</button>
-            <p class="isochrone-status" role="status"><i />{{ isochroneStatus }}</p>
+            <button
+              class="park-pick-button"
+              type="button"
+              :class="{ active: parkPickMode }"
+              :disabled="isochroneLoading"
+              @click="startParkAnalysis"
+            >
+              <span aria-hidden="true">{{ parkPickMode ? '×' : '⌖' }}</span>
+              {{
+                isochroneLoading
+                  ? '正在生成服务圈…'
+                  : parkPickMode
+                    ? '取消地图选点'
+                    : isochronePhase === 'complete'
+                      ? '重新选择公园位置'
+                      : '在地图中选择公园位置'
+              }}
+            </button>
+            <div class="isochrone-status" :class="`is-${isochronePhase}`" role="status">
+              <i /><span>{{ isochroneStatus }}</span>
+            </div>
           </div>
         </PanelCard>
 
@@ -2189,35 +2261,93 @@ onBeforeUnmount(() => {
 
 .isochrone-panel {
   display: grid;
-  gap: 9px;
+  gap: 5px;
 }
-.isochrone-step {
+
+.isochrone-overview {
   display: grid;
   align-items: center;
-  grid-template-columns: 25px 1fr;
+  min-height: 41px;
+  padding: 6px 7px;
+  border: 1px solid rgba(61, 214, 196, 0.13);
+  border-radius: 7px;
+  background: linear-gradient(105deg, rgba(61, 214, 196, 0.09), rgba(61, 214, 196, 0.015));
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   gap: 8px;
 }
-.isochrone-step > i {
+
+.isochrone-overview > i {
   display: grid;
-  width: 23px;
-  height: 23px;
+  width: 28px;
+  height: 28px;
   place-content: center;
   color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.42);
-  border-radius: 50%;
-  font: normal 10px var(--font-data);
+  border: 1px solid rgba(61, 214, 196, 0.35);
+  border-radius: 7px;
+  background: rgba(61, 214, 196, 0.08);
+  font: normal 11px var(--font-data);
 }
-.isochrone-step span {
+
+.isochrone-overview > span {
   display: grid;
+  min-width: 0;
   gap: 2px;
 }
-.isochrone-step strong {
+
+.isochrone-overview strong {
   font-size: 10px;
 }
-.isochrone-step small {
+
+.isochrone-overview small {
+  overflow: hidden;
   color: var(--text-soft);
   font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.isochrone-overview em {
+  padding: 3px 6px;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.16);
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.14);
+  font: normal 7px var(--font-data);
+  white-space: nowrap;
+}
+
+.isochrone-overview em.is-picking,
+.isochrone-overview em.is-loading {
+  color: var(--amber);
+  border-color: rgba(240, 184, 92, 0.38);
+}
+
+.isochrone-overview em.is-complete {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.4);
+}
+
+.isochrone-overview em.is-error {
+  color: #ff766f;
+  border-color: rgba(255, 102, 95, 0.42);
+}
+
+.isochrone-field-heading {
+  display: flex;
+  align-items: center;
+  min-height: 11px;
+}
+
+.isochrone-field-heading strong {
+  font-size: 8px;
+}
+
+.isochrone-field-heading small {
+  margin-left: auto;
+  color: var(--text-soft);
+  font-size: 7px;
+}
+
 .profile-switch,
 .minute-switch {
   display: grid;
@@ -2225,45 +2355,92 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .profile-switch button,
-.minute-switch button,
-.park-pick-button {
-  min-height: 29px;
+.minute-switch button {
+  min-height: 28px;
   color: var(--text-soft);
   border: 1px solid rgba(122, 203, 190, 0.16);
-  border-radius: 5px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.025);
   font-size: 9px;
   cursor: pointer;
+  transition: 140ms ease;
 }
+
 .profile-switch button.active,
-.minute-switch button.active,
-.park-pick-button.active {
+.minute-switch button.active {
   color: var(--cyan);
   border-color: rgba(61, 214, 196, 0.6);
   background: rgba(61, 214, 196, 0.12);
+  box-shadow: inset 0 -2px rgba(61, 214, 196, 0.5);
 }
+
+.minute-switch button {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+}
+
+.minute-switch button strong {
+  font: 11px var(--font-data);
+}
+
+.minute-switch button small {
+  font-size: 7px;
+}
+
 .park-pick-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
+  gap: 7px;
   color: #03201d;
+  border: 1px solid var(--cyan);
+  border-radius: 7px;
   border-color: var(--cyan);
-  background: var(--cyan);
+  background: linear-gradient(100deg, #35c8b7, #4be0ce);
+  box-shadow: 0 5px 16px rgba(34, 178, 160, 0.16);
+  font-size: 9px;
   font-weight: 700;
+  cursor: pointer;
+  transition: 140ms ease;
 }
+
+.park-pick-button > span {
+  font: 15px/1 var(--font-data);
+}
+
+.park-pick-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.park-pick-button.active {
+  color: var(--amber);
+  border-color: rgba(240, 184, 92, 0.55);
+  background: rgba(240, 184, 92, 0.08);
+  box-shadow: none;
+}
+
 .park-pick-button:disabled {
   cursor: wait;
   opacity: 0.7;
 }
+
 .isochrone-status {
   display: flex;
-  min-height: 33px;
-  margin: 0;
-  padding: 7px 8px;
+  align-items: flex-start;
+  min-height: 27px;
+  padding: 6px 7px;
   color: var(--text-soft);
-  border-left: 2px solid var(--cyan);
-  background: rgba(61, 214, 196, 0.045);
+  border: 1px solid rgba(122, 203, 190, 0.09);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.018);
   font-size: 8px;
   line-height: 1.5;
 }
+
 .isochrone-status i {
   flex: 0 0 auto;
   width: 5px;
@@ -2272,6 +2449,17 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: var(--cyan);
   box-shadow: 0 0 6px var(--cyan);
+}
+
+.isochrone-status.is-picking i,
+.isochrone-status.is-loading i {
+  background: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
+}
+
+.isochrone-status.is-error i {
+  background: #ff665f;
+  box-shadow: 0 0 6px rgba(255, 102, 95, 0.7);
 }
 
 .issue-summary {
@@ -2645,7 +2833,7 @@ onBeforeUnmount(() => {
 
 @media (max-height: 800px) {
   .twin-left {
-    grid-template-rows: 230px minmax(0, 1fr);
+    grid-template-rows: 270px minmax(0, 1fr);
   }
 
   .scenario-list button {

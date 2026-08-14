@@ -80,4 +80,16 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain("mapName: 'Lankao_Water'")
     expect(source).toContain("key: 'poiLayer'")
   })
+
+  it('公园服务圈使用状态驱动的单路径操作卡', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('title="公园服务圈"')
+    expect(source).toContain('isochronePhase')
+    expect(source).toContain('生成公园可达服务圈')
+    expect(source).toContain('在地图中选择公园位置')
+    expect(source).toContain('取消地图选点')
+    expect(source).toContain(':aria-pressed="isochroneProfile === option.value"')
+    expect(source).not.toContain('放置公园模型')
+  })
 })
