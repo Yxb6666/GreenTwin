@@ -7,6 +7,10 @@ const runtimeConfigPath = resolve(
   'public/config/runtime-config.json',
 )
 const twinViewPath = resolve(process.cwd(), 'src/features/twin/TwinView.vue')
+const plotPreviewPath = resolve(
+  process.cwd(),
+  'src/features/twin/TwinPlotPreview.vue',
+)
 
 describe('三生模拟场景配置', () => {
   it('不加载公共示例三维模型', async () => {
@@ -70,6 +74,22 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('SIM-2026-001')
     expect(source).not.toContain('保存草案')
     expect(source).not.toContain('下发治理')
+  })
+
+  it('右下角使用与主场景联动的地块双视图预览', async () => {
+    const [source, previewSource] = await Promise.all([
+      readFile(twinViewPath, 'utf8'),
+      readFile(plotPreviewPath, 'utf8'),
+    ])
+
+    expect(source).toContain('TwinPlotPreview')
+    expect(source).toContain(':scene-canvas="sceneSourceCanvas"')
+    expect(source).not.toContain('title="方案决策"')
+    expect(previewSource).toContain('三维场景')
+    expect(previewSource).toContain('区位概览')
+    expect(previewSource).toContain('L.rectangle')
+    expect(previewSource).toContain('context.drawImage(source')
+    expect(previewSource).toContain('source.captureStream(8)')
   })
 
   it('三生模拟场景加载水系、路网与 POI 数据图层', async () => {

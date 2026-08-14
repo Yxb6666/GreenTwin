@@ -14,6 +14,7 @@ import SceneToolbox, {
   type SceneMeasureType,
 } from './SceneToolbox.vue'
 import WeatherSimulation from './WeatherSimulation.vue'
+import TwinPlotPreview from './TwinPlotPreview.vue'
 import {
   createWeatherState,
   describeWeatherRisk,
@@ -91,7 +92,7 @@ interface SuperMapViewer {
     remove: (entity: unknown) => boolean
   }
   scene: {
-    canvas: HTMLElement
+    canvas: HTMLCanvasElement
     globe: {
       depthTestAgainstTerrain: boolean
       enableLighting: boolean
@@ -223,6 +224,7 @@ interface CesiumRuntime {
 
 const config = useRuntimeConfig()
 const cesiumContainer = ref<HTMLElement | null>(null)
+const sceneSourceCanvas = ref<HTMLCanvasElement | null>(null)
 const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
@@ -491,6 +493,15 @@ function cesium(): CesiumRuntime {
 function selectPlan(key: PlanKey) {
   activePlan.value = key
   operationMessage.value = `当前查看：${planData[key].label}`
+}
+
+const previewPlanOrder: PlanKey[] = ['current', 'planA', 'planB']
+
+function movePreviewPlan(direction: -1 | 1) {
+  const currentIndex = previewPlanOrder.indexOf(activePlan.value)
+  const nextIndex =
+    (currentIndex + direction + previewPlanOrder.length) % previewPlanOrder.length
+  selectPlan(previewPlanOrder[nextIndex]!)
 }
 
 function selectMeasure(key: MeasureKey) {
@@ -1664,6 +1675,7 @@ async function initializeViewer() {
       navigationHelpButton: false,
       shadows: false,
     })
+    sceneSourceCanvas.value = viewer.scene.canvas
     viewer.imageryLayers.removeAll(true)
     engineStatus.value = '正在加载 ArcGIS 导航底图'
     viewer.imageryLayers.addImageryProvider(
@@ -1726,6 +1738,7 @@ onBeforeUnmount(() => {
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
   viewer = null
+  sceneSourceCanvas.value = null
 })
 </script>
 
@@ -1966,48 +1979,15 @@ onBeforeUnmount(() => {
           @focus-model="focusGeneratedModel"
         />
 
-        <PanelCard title="方案决策" meta="成本 · 周期 · 受益">
-          <div class="plan-switcher">
-            <button
-              type="button"
-              :class="{ active: activePlan === 'planA' }"
-              @click="selectPlan('planA')"
-            >
-              <span>A</span><strong>排水优先</strong><small>近期推荐</small>
-            </button>
-            <button
-              type="button"
-              :class="{ active: activePlan === 'planB' }"
-              @click="selectPlan('planB')"
-            >
-              <span>B</span><strong>综合改造</strong><small>远期提升</small>
-            </button>
-          </div>
-
-          <div class="decision-metrics">
-            <article>
-              <span>估算投资</span><strong>{{ currentPlan.cost }}</strong>
-            </article>
-            <article>
-              <span>实施周期</span><strong>{{ currentPlan.duration }}</strong>
-            </article>
-            <article>
-              <span>居民影响</span><strong>{{ currentPlan.residents }}</strong>
-            </article>
-            <article>
-              <span>实施风险</span><strong>{{ currentPlan.risk }}</strong>
-            </article>
-          </div>
-
-          <div class="recommendation">
-            <span>系统研判</span>
-            <p>{{ currentPlan.recommendation }}</p>
-          </div>
-
-          <div class="operation-message" role="status">
-            <i />{{ operationMessage }}
-          </div>
-        </PanelCard>
+        <TwinPlotPreview
+          :scene-canvas="sceneSourceCanvas"
+          :point="selectedPoint"
+          :center="simulationFocus"
+          :tile-url="buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken)"
+          :plan-label="currentPlan.label"
+          @previous="movePreviewPlan(-1)"
+          @next="movePreviewPlan(1)"
+        />
       </aside>
     </div>
   </main>
@@ -2056,8 +2036,7 @@ onBeforeUnmount(() => {
 }
 
 .scenario-list button,
-.measure-list button,
-.plan-switcher button {
+.measure-list button {
   display: grid;
   align-items: center;
   min-width: 0;
@@ -2082,10 +2061,8 @@ onBeforeUnmount(() => {
 }
 .scenario-list button:hover,
 .measure-list button:hover,
-.plan-switcher button:hover,
 .scenario-list button.active,
-.measure-list button.active,
-.plan-switcher button.active {
+.measure-list button.active {
   border-color: rgba(61, 214, 196, 0.54);
   background: rgba(61, 214, 196, 0.1);
 }
@@ -2598,94 +2575,6 @@ onBeforeUnmount(() => {
 }
 .legend-benefit {
   background: var(--amber);
-}
-
-.plan-switcher {
-  display: grid;
-  gap: 7px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.plan-switcher button {
-  min-height: 54px;
-  padding: 7px;
-  grid-template-columns: 27px 1fr;
-}
-.plan-switcher button > span {
-  display: grid;
-  place-content: center;
-  width: 23px;
-  height: 23px;
-  color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.35);
-  border-radius: 50%;
-  font: 10px var(--font-data);
-  grid-row: span 2;
-}
-.plan-switcher button strong {
-  font-size: 9px;
-}
-.plan-switcher button small {
-  color: var(--text-soft);
-  font-size: 8px;
-}
-
-.decision-metrics {
-  display: grid;
-  margin-top: 9px;
-  gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.decision-metrics article {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 6px 8px;
-  border: 1px solid rgba(122, 203, 190, 0.1);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.02);
-}
-.decision-metrics span {
-  color: var(--text-soft);
-  font-size: 8px;
-}
-.decision-metrics strong {
-  margin-left: auto;
-  color: var(--cyan);
-  font: 9px var(--font-data);
-}
-
-.recommendation {
-  margin-top: 8px;
-  padding: 8px 9px;
-  border-left: 2px solid var(--cyan);
-  background: rgba(61, 214, 196, 0.05);
-}
-.recommendation span {
-  color: var(--cyan);
-  font-size: 8px;
-}
-.recommendation p {
-  margin: 4px 0 0;
-  color: var(--text-soft);
-  font-size: 8px;
-  line-height: 1.55;
-}
-.operation-message {
-  display: flex;
-  align-items: flex-start;
-  margin-top: 8px;
-  color: var(--text-soft);
-  font-size: 8px;
-  line-height: 1.45;
-}
-.operation-message i {
-  flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
-  margin: 3px 6px 0 0;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 6px var(--cyan);
 }
 
 :deep(.cesium-viewer-bottom),
