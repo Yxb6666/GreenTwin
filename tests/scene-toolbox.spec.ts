@@ -73,4 +73,31 @@ describe('三维场景工具条', () => {
 
     expect(wrapper.emitted('toggle-weather')).toHaveLength(1)
   })
+
+  it('空间分析面板提供阴影时间与通视选点入口', async () => {
+    const wrapper = mount(SceneToolbox, {
+      props: {
+        measuring: null,
+        layers,
+        feedback: '',
+        shadowActive: false,
+        shadowTime: '2026-06-21T15:00',
+        visibilityActive: false,
+        visibilityPointCount: 0,
+      },
+    })
+
+    await wrapper.get('button[aria-label="空间分析"]').trigger('click')
+    expect(
+      (wrapper.get('input[type="datetime-local"]').element as HTMLInputElement)
+        .value,
+    ).toBe('2026-06-21T15:00')
+
+    const actionButtons = wrapper.findAll('.analysis-panel__title button')
+    await actionButtons[0]!.trigger('click')
+    await actionButtons[1]!.trigger('click')
+
+    expect(wrapper.emitted('toggle-shadow')).toHaveLength(1)
+    expect(wrapper.emitted('start-visibility')).toHaveLength(1)
+  })
 })

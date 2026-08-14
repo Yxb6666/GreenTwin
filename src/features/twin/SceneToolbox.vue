@@ -8,6 +8,10 @@ const props = defineProps<{
   layers: Array<{ key: string; label: string; visible: boolean }>
   feedback: string
   weatherActive?: boolean
+  shadowActive?: boolean
+  shadowTime?: string
+  visibilityActive?: boolean
+  visibilityPointCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -21,10 +25,15 @@ const emit = defineEmits<{
   locate: []
   'update-layer': [key: string, visible: boolean]
   'toggle-weather': []
+  'toggle-shadow': []
+  'update-shadow-time': [value: string]
+  'start-visibility': []
+  'cancel-visibility': []
 }>()
 
 const measurementMenuOpen = ref(false)
 const layerMenuOpen = ref(false)
+const analysisMenuOpen = ref(false)
 
 function toggleMeasurementMenu() {
   if (props.measuring) {
@@ -33,6 +42,7 @@ function toggleMeasurementMenu() {
   }
   measurementMenuOpen.value = !measurementMenuOpen.value
   layerMenuOpen.value = false
+  analysisMenuOpen.value = false
   if (props.weatherActive) emit('toggle-weather')
 }
 
@@ -44,13 +54,32 @@ function selectMeasure(type: SceneMeasureType) {
 function toggleLayerMenu() {
   layerMenuOpen.value = !layerMenuOpen.value
   measurementMenuOpen.value = false
+  analysisMenuOpen.value = false
   if (props.weatherActive) emit('toggle-weather')
 }
 
 function toggleWeather() {
   measurementMenuOpen.value = false
   layerMenuOpen.value = false
+  analysisMenuOpen.value = false
   emit('toggle-weather')
+}
+
+function toggleAnalysisMenu() {
+  analysisMenuOpen.value = !analysisMenuOpen.value
+  measurementMenuOpen.value = false
+  layerMenuOpen.value = false
+  if (props.weatherActive) emit('toggle-weather')
+}
+
+function toggleVisibilityAnalysis() {
+  analysisMenuOpen.value = false
+  if (props.visibilityActive) emit('cancel-visibility')
+  else emit('start-visibility')
+}
+
+function updateShadowTime(event: Event) {
+  emit('update-shadow-time', (event.target as HTMLInputElement).value)
 }
 
 function updateLayer(key: string, event: Event) {
@@ -62,6 +91,7 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   measurementMenuOpen.value = false
   layerMenuOpen.value = false
+  analysisMenuOpen.value = false
   if (props.weatherActive) emit('toggle-weather')
 }
 
@@ -97,6 +127,22 @@ onBeforeUnmount(() => {
           <path d="m4 18 9-14 7 5-9 13H4v-4Zm9-14 2 6m-8 5 3 2m0-7 3 2" />
         </svg>
         <span>{{ measuring ? '结束测量' : '测量工具' }}</span>
+      </button>
+      <button
+        type="button"
+        :class="{
+          active: analysisMenuOpen || shadowActive || visibilityActive,
+        }"
+        :aria-expanded="analysisMenuOpen"
+        aria-label="空间分析"
+        title="阴影与通视分析"
+        @click="toggleAnalysisMenu"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="8" cy="8" r="3" />
+          <path d="M8 2v2m0 8v2M2 8h2m8 0h2m2 9-3-3 3-3m-3 3h8" />
+        </svg>
+        <span>空间分析</span>
       </button>
       <button
         type="button"
@@ -157,6 +203,53 @@ onBeforeUnmount(() => {
         <button type="button" @click="selectMeasure('area')">
           <i>⌑</i><span><strong>地表面积</strong><small>闭合范围估算</small></span>
         </button>
+      </div>
+    </Transition>
+
+    <Transition name="tool-panel">
+      <div v-if="analysisMenuOpen" class="scene-toolbox__panel analysis-panel">
+        <header><span>ANALYSIS</span><strong>阴影与通视分析</strong></header>
+        <section>
+          <div class="analysis-panel__title">
+            <span><strong>阴影分析</strong><small>按指定时间模拟建筑投影</small></span>
+            <button
+              type="button"
+              :class="{ active: shadowActive }"
+              @click="emit('toggle-shadow')"
+            >
+              {{ shadowActive ? '关闭' : '启用' }}
+            </button>
+          </div>
+          <label>
+            <span>分析时间</span>
+            <input
+              type="datetime-local"
+              :value="shadowTime"
+              @change="updateShadowTime"
+            />
+          </label>
+        </section>
+        <section>
+          <div class="analysis-panel__title">
+            <span><strong>通视分析</strong><small>依次选取观察点与目标点</small></span>
+            <button
+              type="button"
+              :class="{ active: visibilityActive }"
+              @click="toggleVisibilityAnalysis"
+            >
+              {{ visibilityActive ? '取消' : '开始' }}
+            </button>
+          </div>
+          <p>
+            {{
+              visibilityActive
+                ? visibilityPointCount
+                  ? '观察点已设置，请点击目标点'
+                  : '请在场景中点击观察点'
+                : '绿色表示可见，红色表示视线受阻'
+            }}
+          </p>
+        </section>
       </div>
     </Transition>
 
@@ -349,6 +442,83 @@ onBeforeUnmount(() => {
 .measure-panel > button small {
   color: var(--text-soft);
   font-size: 8px;
+}
+
+.analysis-panel {
+  width: 230px;
+}
+
+.analysis-panel > section {
+  display: grid;
+  padding: 10px 11px;
+  gap: 8px;
+}
+
+.analysis-panel > section + section {
+  border-top: 1px solid rgba(122, 203, 190, 0.1);
+}
+
+.analysis-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analysis-panel__title > span {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+
+.analysis-panel__title strong {
+  font-size: 9px;
+}
+
+.analysis-panel__title small,
+.analysis-panel label > span,
+.analysis-panel p {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+
+.analysis-panel__title button {
+  min-width: 48px;
+  min-height: 25px;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.22);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.analysis-panel__title button:hover,
+.analysis-panel__title button.active {
+  color: var(--cyan);
+  border-color: rgba(61, 214, 196, 0.52);
+  background: rgba(61, 214, 196, 0.1);
+}
+
+.analysis-panel label {
+  display: grid;
+  gap: 4px;
+}
+
+.analysis-panel input {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 6px;
+  color: var(--text);
+  color-scheme: dark;
+  border: 1px solid rgba(122, 203, 190, 0.18);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.18);
+  font: 8px var(--font-data);
+}
+
+.analysis-panel p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .layer-panel {

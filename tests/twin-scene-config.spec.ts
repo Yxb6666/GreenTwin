@@ -51,6 +51,26 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('@update-layer="updateSceneLayer"')
   })
 
+  it('三生模拟场景支持阴影分析与通视分析', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('shadowAnalysisActive')
+    expect(source).toContain('viewer.scene.shadowMap.enabled = active')
+    expect(source).toContain('shadows: sdk.ShadowMode?.ENABLED')
+    expect(source).toContain('viewer.scene.pickFromRay')
+    expect(source).toContain('startVisibilityAnalysis')
+    expect(source).toContain('@toggle-shadow="applyShadowAnalysis(!shadowAnalysisActive)"')
+  })
+
+  it('三生模拟页面不再显示顶部方案任务栏', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).not.toContain('simulation-workbar')
+    expect(source).not.toContain('SIM-2026-001')
+    expect(source).not.toContain('保存草案')
+    expect(source).not.toContain('下发治理')
+  })
+
   it('三生模拟场景加载水系、路网与 POI 数据图层', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 

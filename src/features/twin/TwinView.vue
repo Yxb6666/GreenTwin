@@ -56,6 +56,7 @@ import {
   type IsochroneGeometry,
   type IsochroneProfile,
 } from './isochrone'
+import { isLineOfSightBlocked } from './visibilityAnalysis'
 
 type ScenarioKey = 'waterlogging' | 'public-space' | 'irrigation' | 'ecology'
 type PlanKey = 'current' | 'planA' | 'planB'
@@ -94,8 +95,13 @@ interface SuperMapViewer {
     canvas: HTMLElement
     globe: {
       depthTestAgainstTerrain: boolean
+      enableLighting: boolean
       show: boolean
       pick: (ray: unknown, scene: SuperMapViewer['scene']) => unknown
+    }
+    shadowMap?: {
+      enabled: boolean
+      softShadows: boolean
     }
     layers?: { find?: (name: string) => SceneLayer | undefined }
     primitives: {
@@ -107,6 +113,11 @@ interface SuperMapViewer {
       remove: (stage: WeatherPostProcessStage) => boolean
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
+    pickFromRay?: (
+      ray: unknown,
+      objectsToExclude?: unknown[],
+      width?: number,
+    ) => { position?: unknown; object?: unknown } | undefined
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
     render?: () => void
     requestRender?: () => void
@@ -127,6 +138,8 @@ interface SuperMapViewer {
     zoomIn: (amount: number) => void
     zoomOut: (amount: number) => void
   }
+  clock?: { currentTime: unknown }
+  shadows?: boolean
   destroy: () => void
   isDestroyed?: () => boolean
 }
@@ -136,13 +149,15 @@ interface CesiumRuntime {
     container: HTMLElement,
     options: Record<string, unknown>,
   ) => SuperMapViewer
-  Cartesian3: {
+  Cartesian3: (new () => unknown) & {
     fromDegrees: (
       longitude: number,
       latitude: number,
       height: number,
     ) => unknown
     distance: (left: unknown, right: unknown) => number
+    normalize: (cartesian: unknown, result: unknown) => unknown
+    subtract: (left: unknown, right: unknown, result: unknown) => unknown
     fromDegreesArray: (coordinates: number[]) => unknown
   }
   Cartesian2: new (x: number, y: number) => unknown
@@ -161,6 +176,8 @@ interface CesiumRuntime {
     }
   }
   ScreenSpaceEventHandler: new (canvas?: HTMLElement) => CesiumEventHandler
+  Ray: new (origin: unknown, direction: unknown) => unknown
+  JulianDate?: { fromDate: (date: Date) => unknown }
   ScreenSpaceEventType: {
     LEFT_CLICK: number
     LEFT_DOWN: number
@@ -178,8 +195,10 @@ interface CesiumRuntime {
       scale?: number
       minimumPixelSize?: number
       maximumScale?: number
+      shadows?: unknown
     }) => ModelPrimitive
   }
+  ShadowMode?: { ENABLED: unknown }
   Transforms: {
     eastNorthUpToFixedFrame: (origin: unknown) => unknown
     headingPitchRollToFixedFrame: (
@@ -226,6 +245,10 @@ const modelScale = ref(1)
 const modelHeading = ref(0)
 const selectedPoint = ref<PickedPoint | null>(null)
 const measurementMode = ref<SceneMeasureType | null>(null)
+const shadowAnalysisActive = ref(false)
+const shadowAnalysisTime = ref('2026-06-21T15:00')
+const visibilityAnalysisActive = ref(false)
+const visibilityPoints = ref<PickedPoint[]>([])
 const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
@@ -259,6 +282,7 @@ let markerEntity: unknown = null
 let eventHandler: CesiumEventHandler | null = null
 let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
+let visibilityEntities: unknown[] = []
 let previewEntity: unknown = null
 let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
@@ -552,6 +576,7 @@ async function analyzeParkAt(point: PickedPoint) {
       scale: 2.5,
       minimumPixelSize: 110,
       maximumScale: 20,
+      shadows: sdk.ShadowMode?.ENABLED,
     }),
   )
   try {
@@ -663,6 +688,7 @@ async function loadGeneratedModel(
       scale: 1,
       minimumPixelSize: 96,
       maximumScale: 8,
+      shadows: sdk.ShadowMode?.ENABLED,
     }),
   )
   if (generatedModel.readyPromise) await generatedModel.readyPromise
@@ -811,7 +837,13 @@ function selectModel() {
 }
 
 function startModelDrag(movement: CesiumMovement) {
-  if (!viewer || pickMode.value || measurementMode.value || !movement.position)
+  if (
+    !viewer ||
+    pickMode.value ||
+    measurementMode.value ||
+    visibilityAnalysisActive.value ||
+    !movement.position
+  )
     return
   const picked = viewer.scene.pick(movement.position) as {
     primitive?: unknown
@@ -1005,10 +1037,172 @@ function finishMeasurement() {
   notifyScene(message)
 }
 
+function applyShadowAnalysis(active = shadowAnalysisActive.value) {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  const sdk = cesium()
+  const analysisTime = new Date(shadowAnalysisTime.value)
+  if (Number.isNaN(analysisTime.getTime())) {
+    notifyScene('请选择有效的阴影分析时间')
+    return
+  }
+  shadowAnalysisActive.value = active
+  viewer.scene.globe.enableLighting = active
+  if (viewer.scene.shadowMap) {
+    viewer.scene.shadowMap.enabled = active
+    viewer.scene.shadowMap.softShadows = true
+  }
+  if (viewer.shadows !== undefined) viewer.shadows = active
+  if (active && viewer.clock && sdk.JulianDate) {
+    viewer.clock.currentTime = sdk.JulianDate.fromDate(analysisTime)
+  }
+  viewer.scene.requestRender?.()
+  notifyScene(active ? `阴影分析已启用：${shadowAnalysisTime.value.replace('T', ' ')}` : '阴影分析已关闭')
+}
+
+function updateShadowAnalysisTime(value: string) {
+  shadowAnalysisTime.value = value
+  if (shadowAnalysisActive.value) applyShadowAnalysis(true)
+}
+
+function clearVisibilityOverlays() {
+  if (viewer) {
+    for (const entity of visibilityEntities) viewer.entities.remove(entity)
+  }
+  visibilityEntities = []
+  visibilityPoints.value = []
+  visibilityAnalysisActive.value = false
+}
+
+function cancelVisibilityAnalysis() {
+  clearVisibilityOverlays()
+  notifyScene('通视分析已取消')
+}
+
+function startVisibilityAnalysis() {
+  if (!viewer) {
+    notifyScene('三维场景仍在初始化，请稍后再试')
+    return
+  }
+  if (!viewer.scene.pickFromRay) {
+    notifyScene('当前三维引擎不支持空间射线检测')
+    return
+  }
+  cancelMeasurement()
+  clearVisibilityOverlays()
+  pickMode.value = false
+  parkPickMode.value = false
+  visibilityAnalysisActive.value = true
+  notifyScene('通视分析：请先点击观察点')
+}
+
+function addVisibilityPointEntity(point: PickedPoint, label: string, color: string) {
+  if (!viewer) return
+  const sdk = cesium()
+  const entity = viewer.entities.add({
+    position: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height + 1.7),
+    point: {
+      pixelSize: 10,
+      color,
+      outlineColor: '#effffc',
+      outlineWidth: 2,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: label,
+      font: 'bold 11px sans-serif',
+      fillColor: '#effffc',
+      showBackground: true,
+      backgroundColor: '#051011',
+      backgroundPadding: { x: 7, y: 4 },
+      pixelOffset: new sdk.Cartesian2(0, -24),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  visibilityEntities.push(entity)
+}
+
+function completeVisibilityAnalysis(observer: PickedPoint, target: PickedPoint) {
+  if (!viewer?.scene.pickFromRay) return
+  const sdk = cesium()
+  const observerCartesian = sdk.Cartesian3.fromDegrees(
+    observer.longitude,
+    observer.latitude,
+    observer.height + 1.7,
+  )
+  const targetCartesian = sdk.Cartesian3.fromDegrees(
+    target.longitude,
+    target.latitude,
+    target.height + 1.7,
+  )
+  const direction = sdk.Cartesian3.normalize(
+    sdk.Cartesian3.subtract(targetCartesian, observerCartesian, new sdk.Cartesian3()),
+    new sdk.Cartesian3(),
+  )
+  const totalDistance = sdk.Cartesian3.distance(observerCartesian, targetCartesian)
+  const hit = viewer.scene.pickFromRay(
+    new sdk.Ray(observerCartesian, direction),
+    visibilityEntities,
+    0.1,
+  )
+  const hitDistance = hit?.position
+    ? sdk.Cartesian3.distance(observerCartesian, hit.position)
+    : Number.POSITIVE_INFINITY
+  const blocked = isLineOfSightBlocked(totalDistance, hitDistance)
+  const visibleColor = '#45e6b8'
+  const blockedColor = '#ff665f'
+  const addLine = (positions: unknown[], color: string) => {
+    visibilityEntities.push(
+      viewer!.entities.add({
+        polyline: {
+          positions,
+          width: 5,
+          material: color,
+          depthFailMaterial: color,
+        },
+      }),
+    )
+  }
+  if (blocked && hit?.position) {
+    addLine([observerCartesian, hit.position], visibleColor)
+    addLine([hit.position, targetCartesian], blockedColor)
+    addVisibilityPointEntity(target, '目标点 · 不可见', blockedColor)
+  } else {
+    addLine([observerCartesian, targetCartesian], visibleColor)
+    addVisibilityPointEntity(target, '目标点 · 可见', visibleColor)
+  }
+  visibilityAnalysisActive.value = false
+  notifyScene(
+    blocked
+      ? `通视分析完成：视线在 ${formatDistance(hitDistance)} 处受阻`
+      : `通视分析完成：目标可见，视距 ${formatDistance(totalDistance)}`,
+  )
+}
+
+function addVisibilityAnalysisPoint(position: { x: number; y: number }) {
+  const point = pickGroundPoint(position)
+  if (!point) {
+    notifyScene('未拾取到地图表面，请重新点击')
+    return
+  }
+  if (visibilityPoints.value.length === 0) {
+    visibilityPoints.value = [point]
+    addVisibilityPointEntity(point, '观察点', '#39d8ff')
+    notifyScene('观察点已设置，请点击目标点')
+    return
+  }
+  const observer = visibilityPoints.value[0]!
+  visibilityPoints.value = [observer, point]
+  completeVisibilityAnalysis(observer, point)
+}
+
 function clearSceneDrawings() {
   measurementMode.value = null
   clearMeasurementOverlays()
-  notifyScene('标绘与测量结果已清除')
+  clearVisibilityOverlays()
+  notifyScene('标绘、测量与通视分析结果已清除')
 }
 
 function refreshScene() {
@@ -1204,6 +1398,7 @@ function createBuildingEntities(features: ParsedLayerFeature[]) {
           outlineColor: '#aab4b4',
           closeTop: true,
           closeBottom: true,
+          shadows: sdk.ShadowMode?.ENABLED,
         },
         show: layerVisibility.value.buildingLayer,
       }),
@@ -1294,6 +1489,10 @@ function setupSceneInteractions() {
     if (!movement.position) return
     if (suppressClickAfterDrag) {
       suppressClickAfterDrag = false
+      return
+    }
+    if (visibilityAnalysisActive.value) {
+      addVisibilityAnalysisPoint(movement.position)
       return
     }
     if (measurementMode.value) {
@@ -1515,24 +1714,6 @@ function removeGeneratedModel() {
   engineStatus.value = '模型已移除，可重新选点并输入提示词建造'
 }
 
-function openBuilder() {
-  const panel = document.getElementById('ai-builder-panel')
-  panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-  if (!selectedPoint.value && !pickMode.value) {
-    togglePointPicking()
-    return
-  }
-  panel?.querySelector<HTMLTextAreaElement>('textarea')?.focus()
-}
-
-function saveDraft() {
-  operationMessage.value = `${currentPlan.value.label}已保存为草案，参数与模型版本已关联`
-}
-
-function handoffPlan() {
-  operationMessage.value = `${currentPlan.value.label}已形成治理任务草案，可进入“三生治理”继续派单`
-}
-
 function toggleLayer(key: keyof typeof layerVisibility.value) {
   const layer = viewer?.scene?.layers?.find?.(key)
   if (layer) layer.visible = layerVisibility.value[key]
@@ -1604,6 +1785,7 @@ async function initializeViewer() {
       homeButton: false,
       sceneModePicker: false,
       navigationHelpButton: false,
+      shadows: false,
     })
     viewer.imageryLayers.removeAll(true)
     engineStatus.value = '正在加载 ArcGIS 导航底图'
@@ -1617,6 +1799,7 @@ async function initializeViewer() {
     )
     viewer.scene.globe.show = true
     viewer.scene.globe.depthTestAgainstTerrain = true
+    viewer.scene.globe.enableLighting = false
     viewer.camera.setView({
       destination: sdk.Cartesian3.fromDegrees(
         simulationCamera.longitude,
@@ -1642,6 +1825,7 @@ async function initializeViewer() {
 function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   cancelMeasurement()
+  if (visibilityAnalysisActive.value) cancelVisibilityAnalysis()
   if (parkPickMode.value) cancelParkPicking()
 }
 
@@ -1656,6 +1840,8 @@ onBeforeUnmount(() => {
   eventHandler?.destroy()
   eventHandler = null
   cancelMeasurement()
+  clearVisibilityOverlays()
+  applyShadowAnalysis(false)
   clearNativeWeatherEffect()
   isochroneRequest?.abort()
   clearIsochroneEntities()
@@ -1674,39 +1860,6 @@ onBeforeUnmount(() => {
       title="三生模拟"
       subtitle="真实空间场景构建 · 治理方案推演 · 生产生活生态协同决策"
     />
-
-    <section class="simulation-workbar panel-frame">
-      <div class="workbar-task">
-        <span class="task-id">SIM-2026-001</span>
-        <strong>徐场村道路积水治理模拟</strong>
-        <small>关联事件 ISSUE-2026-018 · 影响范围 400 m</small>
-      </div>
-      <div class="workbar-progress">
-        <span>场景构建</span>
-        <div><i :style="{ width: `${buildProgress}%` }" /></div>
-        <strong>{{ buildProgress }}%</strong>
-      </div>
-      <div class="workbar-actions">
-        <button type="button" class="tiny-button" @click="saveDraft">
-          保存草案
-        </button>
-        <button
-          type="button"
-          class="action-button"
-          :disabled="isGenerating"
-          @click="openBuilder"
-        >
-          {{ isGenerating ? '构建中…' : 'AI 建造' }}
-        </button>
-        <button
-          type="button"
-          class="action-button action-button--primary"
-          @click="handoffPlan"
-        >
-          下发治理
-        </button>
-      </div>
-    </section>
 
     <div class="twin-layout">
       <aside class="twin-left">
@@ -1802,7 +1955,7 @@ onBeforeUnmount(() => {
           ref="cesiumContainer"
           class="cesium-container"
           :class="{
-            'is-picking': pickMode || parkPickMode,
+            'is-picking': pickMode || parkPickMode || visibilityAnalysisActive,
             'is-dragging-model': isDraggingModel,
           }"
         />
@@ -1813,6 +1966,12 @@ onBeforeUnmount(() => {
         <div v-if="parkPickMode" class="pick-mode-hint">
           <span>请点击公园落点，随后自动加载模型并分析等时圈</span>
           <button type="button" @click="cancelParkPicking">取消</button>
+        </div>
+        <div v-if="visibilityAnalysisActive" class="pick-mode-hint">
+          <span>
+            通视分析：{{ visibilityPoints.length ? '请点击目标点' : '请点击观察点' }}
+          </span>
+          <button type="button" @click="cancelVisibilityAnalysis">取消</button>
         </div>
         <WeatherSimulation
           v-model="weatherState"
@@ -1825,6 +1984,10 @@ onBeforeUnmount(() => {
           :layers="sceneLayers"
           :feedback="toolFeedback"
           :weather-active="weatherPanelOpen"
+          :shadow-active="shadowAnalysisActive"
+          :shadow-time="shadowAnalysisTime"
+          :visibility-active="visibilityAnalysisActive"
+          :visibility-point-count="visibilityPoints.length"
           @clear="clearSceneDrawings"
           @measure="startMeasurement"
           @end-measure="cancelMeasurement"
@@ -1835,6 +1998,10 @@ onBeforeUnmount(() => {
           @locate="locateScene"
           @update-layer="updateSceneLayer"
           @toggle-weather="weatherPanelOpen = !weatherPanelOpen"
+          @toggle-shadow="applyShadowAnalysis(!shadowAnalysisActive)"
+          @update-shadow-time="updateShadowAnalysisTime"
+          @start-visibility="startVisibilityAnalysis"
+          @cancel-visibility="cancelVisibilityAnalysis"
         />
       </section>
 
@@ -1917,92 +2084,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .twin-page {
-  grid-template-rows: 72px 44px minmax(0, 1fr);
-}
-
-.simulation-workbar {
-  display: grid;
-  align-items: center;
-  min-width: 0;
-  padding: 0 10px 0 14px;
-  grid-template-columns: minmax(340px, 1fr) minmax(240px, 0.7fr) auto;
-  gap: 18px;
-}
-
-.workbar-task {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 9px;
-}
-
-.workbar-task .task-id {
-  padding: 4px 7px;
-  color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.28);
-  border-radius: 4px;
-  background: rgba(61, 214, 196, 0.08);
-  font: 9px var(--font-data);
-}
-
-.workbar-task strong {
-  font-size: 12px;
-  white-space: nowrap;
-}
-.workbar-task small {
-  overflow: hidden;
-  color: var(--text-soft);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workbar-progress {
-  display: grid;
-  align-items: center;
-  color: var(--text-soft);
-  font-size: 9px;
-  grid-template-columns: auto minmax(100px, 1fr) 34px;
-  gap: 7px;
-}
-
-.workbar-progress > div {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.workbar-progress i {
-  display: block;
-  height: 100%;
-  background: var(--cyan);
-  box-shadow: 0 0 7px var(--cyan);
-  transition: width 180ms linear;
-}
-.workbar-progress strong {
-  color: var(--cyan);
-  font: 10px var(--font-data);
-}
-.workbar-actions {
-  display: flex;
-  gap: 6px;
-}
-.workbar-actions button {
-  min-height: 28px;
-  padding: 0 10px;
-  color: var(--text-soft);
-  font-size: 10px;
-}
-.workbar-actions button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-.workbar-actions .action-button--primary {
-  color: #04201d;
-  border-color: var(--cyan);
-  background: var(--cyan);
-  font-weight: 700;
+  grid-template-rows: 72px minmax(0, 1fr);
 }
 
 .twin-layout {
@@ -2546,13 +2628,6 @@ onBeforeUnmount(() => {
   }
   .twin-right {
     grid-template-rows: minmax(360px, 1.35fr) minmax(225px, 0.65fr);
-  }
-  .simulation-workbar {
-    gap: 10px;
-    grid-template-columns: minmax(300px, 1fr) 210px auto;
-  }
-  .workbar-task small {
-    display: none;
   }
   .scenario-list button {
     min-height: 48px;
