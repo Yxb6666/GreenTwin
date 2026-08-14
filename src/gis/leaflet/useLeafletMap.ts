@@ -316,7 +316,6 @@ export function useLeafletMap(container: Ref<HTMLElement | null>) {
         pane: 'baseMapPane',
         maxZoom: 20,
         crossOrigin: true,
-        attribution: '&copy; Esri and data providers',
       })
       layer.on('tileerror', () => {
         if (!disposed) error.value = `${option.name}加载失败，请检查 accessToken、域名限制与网络连接。`
