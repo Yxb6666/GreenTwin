@@ -804,14 +804,6 @@ onMounted(async () => {
   border-radius: 2px;
 }
 
-:deep(.township-map-label) {
-  padding: 4px 7px;
-  border: 1px solid rgba(214, 237, 159, 0.35);
-  border-radius: 5px;
-  background: rgba(5, 18, 17, 0.82);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.22);
-}
-
 :deep(.township-theme-label),
 :deep(.township-theme-detail) {
   display: block;
