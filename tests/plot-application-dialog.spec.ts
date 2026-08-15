@@ -4,7 +4,7 @@ import PlotApplicationDialog from '@/features/twin/PlotApplicationDialog.vue'
 import { SIMULATION_PLOTS } from '@/features/twin/plotParcels'
 
 describe('地块应用场景弹窗', () => {
-  it('展示当前地块的推荐方向、应用场景和标签', () => {
+  it('精简展示当前地块的建设类型、功能方向和主要设施', () => {
     const plot = SIMULATION_PLOTS[0]!
     const wrapper = mount(PlotApplicationDialog, {
       props: { open: true, plot, position: { x: 420, y: 360 } },
@@ -18,10 +18,15 @@ describe('地块应用场景弹窗', () => {
     expect(wrapper.text()).toContain(plot.applicationLabel)
     plot.applicationScenarios.forEach((scenario) => {
       expect(wrapper.text()).toContain(scenario.label)
+      expect(wrapper.text()).not.toContain(scenario.description)
     })
     plot.applicationTags.forEach((tag) => {
       expect(wrapper.text()).toContain(tag)
     })
+    expect(wrapper.text()).not.toContain(plot.applicationSummary)
+    expect(wrapper.findAll('.plot-popup-table > div')).toHaveLength(3)
+    expect(wrapper.find('.plot-popup-toolbar').exists()).toBe(false)
+    expect(wrapper.find('.plot-popup-note').exists()).toBe(false)
   })
 
   it('支持关闭按钮', async () => {

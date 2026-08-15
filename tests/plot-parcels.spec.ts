@@ -5,6 +5,13 @@ import {
 } from '@/features/twin/plotParcels'
 
 describe('三生模拟规划地块', () => {
+  it('为两个地块设置明确的建设类型', () => {
+    expect(SIMULATION_PLOTS.map((plot) => plot.applicationLabel)).toEqual([
+      '口袋公园',
+      '工厂',
+    ])
+  })
+
   it('提供两个可切换且名称唯一的示范地块', () => {
     expect(SIMULATION_PLOTS).toHaveLength(2)
     expect(SIMULATION_PLOTS.map((plot) => plot.label)).toEqual([

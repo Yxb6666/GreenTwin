@@ -23,38 +23,28 @@ defineEmits<{
       aria-labelledby="plot-application-title"
     >
       <header>
-        <div>
-          <h2 id="plot-application-title">{{ plot.label }}应用场景</h2>
-          <small>规划地块信息</small>
-        </div>
-        <button type="button" aria-label="关闭应用场景弹窗" @click="$emit('close')">
+        <h2 id="plot-application-title">{{ plot.label }}规划内容</h2>
+        <button type="button" aria-label="关闭地块规划弹窗" @click="$emit('close')">
           ×
         </button>
       </header>
 
-      <div class="plot-popup-toolbar" aria-hidden="true">
-        <span>⌖</span><small>点击地块查看规划建议</small>
-      </div>
-
       <dl class="plot-popup-table">
         <div>
-          <dt>推荐场景</dt>
+          <dt>建设类型</dt>
           <dd><strong>{{ plot.applicationLabel }}</strong></dd>
         </div>
         <div>
-          <dt>应用方向</dt>
+          <dt>功能方向</dt>
           <dd>{{ plot.applicationTags.join(' · ') }}</dd>
         </div>
-        <div
-          v-for="scenario in plot.applicationScenarios"
-          :key="scenario.label"
-        >
-          <dt>{{ scenario.label }}</dt>
-          <dd>{{ scenario.description }}</dd>
+        <div>
+          <dt>主要设施</dt>
+          <dd>
+            {{ plot.applicationScenarios.map((scenario) => scenario.label).join('、') }}
+          </dd>
         </div>
       </dl>
-
-      <p class="plot-popup-note">{{ plot.applicationSummary }}</p>
     </section>
   </Transition>
 </template>
@@ -63,7 +53,7 @@ defineEmits<{
 .plot-map-popup {
   position: absolute;
   z-index: 320;
-  width: 350px;
+  width: 390px;
   color: var(--text);
   border: 1px solid rgba(122, 203, 190, 0.54);
   border-radius: 4px;
@@ -99,26 +89,17 @@ defineEmits<{
 .plot-map-popup > header {
   display: grid;
   align-items: center;
-  min-height: 48px;
-  padding: 8px 10px 8px 12px;
+  min-height: 52px;
+  padding: 9px 12px 9px 16px;
   border-bottom: 1px solid rgba(122, 203, 190, 0.14);
   background: rgba(61, 214, 196, 0.04);
-  grid-template-columns: 1fr 26px;
-}
-
-.plot-map-popup > header > div {
-  display: grid;
-  gap: 2px;
+  grid-template-columns: 1fr 28px;
 }
 
 .plot-map-popup h2 {
   margin: 0;
-  font-size: 11px;
-}
-
-.plot-map-popup header small {
-  color: var(--text-soft);
-  font-size: 7px;
+  font-size: 15px;
+  line-height: 1.35;
 }
 
 .plot-map-popup > header button {
@@ -130,37 +111,21 @@ defineEmits<{
   color: var(--text-soft);
   border: 0;
   background: transparent;
-  font: 16px/1 var(--font-body);
+  font: 18px/1 var(--font-body);
   cursor: pointer;
-}
-
-.plot-popup-toolbar {
-  display: flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 5px 10px;
-  gap: 6px;
-  color: var(--text-soft);
-  border-bottom: 1px solid rgba(122, 203, 190, 0.11);
-  font-size: 8px;
-}
-
-.plot-popup-toolbar span {
-  color: var(--cyan);
-  font: 12px var(--font-data);
 }
 
 .plot-popup-table {
   margin: 0;
-  padding: 10px;
+  padding: 12px;
 }
 
 .plot-popup-table > div {
   display: grid;
-  min-height: 36px;
+  min-height: 46px;
   border: 1px solid rgba(122, 203, 190, 0.1);
   border-bottom: 0;
-  grid-template-columns: 94px 1fr;
+  grid-template-columns: 96px 1fr;
 }
 
 .plot-popup-table > div:last-child {
@@ -172,14 +137,15 @@ defineEmits<{
   display: flex;
   align-items: center;
   margin: 0;
-  padding: 6px 8px;
-  font-size: 8px;
-  line-height: 1.45;
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .plot-popup-table dt {
   color: var(--text-soft);
   background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
 }
 
 .plot-popup-table dd {
@@ -189,17 +155,7 @@ defineEmits<{
 
 .plot-popup-table dd strong {
   color: #ffd28a;
-  font-size: 8px;
-}
-
-.plot-popup-note {
-  margin: -2px 10px 10px;
-  padding: 7px 8px;
-  color: var(--text-soft);
-  border-left: 2px solid var(--cyan);
-  background: rgba(61, 214, 196, 0.055);
-  font-size: 7px;
-  line-height: 1.55;
+  font-size: 13px;
 }
 
 .plot-dialog-enter-active,
@@ -224,10 +180,10 @@ defineEmits<{
 
 @media (max-height: 760px) {
   .plot-map-popup {
-    width: 330px;
+    width: 370px;
   }
   .plot-popup-table > div {
-    min-height: 33px;
+    min-height: 42px;
   }
 }
 
