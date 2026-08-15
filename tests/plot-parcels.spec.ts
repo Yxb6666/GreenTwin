@@ -38,16 +38,18 @@ describe('三生模拟规划地块', () => {
     expect(Math.min(...distances)).toBeGreaterThanOrEqual(1_000)
   })
 
-  it('徐场村地块向东南移至道路之间的空地', () => {
+  it('徐场村地块向西北移至目标空地并与道路平行', () => {
     const plot = SIMULATION_PLOTS.find((item) => item.key === 'xuchang-renewal')
 
-    expect(plot?.center).toEqual({ longitude: 114.9688, latitude: 34.949 })
+    expect(plot?.center).toEqual({ longitude: 114.96765, latitude: 34.94985 })
     expect(Math.min(...plot!.ring.map(([longitude]) => longitude))).toBeGreaterThan(
-      114.9681,
+      114.9669,
     )
     expect(Math.min(...plot!.ring.map(([, latitude]) => latitude))).toBeGreaterThan(
-      34.9485,
+      34.9494,
     )
+    expect(plot!.ring[0]![1]).toBeCloseTo(plot!.ring[1]![1], 8)
+    expect(plot!.ring[1]![0]).toBeCloseTo(plot!.ring[2]![0], 8)
   })
 
   it('矩形地块生成闭合且有效的经纬度环', () => {
