@@ -239,13 +239,6 @@ interface CesiumRuntime {
 const config = useRuntimeConfig()
 const cesiumContainer = ref<HTMLElement | null>(null)
 const sceneSourceCanvas = ref<HTMLCanvasElement | null>(null)
-const sceneOverview = ref({
-  longitude: 114.965,
-  latitude: 34.95,
-  longitudeRadius: 0.00052,
-  latitudeRadius: 0.00034,
-  heading: 0,
-})
 const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
@@ -306,8 +299,6 @@ let isochroneEntities: unknown[] = []
 let parkOriginEntity: unknown = null
 let isochroneRequest: AbortController | null = null
 let plotEntities: Array<{ entity: unknown; plotKey: string }> = []
-let removeCameraChangedListener: (() => void) | null = null
-let overviewSyncFrame: number | undefined
 
 const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
 const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
@@ -514,53 +505,6 @@ const assistantPrompts = [
 
 function cesium(): CesiumRuntime {
   return (window as typeof window & { Cesium: CesiumRuntime }).Cesium
-}
-
-function syncSceneOverview() {
-  if (!viewer) return
-  const sdk = cesium()
-  const canvas = viewer.scene.canvas
-  const screenCenter = new sdk.Cartesian2(
-    canvas.clientWidth * 0.5,
-    canvas.clientHeight * 0.68,
-  )
-  const ray = viewer.camera.getPickRay(screenCenter)
-  const groundCenter = ray ? viewer.scene.globe.pick(ray, viewer.scene) : null
-  const cartographic = groundCenter
-    ? sdk.Cartographic.fromCartesian(groundCenter)
-    : viewer.camera.positionCartographic
-  if (!cartographic) return
-
-  const longitude = sdk.Math.toDegrees(cartographic.longitude)
-  const latitude = sdk.Math.toDegrees(cartographic.latitude)
-  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return
-
-  const height = Math.max(20, viewer.camera.positionCartographic?.height ?? 48)
-  const latitudeRadius = Math.min(
-    Math.max((height / 111_320) * 1.6, 0.00025),
-    0.12,
-  )
-  const longitudeRadius = Math.min(
-    latitudeRadius /
-      Math.max(Math.cos(sdk.Math.toRadians(latitude)), 0.35),
-    0.18,
-  )
-
-  sceneOverview.value = {
-    longitude,
-    latitude,
-    longitudeRadius,
-    latitudeRadius,
-    heading: sdk.Math.toDegrees(viewer.camera.heading ?? 0),
-  }
-}
-
-function scheduleSceneOverviewSync() {
-  if (overviewSyncFrame !== undefined) return
-  overviewSyncFrame = window.requestAnimationFrame(() => {
-    overviewSyncFrame = undefined
-    syncSceneOverview()
-  })
 }
 
 function focusSceneFromOverview(point: {
@@ -1863,10 +1807,6 @@ async function initializeViewer() {
         roll: 0,
       },
     })
-    viewer.camera.percentageChanged = 0.01
-    removeCameraChangedListener =
-      viewer.camera.changed?.addEventListener(scheduleSceneOverviewSync) ?? null
-    syncSceneOverview()
     renderSimulationPlots()
     setupSceneInteractions()
     applyNativeWeatherEffect(weatherState.value)
@@ -1899,12 +1839,6 @@ onBeforeUnmount(() => {
   clearNativeWeatherEffect()
   isochroneRequest?.abort()
   clearIsochroneEntities()
-  removeCameraChangedListener?.()
-  removeCameraChangedListener = null
-  if (overviewSyncFrame !== undefined) {
-    window.cancelAnimationFrame(overviewSyncFrame)
-    overviewSyncFrame = undefined
-  }
   if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
   parkModel = null
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
@@ -2154,17 +2088,12 @@ onBeforeUnmount(() => {
 
         <TwinPlotPreview
           :scene-canvas="sceneSourceCanvas"
-          :point="selectedPoint"
-          :overview="sceneOverview"
-          :tile-url="buildArcGisTileUrl('arcgis/navigation', config.arcgis.accessToken)"
           :plan-label="currentPlan.label"
           :plot-label="currentPlot.label"
           :plot-index="activePlotIndex"
           :plot-count="SIMULATION_PLOTS.length"
-          :plot-ring="currentPlot.ring"
           @previous="selectAdjacentPlot(-1)"
           @next="selectAdjacentPlot(1)"
-          @locate="focusSceneFromOverview"
         />
       </aside>
     </div>

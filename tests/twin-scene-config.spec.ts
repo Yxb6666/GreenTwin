@@ -76,7 +76,7 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('下发治理')
   })
 
-  it('右下角使用与主场景联动的地块双视图预览', async () => {
+  it('右下角使用与主场景联动的地块三维预览', async () => {
     const [source, previewSource] = await Promise.all([
       readFile(twinViewPath, 'utf8'),
       readFile(plotPreviewPath, 'utf8'),
@@ -86,16 +86,11 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain(':scene-canvas="sceneSourceCanvas"')
     expect(source).not.toContain('title="方案决策"')
     expect(previewSource).toContain('三维场景')
-    expect(previewSource).toContain('区位概览')
-    expect(source).toContain('viewer.camera.changed?.addEventListener')
-    expect(source).toContain('syncSceneOverview()')
-    expect(source).toContain('@locate="focusSceneFromOverview"')
     expect(source).toContain('renderSimulationPlots()')
     expect(source).toContain('selectAdjacentPlot')
-    expect(source).toContain(':plot-ring="currentPlot.ring"')
-    expect(previewSource).toContain('L.polygon')
-    expect(previewSource).toContain("overviewMap.on('click'")
-    expect(previewSource).toContain('props.overview')
+    expect(previewSource).not.toContain('overview-preview')
+    expect(previewSource).not.toContain("from 'leaflet'")
+    expect(source).not.toContain(':plot-ring="currentPlot.ring"')
     expect(previewSource).toContain('context.drawImage(source')
     expect(previewSource).toContain('source.captureStream(8)')
     expect(previewSource).toContain('查看下一地块')

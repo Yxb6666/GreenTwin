@@ -1,105 +1,26 @@
 <script setup lang="ts">
-import L from 'leaflet'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { PickedPoint } from './modelPlacement'
-
-interface SceneOverview {
-  longitude: number
-  latitude: number
-  longitudeRadius: number
-  latitudeRadius: number
-  heading: number
-}
 
 const props = defineProps<{
   sceneCanvas: HTMLCanvasElement | null
-  point: PickedPoint | null
-  overview: SceneOverview
-  tileUrl: string
   planLabel: string
   plotLabel: string
   plotIndex: number
   plotCount: number
-  plotRing: Array<[longitude: number, latitude: number]>
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   previous: []
   next: []
-  locate: [point: { longitude: number; latitude: number }]
 }>()
 
 const previewCanvas = ref<HTMLCanvasElement | null>(null)
 const previewVideo = ref<HTMLVideoElement | null>(null)
-const overviewHost = ref<HTMLElement | null>(null)
 const previewReady = ref(false)
 
-let overviewMap: L.Map | null = null
-let extentLayer: L.Polygon | null = null
-let centerMarker: L.CircleMarker | null = null
-let selectedPointMarker: L.CircleMarker | null = null
-let plotLayer: L.Polygon | null = null
 let animationFrame = 0
 let lastCaptureAt = 0
-let resizeObserver: ResizeObserver | null = null
 let sceneStream: MediaStream | null = null
-
-function extentCorners() {
-  const { latitude, longitude, latitudeRadius, longitudeRadius, heading } =
-    props.overview
-  const angle = (heading * Math.PI) / 180
-  const cosine = Math.cos(angle)
-  const sine = Math.sin(angle)
-  return [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ].map(([x = 0, y = 0]) => {
-    const rotatedX = x * cosine - y * sine
-    const rotatedY = x * sine + y * cosine
-    return [
-      latitude + rotatedY * latitudeRadius,
-      longitude + rotatedX * longitudeRadius,
-    ] as L.LatLngTuple
-  })
-}
-
-function resolveOverviewZoom(radius: number) {
-  if (radius > 0.025) return 11
-  if (radius > 0.01) return 12
-  if (radius > 0.004) return 13
-  if (radius > 0.0015) return 14
-  if (radius > 0.0006) return 15
-  return 16
-}
-
-function updateOverview() {
-  if (!overviewMap) return
-  const { latitude, longitude, latitudeRadius, longitudeRadius } =
-    props.overview
-  const corners = extentCorners()
-  const radius = Math.max(latitudeRadius, longitudeRadius)
-  const zoom = resolveOverviewZoom(radius)
-
-  overviewMap.setView([latitude, longitude], zoom, {
-    animate: false,
-  })
-  extentLayer?.setLatLngs(corners)
-  plotLayer?.setLatLngs(
-    props.plotRing.map(([plotLongitude, plotLatitude]) => [
-      plotLatitude,
-      plotLongitude,
-    ]),
-  )
-  centerMarker?.setLatLng([latitude, longitude])
-  if (props.point) {
-    selectedPointMarker?.setLatLng([
-      props.point.latitude,
-      props.point.longitude,
-    ])
-  }
-}
 
 function captureScene(timestamp: number) {
   animationFrame = window.requestAnimationFrame(captureScene)
@@ -147,97 +68,16 @@ async function connectSceneStream() {
 
 onMounted(async () => {
   await nextTick()
-  if (overviewHost.value) {
-    overviewMap = L.map(overviewHost.value, {
-      attributionControl: false,
-      zoomControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-    })
-    L.tileLayer(props.tileUrl, { minZoom: 0, maxZoom: 19 }).addTo(overviewMap)
-    extentLayer = L.polygon(
-      [
-        [0, 0],
-        [0, 0],
-      ],
-      {
-        color: '#3dd6c4',
-        weight: 1.5,
-        fillColor: '#092b28',
-        fillOpacity: 0.54,
-        interactive: false,
-      },
-    ).addTo(overviewMap)
-    centerMarker = L.circleMarker([0, 0], {
-      radius: 3,
-      color: '#f4fffd',
-      weight: 1,
-      fillColor: '#3dd6c4',
-      fillOpacity: 1,
-      interactive: false,
-    }).addTo(overviewMap)
-    plotLayer = L.polygon(
-      props.plotRing.map(([longitude, latitude]) => [latitude, longitude]),
-      {
-        color: '#ffb45c',
-        weight: 2,
-        fillColor: '#d96720',
-        fillOpacity: 0.36,
-        interactive: false,
-      },
-    ).addTo(overviewMap)
-    selectedPointMarker = L.circleMarker([0, 0], {
-      radius: 4,
-      color: '#fff4d6',
-      weight: 1.5,
-      fillColor: '#f0b85c',
-      fillOpacity: 1,
-      interactive: false,
-    })
-    if (props.point) selectedPointMarker.addTo(overviewMap)
-    overviewMap.on('click', ({ latlng }) => {
-      emit('locate', { longitude: latlng.lng, latitude: latlng.lat })
-    })
-    updateOverview()
-    resizeObserver = new ResizeObserver(() =>
-      overviewMap?.invalidateSize(false),
-    )
-    resizeObserver.observe(overviewHost.value)
-  }
   await connectSceneStream()
   animationFrame = window.requestAnimationFrame(captureScene)
 })
 
-watch(
-  () => props.point,
-  (point) => {
-    if (!overviewMap || !selectedPointMarker) return
-    if (point) {
-      if (!overviewMap.hasLayer(selectedPointMarker)) {
-        selectedPointMarker.addTo(overviewMap)
-      }
-    } else if (overviewMap.hasLayer(selectedPointMarker)) {
-      selectedPointMarker.removeFrom(overviewMap)
-    }
-    updateOverview()
-  },
-  { deep: true },
-)
-watch(() => props.overview, updateOverview, { deep: true })
-watch(() => props.plotRing, updateOverview, { deep: true })
 watch(() => props.sceneCanvas, () => void connectSceneStream())
 
 onBeforeUnmount(() => {
   window.cancelAnimationFrame(animationFrame)
-  resizeObserver?.disconnect()
-  resizeObserver = null
   sceneStream?.getTracks().forEach((track) => track.stop())
   sceneStream = null
-  overviewMap?.remove()
-  overviewMap = null
 })
 </script>
 
@@ -282,14 +122,6 @@ onBeforeUnmount(() => {
       >
     </div>
 
-    <div class="overview-preview">
-      <div ref="overviewHost" class="overview-map" />
-      <div class="overview-heading">
-        <span>区位概览</span>
-        <strong>主场景实时同步</strong>
-      </div>
-      <div class="extent-legend"><i /> 当前视域 · 点击地图定位</div>
-    </div>
   </section>
 </template>
 
@@ -301,11 +133,10 @@ onBeforeUnmount(() => {
   gap: 7px;
   overflow: hidden;
   background: rgba(8, 23, 23, 0.92);
-  grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
-.scene-preview,
-.overview-preview {
+.scene-preview {
   position: relative;
   min-height: 0;
   overflow: hidden;
@@ -315,8 +146,7 @@ onBeforeUnmount(() => {
 }
 
 .scene-preview canvas,
-.scene-preview video,
-.overview-map {
+.scene-preview video {
   width: 100%;
   height: 100%;
 }
@@ -333,8 +163,7 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
-.scene-preview::after,
-.overview-preview::after {
+.scene-preview::after {
   position: absolute;
   z-index: 2;
   inset: 0;
@@ -344,9 +173,7 @@ onBeforeUnmount(() => {
 }
 
 .scene-title,
-.overview-heading,
-.live-badge,
-.extent-legend {
+.live-badge {
   position: absolute;
   z-index: 4;
   backdrop-filter: blur(7px);
@@ -463,60 +290,6 @@ onBeforeUnmount(() => {
   border-top-color: var(--cyan);
   border-radius: 50%;
   animation: preview-spin 1.1s linear infinite;
-}
-
-.overview-heading {
-  top: 7px;
-  left: 7px;
-  display: grid;
-  min-width: 76px;
-  padding: 5px 7px;
-  gap: 2px;
-  border: 1px solid rgba(122, 203, 190, 0.2);
-  border-radius: 5px;
-  background: rgba(3, 14, 14, 0.76);
-}
-
-.overview-heading span {
-  color: #f4fffd;
-  font-size: 9px;
-  font-weight: 650;
-}
-
-.overview-heading strong {
-  color: var(--cyan);
-  font-size: 7px;
-  font-weight: 500;
-}
-
-.extent-legend {
-  right: 7px;
-  bottom: 6px;
-  display: flex;
-  align-items: center;
-  padding: 4px 6px;
-  gap: 5px;
-  color: rgba(238, 248, 245, 0.82);
-  border-radius: 4px;
-  background: rgba(3, 14, 14, 0.72);
-  font-size: 7px;
-}
-
-.extent-legend i {
-  width: 10px;
-  height: 7px;
-  border: 1px solid var(--cyan);
-  background: rgba(9, 43, 40, 0.65);
-}
-
-:deep(.leaflet-container) {
-  background: #0a1918;
-  cursor: crosshair;
-  font-family: var(--font-body);
-}
-
-:deep(.leaflet-tile-pane) {
-  filter: brightness(0.62) saturate(0.72) hue-rotate(116deg);
 }
 
 @keyframes preview-spin {
