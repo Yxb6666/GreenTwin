@@ -48,7 +48,7 @@ export function createPlotRectangle(
 export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
   {
     key: 'xuchang-renewal',
-    label: '徐场村更新地块',
+    label: '徐场村规划地块',
     description: '村庄公共空间与生活服务设施更新',
     applicationLabel: '生活服务与公共空间更新',
     applicationSummary:
@@ -76,7 +76,7 @@ export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
   },
   {
     key: 'guyang-industry',
-    label: '堌阳东侧产业地块',
+    label: '堌阳东侧规划地块',
     description: '生产空间整理与乡村产业设施提升',
     applicationLabel: '乡村产业与生产设施提升',
     applicationSummary:

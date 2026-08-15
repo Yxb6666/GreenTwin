@@ -7,6 +7,10 @@ import {
 describe('三生模拟规划地块', () => {
   it('提供两个可切换且名称唯一的示范地块', () => {
     expect(SIMULATION_PLOTS).toHaveLength(2)
+    expect(SIMULATION_PLOTS.map((plot) => plot.label)).toEqual([
+      '徐场村规划地块',
+      '堌阳东侧规划地块',
+    ])
     expect(new Set(SIMULATION_PLOTS.map((plot) => plot.key)).size).toBe(2)
     expect(new Set(SIMULATION_PLOTS.map((plot) => plot.label)).size).toBe(2)
     expect(SIMULATION_PLOTS.some((plot) => plot.key === 'canal-ecology')).toBe(false)
