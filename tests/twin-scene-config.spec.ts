@@ -23,11 +23,12 @@ describe('三生模拟场景配置', () => {
     })
   })
 
-  it('使用堌阳镇范围定位且不自动飞向外部模型', async () => {
+  it('初始视角聚焦地块1且不自动飞向外部模型', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
-    expect(source).toContain('longitude: 114.965')
-    expect(source).toContain('latitude: 34.95')
+    expect(source).toContain('const initialSimulationPlot = SIMULATION_PLOTS[0]!')
+    expect(source).toContain('longitude: initialSimulationPlot.center.longitude')
+    expect(source).toContain('latitude: initialSimulationPlot.center.latitude')
     expect(source).toContain('longitude: simulationFocus.longitude - 0.00097')
     expect(source).toContain('latitude: simulationFocus.latitude - 0.00128')
     expect(source).toContain('height: 48')

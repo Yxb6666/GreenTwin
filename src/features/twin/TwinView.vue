@@ -357,10 +357,11 @@ function inferBuildingStyle(
   return 'rural'
 }
 
-// 项目边界数据中堌阳镇包围盒的中心点。徐场村精确坐标接入前只做镇域范围定位。
+// 初始视角聚焦地块1，并与地块配置共用中心点，避免坐标调整后视角偏离。
+const initialSimulationPlot = SIMULATION_PLOTS[0]!
 const simulationFocus = {
-  longitude: 114.965,
-  latitude: 34.95,
+  longitude: initialSimulationPlot.center.longitude,
+  latitude: initialSimulationPlot.center.latitude,
 }
 
 // 采用贴近建筑尺度的西南侧低空机位，让道路和建筑从身旁向远处延伸，
