@@ -38,6 +38,15 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('viewer.flyTo')
   })
 
+  it('清理徐场村和产业地块内的建筑白膜', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain("['xuchang-renewal', 'guyang-industry']")
+    expect(source).toContain(
+      'excludePolygonFeaturesFromRings(rawBuildingFeatures, clearedPlotRings)',
+    )
+  })
+
   it('三生模拟场景使用 ArcGIS 导航底图而不是街道图栅格代理', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
@@ -133,6 +142,10 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain('重新选择服务点')
     expect(source).toContain('clearParkServiceArea')
     expect(source).toContain('aria-label="清除服务点和分析结果"')
+    expect(source).toContain('class="park-action-icon"')
+    expect(source).toContain('M10 17s5-4.15 5-9')
+    expect(source).toContain('M4.5 6.25h11')
+    expect(source).not.toContain("parkPickMode ? '×' : '⌖'")
     expect(source).toContain('服务点与服务圈分析结果已清除')
     expect(source).toContain('renderParkSelectionMarker(point)')
     expect(source).toContain('trackParkModelScreenSize(origin)')

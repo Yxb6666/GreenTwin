@@ -1608,11 +1608,11 @@ async function loadDataLayers() {
   ] = results
   const rawBuildingFeatures =
     buildingResult.status === 'fulfilled' ? buildingResult.value : []
-  const industryPlot = SIMULATION_PLOTS.find(
-    (plot) => plot.key === 'guyang-industry',
-  )
-  const buildingFeatures = industryPlot
-    ? excludePolygonFeaturesFromRings(rawBuildingFeatures, [industryPlot.ring])
+  const clearedPlotRings = SIMULATION_PLOTS.filter((plot) =>
+    ['xuchang-renewal', 'guyang-industry'].includes(plot.key),
+  ).map((plot) => plot.ring)
+  const buildingFeatures = clearedPlotRings.length
+    ? excludePolygonFeaturesFromRings(rawBuildingFeatures, clearedPlotRings)
     : rawBuildingFeatures
   buildingFootprints.value = buildingFeatures
   buildingDataReady.value = buildingResult.status === 'fulfilled'
@@ -2084,7 +2084,21 @@ onBeforeUnmount(() => {
                 :disabled="isochroneLoading"
                 @click="startParkAnalysis"
               >
-                <span aria-hidden="true">{{ parkPickMode ? '×' : '⌖' }}</span>
+                <span class="park-action-icon" aria-hidden="true">
+                  <svg
+                    v-if="parkPickMode"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                  >
+                    <path d="m6.25 6.25 7.5 7.5m0-7.5-7.5 7.5" />
+                  </svg>
+                  <svg v-else viewBox="0 0 20 20" fill="none">
+                    <path
+                      d="M10 17s5-4.15 5-9a5 5 0 1 0-10 0c0 4.85 5 9 5 9Z"
+                    />
+                    <circle cx="10" cy="8" r="1.75" />
+                  </svg>
+                </span>
                 {{
                   isochroneLoading
                     ? '正在生成服务圈…'
@@ -2102,7 +2116,16 @@ onBeforeUnmount(() => {
                 :disabled="!parkSelectedPoint"
                 @click="clearParkServiceArea"
               >
-                <span aria-hidden="true">⌫</span>清除结果
+                <span class="park-action-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none">
+                    <path d="M4.5 6.25h11" />
+                    <path d="M8 3.75h4l.75 2.5h-5.5L8 3.75Z" />
+                    <path
+                      d="m6.25 6.25.6 9h6.3l.6-9M8.5 9v3.75M11.5 9v3.75"
+                    />
+                  </svg>
+                </span>
+                清除结果
               </button>
             </div>
           </div>
@@ -2430,8 +2453,31 @@ onBeforeUnmount(() => {
     0 0 12px rgba(61, 214, 196, 0.12);
 }
 
-.park-pick-button > span {
-  font: 15px/1 var(--font-data);
+.park-action-icon {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: rgba(61, 214, 196, 0.08);
+  opacity: 0.92;
+}
+
+.park-action-icon svg {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.park-pick-button:hover:not(:disabled) .park-action-icon,
+.park-clear-button:hover:not(:disabled) .park-action-icon {
+  background: rgba(61, 214, 196, 0.15);
 }
 
 .park-pick-button:hover:not(:disabled),
@@ -2448,6 +2494,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 16px rgba(240, 184, 92, 0.24);
 }
 
+.park-pick-button.active .park-action-icon {
+  background: rgba(16, 33, 30, 0.1);
+}
+
 .park-pick-button:disabled {
   cursor: wait;
   opacity: 0.7;
@@ -2459,8 +2509,8 @@ onBeforeUnmount(() => {
   background: rgba(239, 123, 110, 0.09);
 }
 
-.park-clear-button > span {
-  font: 11px/1 var(--font-data);
+.park-clear-button .park-action-icon {
+  background: rgba(239, 123, 110, 0.06);
 }
 
 .park-clear-button:disabled {
