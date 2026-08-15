@@ -504,6 +504,52 @@ const housingCoverageStale = computed(
     housingCoverage.value !== null &&
     housingCoverageSignature.value !== currentIsochroneSignature.value,
 )
+const serviceAnalysisSteps = computed(() => {
+  const pointReady = parkSelectedPoint.value !== null
+  const resultReady = housingCoverage.value !== null && !housingCoverageStale.value
+  const profileLabel =
+    profileOptions.find((option) => option.value === isochroneProfile.value)
+      ?.label ?? '步行'
+
+  return [
+    {
+      code: '01',
+      title: '设置分析参数',
+      detail: `${profileLabel} · ${isochroneMinutes.value.join('/')} 分钟`,
+      state: 'done',
+    },
+    {
+      code: '02',
+      title: '选择服务中心',
+      detail: pointReady
+        ? parkSelectedPoint.value?.label || '服务点已标记'
+        : parkPickMode.value
+          ? '请在地图上点击位置'
+          : '等待地图选点',
+      state: pointReady ? 'done' : parkPickMode.value ? 'active' : 'pending',
+    },
+    {
+      code: '03',
+      title: '生成覆盖结果',
+      detail: resultReady
+        ? '覆盖住房与分圈层统计已完成'
+        : isochroneLoading.value
+          ? '正在计算等时圈与覆盖指标'
+          : '选点后自动生成分析',
+      state: resultReady
+        ? 'done'
+        : isochroneLoading.value
+          ? 'active'
+          : 'pending',
+    },
+  ]
+})
+const serviceAnalysisGuideMeta = computed(() => {
+  if (housingCoverage.value && !housingCoverageStale.value) return '分析完成'
+  if (isochroneLoading.value) return '计算中'
+  if (parkPickMode.value) return '等待选点'
+  return '3 步完成'
+})
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
   scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
@@ -2145,6 +2191,32 @@ onBeforeUnmount(() => {
             :stale="housingCoverageStale"
           />
         </PanelCard>
+
+        <PanelCard
+          class="analysis-guide-card"
+          title="分析指引"
+          :meta="serviceAnalysisGuideMeta"
+        >
+          <div class="analysis-guide">
+            <ol class="analysis-guide__steps">
+              <li
+                v-for="step in serviceAnalysisSteps"
+                :key="step.code"
+                :class="`is-${step.state}`"
+              >
+                <i>{{ step.code }}</i>
+                <span>
+                  <strong>{{ step.title }}</strong>
+                  <small>{{ step.detail }}</small>
+                </span>
+              </li>
+            </ol>
+            <div class="analysis-guide__status">
+              <i aria-hidden="true" />
+              <span>{{ isochroneStatus }}</span>
+            </div>
+          </div>
+        </PanelCard>
       </aside>
 
       <section class="twin-scene panel-frame">
@@ -2266,15 +2338,23 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(61, 214, 196, 0.22) transparent;
-  grid-template-rows: max-content max-content;
+  grid-template-rows: max-content max-content minmax(190px, 1fr);
 }
 
 .twin-left > .panel-card {
   align-self: start;
 }
 
+.twin-left > .analysis-guide-card {
+  align-self: stretch;
+}
+
 .twin-left :deep(.panel-card__body) {
   height: auto;
+}
+
+.twin-left :deep(.analysis-guide-card .panel-card__body) {
+  height: calc(100% - 38px);
 }
 .twin-right {
   grid-template-rows: minmax(250px, 0.65fr) minmax(390px, 1.35fr);
@@ -2535,6 +2615,122 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.02);
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.analysis-guide {
+  position: relative;
+  display: grid;
+  min-height: 100%;
+  overflow: hidden;
+  gap: 6px;
+  grid-template-rows: 1fr auto;
+}
+
+.analysis-guide::after {
+  position: absolute;
+  right: -34px;
+  bottom: -42px;
+  width: 132px;
+  height: 132px;
+  border: 1px solid rgba(61, 214, 196, 0.08);
+  border-radius: 50%;
+  content: '';
+  box-shadow:
+    0 0 0 18px rgba(61, 214, 196, 0.018),
+    0 0 0 36px rgba(61, 214, 196, 0.012);
+}
+
+.analysis-guide__steps {
+  display: grid;
+  align-content: center;
+  margin: 0;
+  padding: 0;
+  gap: 5px;
+  list-style: none;
+}
+
+.analysis-guide__steps li {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  min-height: 32px;
+  padding: 3px 6px;
+  gap: 7px;
+  border: 1px solid rgba(122, 203, 190, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.018);
+  grid-template-columns: 23px 1fr;
+}
+
+.analysis-guide__steps li > i {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  color: var(--text-soft);
+  border: 1px solid rgba(122, 203, 190, 0.18);
+  border-radius: 50%;
+  font: normal 8px var(--font-data);
+}
+
+.analysis-guide__steps li > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.analysis-guide__steps strong {
+  color: rgba(233, 248, 245, 0.88);
+  font-size: 9px;
+}
+
+.analysis-guide__steps small {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-guide__steps li.is-active {
+  border-color: rgba(240, 184, 92, 0.34);
+  background: rgba(240, 184, 92, 0.06);
+}
+
+.analysis-guide__steps li.is-active > i {
+  color: var(--amber);
+  border-color: rgba(240, 184, 92, 0.48);
+  box-shadow: 0 0 10px rgba(240, 184, 92, 0.12);
+}
+
+.analysis-guide__steps li.is-done > i {
+  color: #09201d;
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+
+.analysis-guide__status {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 6px;
+  gap: 7px;
+  color: rgba(190, 218, 213, 0.78);
+  border-top: 1px solid rgba(122, 203, 190, 0.1);
+  font-size: 7.5px;
+  line-height: 1.4;
+}
+
+.analysis-guide__status > i {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 7px rgba(61, 214, 196, 0.72);
 }
 
 .issue-summary {
