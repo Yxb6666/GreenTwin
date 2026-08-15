@@ -282,13 +282,14 @@ const weatherState = ref(createWeatherState('clear'))
 const nativeWeatherEffects = ref(false)
 const weatherPanelOpen = ref(false)
 const parkPickMode = ref(false)
+const parkSelectedPoint = ref<PickedPoint | null>(null)
 const isochroneLoading = ref(false)
 const isochronePhase = ref<
   'idle' | 'picking' | 'loading' | 'complete' | 'error'
 >('idle')
 const isochroneProfile = ref<IsochroneProfile>('walking')
 const isochroneMinutes = ref([5, 10, 15])
-const isochroneStatus = ref('点击下方按钮，然后在地图上选择公园落点')
+const isochroneStatus = ref('设置参数后，在地图中选择服务圈中心')
 const buildingFootprints = ref<ParsedLayerFeature[]>([])
 const buildingDataReady = ref(false)
 const housingCoverage = ref<HousingCoverageSummary | null>(null)
@@ -672,8 +673,8 @@ function startParkAnalysis() {
   isochronePhase.value = 'picking'
   pickMode.value = false
   cancelMeasurement()
-  isochroneStatus.value = '请在地图上点击公园建设位置'
-  operationMessage.value = '公园等时圈分析：等待选择落点'
+  isochroneStatus.value = '请在地图上点击服务圈中心'
+  operationMessage.value = '服务圈分析：等待选择中心点'
 }
 
 function cancelParkPicking() {
@@ -691,12 +692,71 @@ function clearIsochroneEntities() {
   parkOriginEntity = null
 }
 
+function renderParkSelectionMarker(point: PickedPoint) {
+  if (!viewer) return
+  const sdk = cesium()
+  const groundPosition = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height + 0.6,
+  )
+  const markerPosition = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height + 18,
+  )
+
+  isochroneEntities.push(
+    viewer.entities.add({
+      position: groundPosition,
+      ellipse: {
+        semiMajorAxis: 18,
+        semiMinorAxis: 18,
+        material: new sdk.Color(61 / 255, 214 / 255, 196 / 255, 0.22),
+        outline: true,
+        outlineColor: new sdk.Color(1, 193 / 255, 92 / 255, 0.96),
+        outlineWidth: 3,
+        height: point.height + 0.6,
+      },
+    }),
+    viewer.entities.add({
+      polyline: {
+        positions: [groundPosition, markerPosition],
+        width: 3,
+        material: new sdk.Color(1, 193 / 255, 92 / 255, 0.94),
+      },
+    }),
+  )
+  parkOriginEntity = viewer.entities.add({
+    position: markerPosition,
+    point: {
+      pixelSize: 18,
+      color: new sdk.Color(1, 193 / 255, 92 / 255, 1),
+      outlineColor: new sdk.Color(3 / 255, 32 / 255, 29 / 255, 1),
+      outlineWidth: 4,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+    label: {
+      text: '服务圈中心 · 已选',
+      font: 'bold 12px sans-serif',
+      fillColor: new sdk.Color(1, 247 / 255, 234 / 255, 1),
+      showBackground: true,
+      backgroundColor: new sdk.Color(3 / 255, 32 / 255, 29 / 255, 0.9),
+      backgroundPadding: { x: 9, y: 6 },
+      pixelOffset: new sdk.Cartesian2(0, -32),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    },
+  })
+  viewer.scene.requestRender?.()
+}
+
 function clearParkServiceArea() {
   isochroneRequest?.abort()
   isochroneRequest = null
   parkPickMode.value = false
   isochroneLoading.value = false
   clearIsochroneEntities()
+  parkSelectedPoint.value = null
   if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
   parkModel = null
   latestIsochrones.value = []
@@ -704,8 +764,8 @@ function clearParkServiceArea() {
   housingCoverage.value = null
   housingCoverageSignature.value = ''
   isochronePhase.value = 'idle'
-  isochroneStatus.value = '结果已清除，可重新选择公园位置'
-  operationMessage.value = '公园模型与等时圈已清除'
+  isochroneStatus.value = '结果已清除，可重新选择服务点'
+  operationMessage.value = '服务点与服务圈分析结果已清除'
 }
 
 function refreshHousingCoverage(signature = currentIsochroneSignature.value) {
@@ -740,6 +800,9 @@ async function analyzeParkAt(point: PickedPoint) {
   isochroneRequest?.abort()
   isochroneRequest = new AbortController()
   clearIsochroneEntities()
+  parkSelectedPoint.value = point
+  renderParkSelectionMarker(point)
+  isochroneStatus.value = '已标记服务圈中心，正在加载公园模型…'
   if (parkModel) viewer.scene.primitives.remove(parkModel)
   const origin = sdk.Cartesian3.fromDegrees(
     point.longitude,
@@ -799,30 +862,6 @@ async function analyzeParkAt(point: PickedPoint) {
           }),
         )
       })
-    })
-    parkOriginEntity = viewer.entities.add({
-      position: sdk.Cartesian3.fromDegrees(
-        point.longitude,
-        point.latitude,
-        point.height + 18,
-      ),
-      point: {
-        pixelSize: 16,
-        color: new sdk.Color(228 / 255, 84 / 255, 63 / 255, 1),
-        outlineColor: new sdk.Color(1, 242 / 255, 223 / 255, 1),
-        outlineWidth: 4,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      label: {
-        text: '公园中心',
-        font: 'bold 11px sans-serif',
-        fillColor: new sdk.Color(1, 247 / 255, 234 / 255, 1),
-        showBackground: true,
-        backgroundColor: new sdk.Color(113 / 255, 33 / 255, 26 / 255, 0.86),
-        backgroundPadding: { x: 7, y: 4 },
-        pixelOffset: new sdk.Cartesian2(0, -28),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
     })
     latestIsochrones.value = result.features
     latestIsochroneSignature.value = analysisSignature
@@ -1954,13 +1993,17 @@ onBeforeUnmount(() => {
 
     <div class="twin-layout">
       <aside class="twin-left">
-        <PanelCard title="公园服务圈" meta="可达性分析">
+        <PanelCard
+          class="service-area-card"
+          title="服务圈分析"
+          meta="可达性分析"
+        >
           <div class="isochrone-panel">
             <div class="isochrone-overview">
               <i>园</i>
               <span>
-                <strong>生成公园可达服务圈</strong>
-                <small>选择出行方式与时长，再到地图中确定位置</small>
+                <strong>分析公园服务覆盖范围</strong>
+                <small>设置出行方式与时长，再选择服务圈中心</small>
               </span>
               <em :class="`is-${isochronePhase}`">
                 {{
@@ -2020,20 +2063,20 @@ onBeforeUnmount(() => {
                   isochroneLoading
                     ? '正在生成服务圈…'
                     : parkPickMode
-                      ? '取消地图选点'
-                      : isochronePhase === 'complete'
-                        ? '重新选择公园位置'
-                        : '在地图中选择公园位置'
+                      ? '取消选点'
+                      : parkSelectedPoint
+                        ? '重新选择服务点'
+                        : '在地图中选择服务点'
                 }}
               </button>
               <button
                 class="park-clear-button"
                 type="button"
-                aria-label="清除公园和等时圈"
-                :disabled="isochronePhase === 'idle'"
+                aria-label="清除服务点和分析结果"
+                :disabled="!parkSelectedPoint"
                 @click="clearParkServiceArea"
               >
-                <span aria-hidden="true">⌫</span>清除
+                <span aria-hidden="true">⌫</span>清除结果
               </button>
             </div>
             <div
@@ -2041,7 +2084,14 @@ onBeforeUnmount(() => {
               :class="`is-${isochronePhase}`"
               role="status"
             >
-              <i /><span>{{ isochroneStatus }}</span>
+              <i />
+              <span>
+                <strong>{{ isochroneStatus }}</strong>
+                <small v-if="parkSelectedPoint">
+                  东经 {{ parkSelectedPoint.longitude.toFixed(6) }}° · 北纬
+                  {{ parkSelectedPoint.latitude.toFixed(6) }}°
+                </small>
+              </span>
             </div>
           </div>
         </PanelCard>
@@ -2072,7 +2122,7 @@ onBeforeUnmount(() => {
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
         <div v-if="parkPickMode" class="pick-mode-hint">
-          <span>请点击公园落点，随后自动加载模型并分析等时圈</span>
+          <span>请点击服务圈中心，随后自动加载模型并分析可达范围</span>
           <button type="button" @click="cancelParkPicking">取消</button>
         </div>
         <WeatherSimulation
@@ -2257,7 +2307,20 @@ onBeforeUnmount(() => {
 
 .isochrone-panel {
   display: grid;
-  gap: 5px;
+  gap: 6px;
+}
+
+:deep(.service-area-card .panel-card__header h2) {
+  color: #f3fffc;
+  font-size: 15px;
+  font-weight: 720;
+  letter-spacing: 0.02em;
+}
+
+:deep(.service-area-card .panel-card__header > span) {
+  color: rgba(207, 235, 230, 0.76);
+  font-size: 9px;
+  letter-spacing: 0.04em;
 }
 
 .isochrone-overview {
@@ -2295,13 +2358,17 @@ onBeforeUnmount(() => {
 }
 
 .isochrone-overview strong {
-  font-size: 10px;
+  color: #edfffb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .isochrone-overview small {
   overflow: hidden;
-  color: var(--text-soft);
-  font-size: 8px;
+  color: rgba(205, 229, 225, 0.68);
+  font-size: 8.5px;
+  line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2339,13 +2406,15 @@ onBeforeUnmount(() => {
 }
 
 .isochrone-field-heading strong {
-  font-size: 8px;
+  color: rgba(238, 252, 249, 0.92);
+  font-size: 9.5px;
+  font-weight: 650;
 }
 
 .isochrone-field-heading small {
   margin-left: auto;
-  color: var(--text-soft);
-  font-size: 7px;
+  color: rgba(190, 218, 213, 0.62);
+  font-size: 8px;
 }
 
 .profile-switch,
@@ -2356,12 +2425,13 @@ onBeforeUnmount(() => {
 }
 .profile-switch button,
 .minute-switch button {
-  min-height: 28px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.16);
+  min-height: 30px;
+  color: rgba(220, 238, 234, 0.74);
+  border: 1px solid rgba(122, 203, 190, 0.22);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.025);
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 600;
   cursor: pointer;
   transition: 140ms ease;
 }
@@ -2386,13 +2456,13 @@ onBeforeUnmount(() => {
 }
 
 .minute-switch button small {
-  font-size: 7px;
+  font-size: 8px;
 }
 
 .park-analysis-actions {
   display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 8px;
+  grid-template-columns: minmax(0, 2fr) minmax(78px, 1fr);
 }
 
 .park-pick-button,
@@ -2400,20 +2470,26 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 38px;
   gap: 7px;
   border-radius: 7px;
-  font-size: 9px;
+  font-size: 10px;
+  font-weight: 650;
   cursor: pointer;
   transition: 140ms ease;
 }
 
 .park-pick-button {
-  color: #03201d;
-  border: 1px solid var(--cyan);
-  background: linear-gradient(100deg, #35c8b7, #4be0ce);
-  box-shadow: 0 5px 16px rgba(34, 178, 160, 0.16);
-  font-weight: 700;
+  color: #dffff9;
+  border: 1px solid rgba(61, 214, 196, 0.72);
+  background: linear-gradient(
+    105deg,
+    rgba(61, 214, 196, 0.16),
+    rgba(61, 214, 196, 0.07)
+  );
+  box-shadow:
+    inset 0 0 14px rgba(61, 214, 196, 0.06),
+    0 0 12px rgba(61, 214, 196, 0.12);
 }
 
 .park-pick-button > span {
@@ -2422,15 +2498,16 @@ onBeforeUnmount(() => {
 
 .park-pick-button:hover:not(:disabled),
 .park-clear-button:hover:not(:disabled) {
-  filter: brightness(1.08);
+  border-color: rgba(91, 235, 218, 0.88);
+  filter: brightness(1.12);
   transform: translateY(-1px);
 }
 
 .park-pick-button.active {
-  color: var(--amber);
-  border-color: rgba(240, 184, 92, 0.55);
-  background: rgba(240, 184, 92, 0.08);
-  box-shadow: none;
+  color: #10211e;
+  border-color: #f0b85c;
+  background: linear-gradient(105deg, #f0b85c, #ffd488);
+  box-shadow: 0 0 16px rgba(240, 184, 92, 0.24);
 }
 
 .park-pick-button:disabled {
@@ -2439,9 +2516,9 @@ onBeforeUnmount(() => {
 }
 
 .park-clear-button {
-  color: #f19a91;
-  border: 1px solid rgba(239, 123, 110, 0.34);
-  background: rgba(239, 123, 110, 0.06);
+  color: rgba(255, 202, 195, 0.9);
+  border: 1px solid rgba(239, 123, 110, 0.48);
+  background: rgba(239, 123, 110, 0.09);
 }
 
 .park-clear-button > span {
@@ -2459,14 +2536,34 @@ onBeforeUnmount(() => {
 .isochrone-status {
   display: flex;
   align-items: flex-start;
-  min-height: 27px;
-  padding: 6px 7px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.09);
+  min-height: 30px;
+  padding: 6px 8px;
+  color: rgba(218, 239, 235, 0.78);
+  border: 1px solid rgba(122, 203, 190, 0.14);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.018);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.5;
+}
+
+.isochrone-status > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.isochrone-status strong {
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.isochrone-status small {
+  color: rgba(129, 221, 209, 0.72);
+  font: 7.5px var(--font-data);
+  white-space: nowrap;
 }
 
 .isochrone-status i {
