@@ -330,7 +330,7 @@ let isochroneRequest: AbortController | null = null
 let plotEntities: Array<{ entity: unknown; plotKey: string }> = []
 
 const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
-const parkModelBaseScale = 2.5
+const parkModelBaseScale = 0.35
 const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
   { value: 'walking', label: '步行' },
   { value: 'cycling', label: '骑行' },
