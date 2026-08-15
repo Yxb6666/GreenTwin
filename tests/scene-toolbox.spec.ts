@@ -88,6 +88,10 @@ describe('三维场景工具条', () => {
     await wrapper.get('button[aria-label="空间分析"]').trigger('click')
     expect(wrapper.find('.analysis-panel').text()).toContain('日照阴影分析')
     expect(wrapper.find('.analysis-panel').text()).not.toContain('通视分析')
+    expect(wrapper.find('.shadow-analysis-card__status svg').exists()).toBe(
+      true,
+    )
+    expect(wrapper.find('.shadow-analysis-card__tip svg').exists()).toBe(true)
     expect(
       (wrapper.get('input[type="datetime-local"]').element as HTMLInputElement)
         .value,
@@ -100,5 +104,19 @@ describe('三维场景工具条', () => {
     expect(wrapper.emitted('update-shadow-time')?.[0]).toEqual([
       '2026-06-21T12:00',
     ])
+  })
+
+  it('日照分析按钮使用太阳与建筑组合图标', () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '' },
+    })
+    const icon = wrapper.get('.scene-toolbox__sunlight-icon')
+
+    expect(icon.find('circle').attributes()).toMatchObject({
+      cx: '7',
+      cy: '7',
+      r: '2.5',
+    })
+    expect(icon.findAll('path')).toHaveLength(2)
   })
 })

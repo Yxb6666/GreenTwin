@@ -131,9 +131,16 @@ onBeforeUnmount(() => {
         title="日照阴影分析"
         @click="toggleAnalysisMenu"
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="8" cy="8" r="3" />
-          <path d="M8 2v2m0 8v2M2 8h2m8 0h2m2 9-3-3 3-3m-3 3h8" />
+        <svg
+          class="scene-toolbox__sunlight-icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle cx="7" cy="7" r="2.5" />
+          <path
+            d="M7 2v1.5M7 10.5V12M2 7h1.5M10.5 7H12M3.5 3.5l1 1m5 5 1 1m0-7-1 1m-5 5-1 1"
+          />
+          <path d="m12 14 4-2 4 2-4 2-4-2Zm0 0v4l4 2 4-2v-4m-4 2v4" />
         </svg>
         <span>空间分析</span>
       </button>
@@ -208,7 +215,12 @@ onBeforeUnmount(() => {
         </header>
         <section class="shadow-analysis-card">
           <div class="shadow-analysis-card__status">
-            <i :class="{ active: shadowActive }" aria-hidden="true">☀</i>
+            <i :class="{ active: shadowActive }" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3.5" />
+                <path d="M12 2.5V5m0 14v2.5M2.5 12H5m14 0h2.5M5.3 5.3l1.8 1.8m9.8 9.8 1.8 1.8m0-13.4-1.8 1.8m-9.8 9.8-1.8 1.8" />
+              </svg>
+            </i>
             <span>
               <strong>{{ shadowActive ? '阴影效果已显示' : '阴影效果未启用' }}</strong>
               <small>{{ shadowActive ? '调整时间可实时更新场景' : '开启后按当前时间模拟光照' }}</small>
@@ -243,7 +255,11 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <p class="shadow-analysis-card__tip">
-            阴影结果取决于场景中已加载的建筑与模型数据。
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 7v4m0-6v.01" />
+            </svg>
+            <span>阴影结果取决于场景中已加载的建筑与模型数据。</span>
           </p>
         </section>
       </div>
@@ -459,7 +475,15 @@ onBeforeUnmount(() => {
 .shadow-analysis-card__status {
   display: grid;
   align-items: center;
-  gap: 8px;
+  padding: 8px;
+  gap: 7px;
+  border: 1px solid rgba(122, 203, 190, 0.12);
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(61, 214, 196, 0.06),
+    rgba(0, 0, 0, 0.08)
+  );
   grid-template-columns: 30px minmax(0, 1fr) auto;
 }
 
@@ -471,8 +495,17 @@ onBeforeUnmount(() => {
   color: var(--text-soft);
   border: 1px solid rgba(122, 203, 190, 0.18);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
-  font: normal 14px var(--font-data);
+  background: rgba(61, 214, 196, 0.045);
+}
+
+.shadow-analysis-card__status > i svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .shadow-analysis-card__status > i.active {
@@ -489,7 +522,13 @@ onBeforeUnmount(() => {
 }
 
 .shadow-analysis-card__status strong {
+  color: var(--text);
   font-size: 9px;
+  line-height: 1.25;
+}
+
+.shadow-analysis-card__status small {
+  line-height: 1.35;
 }
 
 .shadow-analysis-card__status small,
@@ -500,22 +539,35 @@ onBeforeUnmount(() => {
 }
 
 .shadow-toggle {
-  min-width: 56px;
-  min-height: 28px;
-  padding: 0 8px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.22);
+  min-width: 62px;
+  min-height: 30px;
+  padding: 0 9px;
+  color: #06211e;
+  border: 1px solid rgba(89, 234, 216, 0.72);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(135deg, #53ddcc, #2fc4b3);
+  box-shadow: 0 4px 12px rgba(23, 177, 160, 0.18);
   font-size: 8px;
+  font-weight: 700;
   cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.shadow-toggle:hover,
+.shadow-toggle:hover {
+  border-color: rgba(121, 255, 239, 0.9);
+  box-shadow: 0 5px 15px rgba(23, 177, 160, 0.26);
+  transform: translateY(-1px);
+}
+
 .shadow-toggle.active {
-  color: var(--cyan);
-  border-color: rgba(61, 214, 196, 0.52);
-  background: rgba(61, 214, 196, 0.1);
+  color: var(--amber);
+  border-color: rgba(240, 184, 92, 0.42);
+  background: rgba(240, 184, 92, 0.08);
+  box-shadow: none;
 }
 
 .shadow-time-field {
@@ -568,11 +620,25 @@ onBeforeUnmount(() => {
 }
 
 .shadow-analysis-card__tip {
+  display: flex;
+  align-items: flex-start;
   margin: 0;
-  padding: 7px 8px;
-  border-left: 2px solid rgba(61, 214, 196, 0.5);
-  background: rgba(61, 214, 196, 0.035);
+  padding: 8px 1px 0;
+  gap: 6px;
+  border-top: 1px solid rgba(122, 203, 190, 0.09);
   line-height: 1.5;
+}
+
+.shadow-analysis-card__tip svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  fill: none;
+  stroke: rgba(90, 221, 204, 0.72);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .layer-panel {
