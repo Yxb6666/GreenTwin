@@ -76,7 +76,7 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('下发治理')
   })
 
-  it('右下角使用与主场景联动的地块三维预览', async () => {
+  it('右上角使用与主场景联动的地块三维预览', async () => {
     const [source, previewSource] = await Promise.all([
       readFile(twinViewPath, 'utf8'),
       readFile(plotPreviewPath, 'utf8'),
@@ -84,6 +84,15 @@ describe('三生模拟场景配置', () => {
 
     expect(source).toContain('TwinPlotPreview')
     expect(source).toContain(':scene-canvas="sceneSourceCanvas"')
+    expect(source.indexOf('<TwinPlotPreview')).toBeLessThan(
+      source.indexOf('<AiBuilderAssistant'),
+    )
+    expect(source).toContain(
+      'grid-template-rows: minmax(250px, 0.65fr) minmax(390px, 1.35fr)',
+    )
+    expect(source).toContain(
+      'grid-template-rows: minmax(225px, 0.65fr) minmax(360px, 1.35fr)',
+    )
     expect(source).not.toContain('title="方案决策"')
     expect(previewSource).toContain('三维场景')
     expect(source).toContain('renderSimulationPlots()')

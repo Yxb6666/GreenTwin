@@ -2082,6 +2082,16 @@ onBeforeUnmount(() => {
       </section>
 
       <aside class="twin-right">
+        <TwinPlotPreview
+          :scene-canvas="sceneSourceCanvas"
+          :plan-label="currentPlan.label"
+          :plot-label="currentPlot.label"
+          :plot-index="activePlotIndex"
+          :plot-count="SIMULATION_PLOTS.length"
+          @previous="selectAdjacentPlot(-1)"
+          @next="selectAdjacentPlot(1)"
+        />
+
         <AiBuilderAssistant
           :open="true"
           embedded
@@ -2103,16 +2113,6 @@ onBeforeUnmount(() => {
           @update-heading="updateModelHeading"
           @remove-model="removeGeneratedModel"
           @focus-model="focusGeneratedModel"
-        />
-
-        <TwinPlotPreview
-          :scene-canvas="sceneSourceCanvas"
-          :plan-label="currentPlan.label"
-          :plot-label="currentPlot.label"
-          :plot-index="activePlotIndex"
-          :plot-count="SIMULATION_PLOTS.length"
-          @previous="selectAdjacentPlot(-1)"
-          @next="selectAdjacentPlot(1)"
         />
       </aside>
     </div>
@@ -2148,7 +2148,7 @@ onBeforeUnmount(() => {
   grid-template-rows: 290px minmax(0, 1fr);
 }
 .twin-right {
-  grid-template-rows: minmax(390px, 1.35fr) minmax(250px, 0.65fr);
+  grid-template-rows: minmax(250px, 0.65fr) minmax(390px, 1.35fr);
 }
 
 .scenario-list,
@@ -2727,7 +2727,7 @@ onBeforeUnmount(() => {
     grid-template-rows: 270px minmax(0, 1fr);
   }
   .twin-right {
-    grid-template-rows: minmax(360px, 1.35fr) minmax(225px, 0.65fr);
+    grid-template-rows: minmax(225px, 0.65fr) minmax(360px, 1.35fr);
   }
   .scenario-list button {
     min-height: 48px;
