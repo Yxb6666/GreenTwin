@@ -316,7 +316,7 @@ const parameters = ref({
 let viewer: SuperMapViewer | null = null
 let generatedModel: ModelPrimitive | null = null
 let constructionRun = 0
-let markerEntity: unknown = null
+let buildLocationEntities: unknown[] = []
 let eventHandler: CesiumEventHandler | null = null
 let suppressClickAfterDrag = false
 let measurementEntities: unknown[] = []
@@ -1014,35 +1014,75 @@ async function playConstruction(
   }
 }
 
+function clearBuildLocationMarker() {
+  if (viewer) {
+    buildLocationEntities.forEach((entity) => viewer?.entities.remove(entity))
+  }
+  buildLocationEntities = []
+}
+
 function upsertMarker(point: PickedPoint | null) {
   if (!viewer || !point) return
   const sdk = cesium()
-  const position = sdk.Cartesian3.fromDegrees(
+  clearBuildLocationMarker()
+  const groundPosition = sdk.Cartesian3.fromDegrees(
     point.longitude,
     point.latitude,
-    point.height,
+    point.height + 0.6,
   )
-  if (markerEntity) viewer.entities.remove(markerEntity)
-  markerEntity = viewer.entities.add({
-    position,
-    point: {
-      pixelSize: modelSelected.value ? 18 : 12,
-      color: modelSelected.value ? '#3dd6c4' : '#ef7b6e',
-      outlineColor: '#ffffff',
-      outlineWidth: 2,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-    label: {
-      text: point.label,
-      font: '10px sans-serif',
-      fillColor: '#eafffb',
-      showBackground: true,
-      backgroundColor: '#051011',
-      backgroundPadding: { x: 7, y: 4 },
-      pixelOffset: new sdk.Cartesian2(0, -26),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-  })
+  const markerPosition = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height + 18,
+  )
+  const markerColor = modelSelected.value
+    ? new sdk.Color(61 / 255, 214 / 255, 196 / 255, 1)
+    : new sdk.Color(240 / 255, 184 / 255, 92 / 255, 1)
+
+  buildLocationEntities.push(
+    viewer.entities.add({
+      position: groundPosition,
+      ellipse: {
+        semiMajorAxis: 14,
+        semiMinorAxis: 14,
+        material: new sdk.Color(240 / 255, 184 / 255, 92 / 255, 0.18),
+        outline: true,
+        outlineColor: markerColor,
+        outlineWidth: 3,
+        height: point.height + 0.6,
+      },
+    }),
+    viewer.entities.add({
+      polyline: {
+        positions: [groundPosition, markerPosition],
+        width: 3,
+        material: markerColor,
+      },
+    }),
+  )
+  buildLocationEntities.push(
+    viewer.entities.add({
+      position: markerPosition,
+      point: {
+        pixelSize: modelSelected.value ? 18 : 12,
+        color: markerColor,
+        outlineColor: new sdk.Color(3 / 255, 32 / 255, 29 / 255, 1),
+        outlineWidth: 4,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: `建造位置 · 已选\n${point.label}`,
+        font: 'bold 11px sans-serif',
+        fillColor: new sdk.Color(1, 247 / 255, 234 / 255, 1),
+        showBackground: true,
+        backgroundColor: new sdk.Color(3 / 255, 32 / 255, 29 / 255, 0.9),
+        backgroundPadding: { x: 9, y: 6 },
+        pixelOffset: new sdk.Cartesian2(0, -38),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    }),
+  )
+  viewer.scene.requestRender?.()
 }
 
 function applyModelTransform() {
@@ -1095,17 +1135,24 @@ function pickGroundPoint(position: { x: number; y: number }) {
 
 function togglePointPicking() {
   if (pickMode.value) {
-    pickMode.value = false
-    operationMessage.value = '已取消选点'
+    cancelPointPicking()
     return
   }
+  if (!viewer) {
+    operationMessage.value = '三维地图尚未初始化，请稍后再试'
+    return
+  }
+  if (parkPickMode.value) cancelParkPicking()
+  cancelMeasurement()
   pickMode.value = true
-  operationMessage.value =
-    '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
+  operationMessage.value = 'AI 建造：等待选择建造位置'
 }
 
 function cancelPointPicking() {
   pickMode.value = false
+  operationMessage.value = selectedPoint.value
+    ? `保留已选建造位置：${selectedPoint.value.label}`
+    : '已取消建造位置选择'
 }
 
 function handleSceneClick(position: { x: number; y: number }) {
@@ -2015,6 +2062,7 @@ function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
   plotApplicationOpen.value = false
   cancelMeasurement()
+  if (pickMode.value) cancelPointPicking()
   if (parkPickMode.value) cancelParkPicking()
 }
 
@@ -2034,6 +2082,7 @@ onBeforeUnmount(() => {
   isochroneRequest?.abort()
   clearIsochroneEntities()
   removeParkModel()
+  clearBuildLocationMarker()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()
@@ -2195,7 +2244,7 @@ onBeforeUnmount(() => {
           }"
         />
         <div v-if="pickMode" class="pick-mode-hint">
-          <span>请在地图上点击确定建造位置</span>
+          <span>请点击建造位置，选点后继续描述模型需求</span>
           <button type="button" @click="cancelPointPicking">取消</button>
         </div>
         <div v-if="parkPickMode" class="pick-mode-hint">

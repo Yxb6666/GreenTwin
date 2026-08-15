@@ -31,6 +31,9 @@ describe('AI 建造助手', () => {
       '选择位置',
     )
     expect(wrapper.find('.builder-empty').text()).toContain('先确定模型建造位置')
+    expect(wrapper.find('.builder-empty button').text()).toBe(
+      '在地图中选择建造位置',
+    )
     expect(wrapper.find('.builder-composer').exists()).toBe(false)
 
     await wrapper.find('.builder-empty button').trigger('click')
@@ -66,7 +69,10 @@ describe('AI 建造助手', () => {
       props: { ...defaultProps, embedded: true, picking: true },
     })
 
-    expect(wrapper.find('.builder-empty').text()).toContain('请在地图中点击落点')
+    expect(wrapper.find('.builder-empty').text()).toContain(
+      '请在地图中选择建造位置',
+    )
+    expect(wrapper.find('.builder-empty').text()).toContain('地图会即时标记落点')
     expect(wrapper.find('.builder-empty button').text()).toBe('取消选点')
 
     await wrapper.find('.builder-empty button').trigger('click')

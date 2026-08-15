@@ -281,11 +281,11 @@ watch(
             :class="{ 'is-picking': picking }"
           >
             <span class="builder-empty__icon" aria-hidden="true">⌖</span>
-            <strong>{{ picking ? '请在地图中点击落点' : '先确定模型建造位置' }}</strong>
+            <strong>{{ picking ? '请在地图中选择建造位置' : '先确定模型建造位置' }}</strong>
             <p>
               {{
                 picking
-                  ? '建议选择建筑旁的空地，落点后即可继续描述模型。'
+                  ? '地图会即时标记落点；选定后即可继续描述模型。'
                   : '选点后再描述建筑类型、尺寸和风格，操作会更清晰。'
               }}
             </p>
@@ -295,7 +295,7 @@ watch(
               data-no-drag
               @click="picking ? emit('cancel-pick') : emit('toggle-pick')"
             >
-              {{ picking ? '取消选点' : '在地图上选择位置' }}
+              {{ picking ? '取消选点' : '在地图中选择建造位置' }}
             </button>
             <small v-if="picking">按 Esc 也可取消</small>
           </section>

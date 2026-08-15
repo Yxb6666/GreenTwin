@@ -175,4 +175,27 @@ describe('三生模拟场景配置', () => {
     )
     expect(source).not.toContain('放置公园模型')
   })
+
+  it('AI 建造选点复用清晰的地图标记交互且不加载公园模型', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain('function clearBuildLocationMarker()')
+    expect(source).toContain('buildLocationEntities.push(')
+    expect(source).toContain('text: `建造位置 · 已选\\n${point.label}`')
+    expect(source).toContain('请点击建造位置，选点后继续描述模型需求')
+    expect(source).toContain('if (parkPickMode.value) cancelParkPicking()')
+    expect(source).toContain('if (pickMode.value) cancelPointPicking()')
+    expect(source).toContain(
+      "operationMessage.value = 'AI 建造：等待选择建造位置'",
+    )
+
+    const toggleStart = source.indexOf('function togglePointPicking()')
+    const toggleEnd = source.indexOf(
+      'function cancelPointPicking()',
+      toggleStart,
+    )
+    const toggleSource = source.slice(toggleStart, toggleEnd)
+    expect(toggleSource).not.toContain('parkModel')
+    expect(toggleSource).not.toContain('analyzeParkAt')
+  })
 })
