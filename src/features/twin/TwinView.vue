@@ -10,12 +10,16 @@ import { buildArcGisTileUrl } from '@/gis/leaflet/baseMaps'
 import AiBuilderAssistant, {
   type AiBuilderStyle,
 } from './AiBuilderAssistant.vue'
-import SceneToolbox, {
-  type SceneMeasureType,
-} from './SceneToolbox.vue'
+import SceneToolbox, { type SceneMeasureType } from './SceneToolbox.vue'
 import WeatherSimulation from './WeatherSimulation.vue'
 import TwinPlotPreview from './TwinPlotPreview.vue'
+import HousingCoveragePanel from './HousingCoveragePanel.vue'
 import { SIMULATION_PLOTS } from './plotParcels'
+import {
+  calculateHousingCoverage,
+  type HousingCoverageSummary,
+  type HousingIsochroneFeature,
+} from './housingCoverage'
 import {
   createWeatherState,
   describeWeatherRisk,
@@ -83,7 +87,10 @@ interface CesiumMovement {
 }
 
 interface CesiumEventHandler {
-  setInputAction: (action: (movement: CesiumMovement) => void, type: number) => void
+  setInputAction: (
+    action: (movement: CesiumMovement) => void,
+    type: number,
+  ) => void
   destroy: () => void
 }
 
@@ -223,7 +230,11 @@ interface CesiumRuntime {
       result?: unknown,
     ) => unknown
   }
-  HeadingPitchRoll: new (heading: number, pitch: number, roll: number) => unknown
+  HeadingPitchRoll: new (
+    heading: number,
+    pitch: number,
+    roll: number,
+  ) => unknown
   Ellipsoid: { WGS84: unknown }
   Math: {
     toRadians: (degrees: number) => number
@@ -260,16 +271,26 @@ const shadowAnalysisTime = ref('2026-06-21T15:00')
 const toolFeedback = ref('')
 const measurePoints = ref<PickedPoint[]>([])
 const dataLayerEntities = ref<Record<string, unknown[]>>({})
-const operationMessage = ref('点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模')
+const operationMessage = ref(
+  '点击“AI 建造”，先在地图上选点，再输入提示词启动 Blender 建模',
+)
 const weatherState = ref(createWeatherState('clear'))
 const nativeWeatherEffects = ref(false)
 const weatherPanelOpen = ref(false)
 const parkPickMode = ref(false)
 const isochroneLoading = ref(false)
-const isochronePhase = ref<'idle' | 'picking' | 'loading' | 'complete' | 'error'>('idle')
+const isochronePhase = ref<
+  'idle' | 'picking' | 'loading' | 'complete' | 'error'
+>('idle')
 const isochroneProfile = ref<IsochroneProfile>('walking')
 const isochroneMinutes = ref([5, 10, 15])
 const isochroneStatus = ref('点击下方按钮，然后在地图上选择公园落点')
+const buildingFootprints = ref<ParsedLayerFeature[]>([])
+const buildingDataReady = ref(false)
+const housingCoverage = ref<HousingCoverageSummary | null>(null)
+const housingCoverageSignature = ref('')
+const latestIsochrones = ref<HousingIsochroneFeature[]>([])
+const latestIsochroneSignature = ref('')
 const layerVisibility = ref({
   buildingLayer: true,
   roadLayer: true,
@@ -307,12 +328,19 @@ const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
   { value: 'driving', label: '驾车' },
 ]
 
-const constructionStages = ['场地准备', '基础施工', '主体搭建', '屋顶封顶', '装饰完成']
+const constructionStages = [
+  '场地准备',
+  '基础施工',
+  '主体搭建',
+  '屋顶封顶',
+  '装饰完成',
+]
 
 function inferBuildingStyle(
   instruction: string,
 ): NonNullable<SimulationParameters['buildingStyle']> {
-  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction)) return 'traditional-chinese'
+  if (/古风|中式|传统|四合院|亭|庙|牌楼/.test(instruction))
+    return 'traditional-chinese'
   if (/现代|办公|商业|玻璃|公寓|高层|科技/.test(instruction)) return 'modern'
   return 'rural'
 }
@@ -457,6 +485,14 @@ const currentPlan = computed(() => planData[activePlan.value])
 const currentPlot = computed(() => SIMULATION_PLOTS[activePlotIndex.value]!)
 const weatherMetrics = computed(() => resolveWeatherMetrics(weatherState.value))
 const isGenerating = computed(() => buildState.value === 'running')
+const currentIsochroneSignature = computed(
+  () => `${isochroneProfile.value}:${isochroneMinutes.value.join(',')}`,
+)
+const housingCoverageStale = computed(
+  () =>
+    housingCoverage.value !== null &&
+    housingCoverageSignature.value !== currentIsochroneSignature.value,
+)
 const assistantContext = computed<DecisionAssistantContext>(() => ({
   module: '三生模拟',
   scopeLabel: `${currentScenario.value.label} · ${currentPlan.value.label}`,
@@ -514,8 +550,10 @@ function focusSceneFromOverview(point: {
   if (!viewer) return
   const sdk = cesium()
   const height = Math.max(30, viewer.camera.positionCartographic?.height ?? 48)
-  const heading = viewer.camera.heading ?? sdk.Math.toRadians(simulationCamera.heading)
-  const pitch = viewer.camera.pitch ?? sdk.Math.toRadians(simulationCamera.pitch)
+  const heading =
+    viewer.camera.heading ?? sdk.Math.toRadians(simulationCamera.heading)
+  const pitch =
+    viewer.camera.pitch ?? sdk.Math.toRadians(simulationCamera.pitch)
   const lookAngle = Math.max(
     sdk.Math.toRadians(10),
     Math.min(Math.abs(pitch), sdk.Math.toRadians(80)),
@@ -605,12 +643,6 @@ function selectAdjacentPlot(direction: -1 | 1) {
   selectSimulationPlot(activePlotIndex.value + direction)
 }
 
-function selectMeasure(key: MeasureKey) {
-  activeMeasure.value = key
-  const measure = measures.find((item) => item.key === key)
-  operationMessage.value = `正在配置治理措施：${measure?.label ?? ''}`
-}
-
 function toggleIsochroneMinute(minute: number) {
   const selected = isochroneMinutes.value.includes(minute)
   if (selected && isochroneMinutes.value.length === 1) {
@@ -663,9 +695,22 @@ function clearParkServiceArea() {
   clearIsochroneEntities()
   if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
   parkModel = null
+  latestIsochrones.value = []
+  latestIsochroneSignature.value = ''
+  housingCoverage.value = null
+  housingCoverageSignature.value = ''
   isochronePhase.value = 'idle'
   isochroneStatus.value = '结果已清除，可重新选择公园位置'
   operationMessage.value = '公园模型与等时圈已清除'
+}
+
+function refreshHousingCoverage(signature = currentIsochroneSignature.value) {
+  if (!buildingDataReady.value || !latestIsochrones.value.length) return
+  housingCoverage.value = calculateHousingCoverage(
+    latestIsochrones.value,
+    buildingFootprints.value,
+  )
+  housingCoverageSignature.value = signature
 }
 
 function polygonRings(geometry: IsochroneGeometry) {
@@ -692,7 +737,11 @@ async function analyzeParkAt(point: PickedPoint) {
   isochroneRequest = new AbortController()
   clearIsochroneEntities()
   if (parkModel) viewer.scene.primitives.remove(parkModel)
-  const origin = sdk.Cartesian3.fromDegrees(point.longitude, point.latitude, point.height)
+  const origin = sdk.Cartesian3.fromDegrees(
+    point.longitude,
+    point.latitude,
+    point.height,
+  )
   parkModel = viewer.scene.primitives.add(
     sdk.Model.fromGltf({
       url: parkModelUrl,
@@ -703,6 +752,9 @@ async function analyzeParkAt(point: PickedPoint) {
       shadows: sdk.ShadowMode?.ENABLED,
     }),
   )
+  const analysisProfile = isochroneProfile.value
+  const analysisMinutes = [...isochroneMinutes.value]
+  const analysisSignature = `${analysisProfile}:${analysisMinutes.join(',')}`
   try {
     if (parkModel.readyPromise) await parkModel.readyPromise
     isochroneStatus.value = '公园已加载，正在请求 Mapbox 等时圈…'
@@ -710,12 +762,14 @@ async function analyzeParkAt(point: PickedPoint) {
       accessToken: config.mapbox.accessToken,
       longitude: point.longitude,
       latitude: point.latitude,
-      profile: isochroneProfile.value,
-      minutes: isochroneMinutes.value,
+      profile: analysisProfile,
+      minutes: analysisMinutes,
       signal: isochroneRequest.signal,
     })
     const ordered = [...result.features].sort(
-      (left, right) => Number(right.properties?.contour ?? 0) - Number(left.properties?.contour ?? 0),
+      (left, right) =>
+        Number(right.properties?.contour ?? 0) -
+        Number(left.properties?.contour ?? 0),
     )
     ordered.forEach((feature, featureIndex) => {
       const contour = Number(feature.properties?.contour ?? 0)
@@ -766,17 +820,25 @@ async function analyzeParkAt(point: PickedPoint) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
-    isochroneStatus.value = `分析完成：${isochroneProfile.value === 'walking' ? '步行' : isochroneProfile.value === 'cycling' ? '骑行' : '驾车'} ${isochroneMinutes.value.join('/')} 分钟可达范围`
+    latestIsochrones.value = result.features
+    latestIsochroneSignature.value = analysisSignature
+    refreshHousingCoverage(analysisSignature)
+    isochroneStatus.value = `分析完成：${analysisProfile === 'walking' ? '步行' : analysisProfile === 'cycling' ? '骑行' : '驾车'} ${analysisMinutes.join('/')} 分钟可达范围`
     isochronePhase.value = 'complete'
     operationMessage.value = `公园等时圈已生成，共 ${result.features.length} 个圈层`
     viewer.camera.flyTo({
-      destination: sdk.Cartesian3.fromDegrees(point.longitude, point.latitude - 0.025, 4200),
+      destination: sdk.Cartesian3.fromDegrees(
+        point.longitude,
+        point.latitude - 0.025,
+        4200,
+      ),
       orientation: { heading: 0, pitch: sdk.Math.toRadians(-70), roll: 0 },
     })
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {
       isochronePhase.value = 'error'
-      isochroneStatus.value = error instanceof Error ? error.message : '公园等时圈分析失败'
+      isochroneStatus.value =
+        error instanceof Error ? error.message : '公园等时圈分析失败'
       operationMessage.value = isochroneStatus.value
     }
   } finally {
@@ -820,18 +882,19 @@ async function loadGeneratedModel(
   if (generatedModel.readyPromise) await generatedModel.readyPromise
   applyModelTransform()
   upsertMarker(selectedPoint.value)
-  if (focus) viewer.camera.flyTo({
-    destination: sdk.Cartesian3.fromDegrees(
-      placement.longitude,
-      placement.latitude - 0.00028,
-      65,
-    ),
-    orientation: {
-      heading: 0,
-      pitch: sdk.Math.toRadians(-52),
-      roll: 0,
-    },
-  })
+  if (focus)
+    viewer.camera.flyTo({
+      destination: sdk.Cartesian3.fromDegrees(
+        placement.longitude,
+        placement.latitude - 0.00028,
+        65,
+      ),
+      orientation: {
+        heading: 0,
+        pitch: sdk.Math.toRadians(-52),
+        roll: 0,
+      },
+    })
 }
 
 async function playConstruction(
@@ -935,7 +998,8 @@ function togglePointPicking() {
     return
   }
   pickMode.value = true
-  operationMessage.value = '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
+  operationMessage.value =
+    '点击地图确定建造位置；再次点击“AI 建造”面板中的按钮可取消'
 }
 
 function cancelPointPicking() {
@@ -959,23 +1023,20 @@ function selectModel() {
   if (!generatedModel) return
   modelSelected.value = true
   if (selectedPoint.value) upsertMarker(selectedPoint.value)
-  operationMessage.value = '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
+  operationMessage.value =
+    '模型已选中，可在地图上拖拽移动，或用面板滑杆缩放和旋转'
 }
 
 function startModelDrag(movement: CesiumMovement) {
-  if (
-    !viewer ||
-    pickMode.value ||
-    measurementMode.value ||
-    !movement.position
-  )
+  if (!viewer || pickMode.value || measurementMode.value || !movement.position)
     return
   const picked = viewer.scene.pick(movement.position) as {
     primitive?: unknown
     id?: unknown
   }
   const hitModel =
-    picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+    picked &&
+    (picked.primitive === generatedModel || picked.id === generatedModel)
   if (!hitModel) return
   isDraggingModel.value = true
   suppressClickAfterDrag = true
@@ -1131,9 +1192,7 @@ function finishMeasurement() {
     message = `面积测量完成：${formatArea(area)}`
   } else {
     message =
-      type === 'distance'
-        ? '距离测量至少需要两个点'
-        : '面积测量至少需要三个点'
+      type === 'distance' ? '距离测量至少需要两个点' : '面积测量至少需要三个点'
     clearMeasurementOverlays()
     measurementMode.value = null
     notifyScene(message)
@@ -1184,7 +1243,11 @@ function applyShadowAnalysis(active = shadowAnalysisActive.value) {
     viewer.clock.currentTime = sdk.JulianDate.fromDate(analysisTime)
   }
   viewer.scene.requestRender?.()
-  notifyScene(active ? `阴影分析已启用：${shadowAnalysisTime.value.replace('T', ' ')}` : '阴影分析已关闭')
+  notifyScene(
+    active
+      ? `阴影分析已启用：${shadowAnalysisTime.value.replace('T', ' ')}`
+      : '阴影分析已关闭',
+  )
 }
 
 function updateShadowAnalysisTime(value: string) {
@@ -1403,74 +1466,86 @@ async function loadDataLayers() {
   if (!viewer) return
   engineStatus.value = '正在加载建筑白膜、水系、路网与 POI 数据图层'
   const results = await Promise.allSettled([
-        fetchIServerFeatures(
-          {
-            serviceUrl: config.supermap.mapServices.buildingFootprints,
-            mapName: 'Lankao_3D_GloBFP_SHP',
-            datasetName: 'Lankao_3D_GloBFP',
-          },
-          {
-            bounds: {
-              minLongitude: 114.94,
-              minLatitude: 34.93,
-              maxLongitude: 114.99,
-              maxLatitude: 34.97,
-            },
-            expectCount: 6000,
-          },
-        ),
-        fetchIServerFeatures(
-          {
-            serviceUrl: config.supermap.mapServices.poi,
-            mapName: 'Lankao_POI_2025',
-            datasetName: 'Lankao_POI_2025',
-          },
-          {
-            attributeFilter: buildWgs84BoundsFilter(
-              114.9,
-              34.9,
-              115.03,
-              35.0,
-            ),
-          },
-        ),
-        fetchIServerFeatures({
-          serviceUrl: config.supermap.mapServices.roadNetwork,
-          mapName: 'Lankao_Road_Network',
-          datasetName: 'Lankao_Road_Network',
-        }),
-        fetchIServerFeatures({
-          serviceUrl: config.supermap.mapServices.water,
-          mapName: 'Lankao_Water',
-          datasetName: 'Laokao_Water_Line',
-        }),
-        fetchIServerFeatures({
-          serviceUrl: config.supermap.mapServices.water,
-          mapName: 'Lankao_Water',
-          datasetName: 'Laokao_Water_Polygon',
-        }),
-      ])
+    fetchIServerFeatures(
+      {
+        serviceUrl: config.supermap.mapServices.buildingFootprints,
+        mapName: 'Lankao_3D_GloBFP_SHP',
+        datasetName: 'Lankao_3D_GloBFP',
+      },
+      {
+        bounds: {
+          minLongitude: 114.94,
+          minLatitude: 34.93,
+          maxLongitude: 114.99,
+          maxLatitude: 34.97,
+        },
+        expectCount: 6000,
+      },
+    ),
+    fetchIServerFeatures(
+      {
+        serviceUrl: config.supermap.mapServices.poi,
+        mapName: 'Lankao_POI_2025',
+        datasetName: 'Lankao_POI_2025',
+      },
+      {
+        attributeFilter: buildWgs84BoundsFilter(114.9, 34.9, 115.03, 35.0),
+      },
+    ),
+    fetchIServerFeatures({
+      serviceUrl: config.supermap.mapServices.roadNetwork,
+      mapName: 'Lankao_Road_Network',
+      datasetName: 'Lankao_Road_Network',
+    }),
+    fetchIServerFeatures({
+      serviceUrl: config.supermap.mapServices.water,
+      mapName: 'Lankao_Water',
+      datasetName: 'Laokao_Water_Line',
+    }),
+    fetchIServerFeatures({
+      serviceUrl: config.supermap.mapServices.water,
+      mapName: 'Lankao_Water',
+      datasetName: 'Laokao_Water_Polygon',
+    }),
+  ])
   if (!viewer) return
-  const [buildingResult, poiResult, roadResult, waterLineResult, waterPolygonResult] = results
-  const buildingFeatures = buildingResult.status === 'fulfilled' ? buildingResult.value : []
+  const [
+    buildingResult,
+    poiResult,
+    roadResult,
+    waterLineResult,
+    waterPolygonResult,
+  ] = results
+  const buildingFeatures =
+    buildingResult.status === 'fulfilled' ? buildingResult.value : []
+  buildingFootprints.value = buildingFeatures
+  buildingDataReady.value = buildingResult.status === 'fulfilled'
+  refreshHousingCoverage(latestIsochroneSignature.value)
   const poiFeatures = poiResult.status === 'fulfilled' ? poiResult.value : []
   const roadFeatures = roadResult.status === 'fulfilled' ? roadResult.value : []
-  const waterLines = waterLineResult.status === 'fulfilled' ? waterLineResult.value : []
-  const waterPolygons = waterPolygonResult.status === 'fulfilled' ? waterPolygonResult.value : []
+  const waterLines =
+    waterLineResult.status === 'fulfilled' ? waterLineResult.value : []
+  const waterPolygons =
+    waterPolygonResult.status === 'fulfilled' ? waterPolygonResult.value : []
   dataLayerEntities.value = {
-      buildingLayer: createBuildingEntities(buildingFeatures),
-      poiLayer: createPoiEntities(poiFeatures),
-      roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
-      waterLayer: [
-        ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
-        ...createPolygonEntities(waterPolygons),
-      ],
+    buildingLayer: createBuildingEntities(buildingFeatures),
+    poiLayer: createPoiEntities(poiFeatures),
+    roadLayer: createLineEntities(roadFeatures, '#e8b95c', 1.6, 'roadLayer'),
+    waterLayer: [
+      ...createLineEntities(waterLines, '#3aa8ff', 1.6, 'waterLayer'),
+      ...createPolygonEntities(waterPolygons),
+    ],
   }
-  const failedCount = results.filter((result) => result.status === 'rejected').length
+  const failedCount = results.filter(
+    (result) => result.status === 'rejected',
+  ).length
   engineStatus.value = `数据图层已加载：白膜 ${buildingFeatures.length} · POI ${poiFeatures.length} · 路网 ${roadFeatures.length} · 水系 ${waterLines.length + waterPolygons.length}${failedCount ? ` · ${failedCount} 项失败` : ''}`
-  notifyScene(`建筑白膜已按 Height 字段拉伸，共加载 ${buildingFeatures.length} 个要素`)
+  notifyScene(
+    `建筑白膜已按 Height 字段拉伸，共加载 ${buildingFeatures.length} 个要素`,
+  )
   results.forEach((result) => {
-    if (result.status === 'rejected') console.error('数据图层加载失败', result.reason)
+    if (result.status === 'rejected')
+      console.error('数据图层加载失败', result.reason)
   })
 }
 
@@ -1505,34 +1580,37 @@ function setupSceneInteractions() {
       primitive?: unknown
       id?: unknown
     }
-    const plotIndex = plotEntities.findIndex(({ entity }) => picked?.id === entity)
+    const plotIndex = plotEntities.findIndex(
+      ({ entity }) => picked?.id === entity,
+    )
     if (plotIndex >= 0) {
       selectSimulationPlot(plotIndex)
       return
     }
     const hitModel =
-      picked && (picked.primitive === generatedModel || picked.id === generatedModel)
+      picked &&
+      (picked.primitive === generatedModel || picked.id === generatedModel)
     if (hitModel) selectModel()
     else if (!isDraggingModel.value && selectedPoint.value) {
       modelSelected.value = false
       upsertMarker(selectedPoint.value)
     }
   }, sdk.ScreenSpaceEventType.LEFT_CLICK)
-  eventHandler.setInputAction(startModelDrag, sdk.ScreenSpaceEventType.LEFT_DOWN)
-  eventHandler.setInputAction(moveModelDrag, sdk.ScreenSpaceEventType.MOUSE_MOVE)
+  eventHandler.setInputAction(
+    startModelDrag,
+    sdk.ScreenSpaceEventType.LEFT_DOWN,
+  )
+  eventHandler.setInputAction(
+    moveModelDrag,
+    sdk.ScreenSpaceEventType.MOUSE_MOVE,
+  )
   eventHandler.setInputAction(endModelDrag, sdk.ScreenSpaceEventType.LEFT_UP)
-  eventHandler.setInputAction(
-    () => {
-      if (measurementMode.value) finishMeasurement()
-    },
-    sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-  )
-  eventHandler.setInputAction(
-    () => {
-      if (measurementMode.value) finishMeasurement()
-    },
-    sdk.ScreenSpaceEventType.RIGHT_CLICK,
-  )
+  eventHandler.setInputAction(() => {
+    if (measurementMode.value) finishMeasurement()
+  }, sdk.ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
+  eventHandler.setInputAction(() => {
+    if (measurementMode.value) finishMeasurement()
+  }, sdk.ScreenSpaceEventType.RIGHT_CLICK)
 }
 
 async function buildFromPrompt(prompt: string, requestedStyle: AiBuilderStyle) {
@@ -1604,17 +1682,13 @@ async function buildWithAgent(prompt: string) {
       placement: toSimulationPlacement(point),
       buildingStyle: inferBuildingStyle(prompt),
     })
-    const completedJob = await waitForAgentJob(
-      config.apiBaseUrl,
-      initialJob,
-      {
-        timeoutMs: config.reportTimeoutMs,
-        onProgress: (job) => {
-          buildProgress.value = job.progress
-          engineStatus.value = job.message
-        },
+    const completedJob = await waitForAgentJob(config.apiBaseUrl, initialJob, {
+      timeoutMs: config.reportTimeoutMs,
+      onProgress: (job) => {
+        buildProgress.value = job.progress
+        engineStatus.value = job.message
       },
-    )
+    })
     await playConstruction(completedJob)
     generatedJob.value = completedJob
     buildState.value = 'ready'
@@ -1907,7 +1981,8 @@ onBeforeUnmount(() => {
                 :aria-pressed="isochroneMinutes.includes(minute)"
                 @click="toggleIsochroneMinute(minute)"
               >
-                <strong>{{ minute }}</strong><small>分钟</small>
+                <strong>{{ minute }}</strong
+                ><small>分钟</small>
               </button>
             </div>
             <div class="park-analysis-actions">
@@ -1939,81 +2014,25 @@ onBeforeUnmount(() => {
                 <span aria-hidden="true">⌫</span>清除
               </button>
             </div>
-            <div class="isochrone-status" :class="`is-${isochronePhase}`" role="status">
+            <div
+              class="isochrone-status"
+              :class="`is-${isochronePhase}`"
+              role="status"
+            >
               <i /><span>{{ isochroneStatus }}</span>
             </div>
           </div>
         </PanelCard>
 
-        <PanelCard title="治理措施" meta="参数化场景构建">
-          <div class="measure-list">
-            <button
-              v-for="measure in measures"
-              :key="measure.key"
-              type="button"
-              :class="{ active: activeMeasure === measure.key }"
-              @click="selectMeasure(measure.key)"
-            >
-              <i>{{ measure.icon }}</i>
-              <span
-                ><strong>{{ measure.label }}</strong
-                ><small>{{ measure.description }}</small></span
-              >
-            </button>
-          </div>
-
-          <div class="parameter-panel">
-            <label>
-              <span
-                >排水沟宽度
-                <strong>{{ parameters.ditchWidth.toFixed(1) }} m</strong></span
-              >
-              <input
-                v-model.number="parameters.ditchWidth"
-                type="range"
-                min="0.3"
-                max="1.2"
-                step="0.1"
-              />
-            </label>
-            <label>
-              <span
-                >排水沟深度
-                <strong>{{ parameters.ditchDepth.toFixed(1) }} m</strong></span
-              >
-              <input
-                v-model.number="parameters.ditchDepth"
-                type="range"
-                min="0.4"
-                max="1.5"
-                step="0.1"
-              />
-            </label>
-            <label>
-              <span
-                >排水口数量
-                <strong>{{ parameters.outletCount }} 处</strong></span
-              >
-              <input
-                v-model.number="parameters.outletCount"
-                type="range"
-                min="1"
-                max="8"
-                step="1"
-              />
-            </label>
-          </div>
-
-          <div class="layer-chips" aria-label="场景要素图层">
-            <label v-for="layer in layers" :key="layer.key">
-              <input
-                v-model="layerVisibility[layer.key]"
-                type="checkbox"
-                @change="toggleLayer(layer.key)"
-              />
-              <span>{{ layer.label }}</span>
-            </label>
-          </div>
+        <PanelCard title="住房覆盖分析" meta="等时圈联动">
+          <HousingCoveragePanel
+            :phase="isochronePhase"
+            :profile="isochroneProfile"
+            :minutes="isochroneMinutes"
+            :coverage="housingCoverage"
+            :building-data-ready="buildingDataReady"
+            :stale="housingCoverageStale"
+          />
         </PanelCard>
       </aside>
 
@@ -2220,7 +2239,11 @@ onBeforeUnmount(() => {
   padding: 6px 7px;
   border: 1px solid rgba(61, 214, 196, 0.13);
   border-radius: 7px;
-  background: linear-gradient(105deg, rgba(61, 214, 196, 0.09), rgba(61, 214, 196, 0.015));
+  background: linear-gradient(
+    105deg,
+    rgba(61, 214, 196, 0.09),
+    rgba(61, 214, 196, 0.015)
+  );
   grid-template-columns: 30px minmax(0, 1fr) auto;
   gap: 8px;
 }
