@@ -101,14 +101,14 @@ onBeforeUnmount(() => {
     <div class="scene-toolbox__rail" role="toolbar" aria-label="三维场景操作">
       <button
         type="button"
-        aria-label="清除标绘与测量结果"
-        title="清除标绘与测量结果"
+        aria-label="清除场景模型与标绘结果"
+        title="清除 Blender 模型、公园模型及标绘结果"
         @click="emit('clear')"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" />
         </svg>
-        <span>清除标绘</span>
+        <span>清除场景</span>
       </button>
       <button
         type="button"

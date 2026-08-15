@@ -198,4 +198,20 @@ describe('三生模拟场景配置', () => {
     expect(toggleSource).not.toContain('parkModel')
     expect(toggleSource).not.toContain('analyzeParkAt')
   })
+
+  it('场景清除按钮同时移除 Blender 模型和公园模型', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    const clearStart = source.indexOf('function clearSceneContent()')
+    const clearEnd = source.indexOf('function refreshScene()', clearStart)
+    const clearSource = source.slice(clearStart, clearEnd)
+
+    expect(clearStart).toBeGreaterThan(-1)
+    expect(clearSource).toContain('removeGeneratedModel()')
+    expect(clearSource).toContain('clearParkServiceArea()')
+    expect(clearSource).toContain('clearMeasurementOverlays()')
+    expect(source).toContain('@clear="clearSceneContent"')
+    expect(source).toContain('Blender 模型')
+    expect(source).toContain('公园模型与服务圈结果')
+  })
 })

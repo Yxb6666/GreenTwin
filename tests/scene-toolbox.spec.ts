@@ -10,12 +10,12 @@ const layers = [
 ]
 
 describe('三维场景工具条', () => {
-  it('清除、缩放、定位按钮发出对应事件', async () => {
+  it('清除场景、缩放、定位按钮发出对应事件', async () => {
     const wrapper = mount(SceneToolbox, {
       props: { measuring: null, layers, feedback: '' },
     })
     await wrapper
-      .get('button[aria-label="清除标绘与测量结果"]')
+      .get('button[aria-label="清除场景模型与标绘结果"]')
       .trigger('click')
     await wrapper.get('button[aria-label="放大场景"]').trigger('click')
     await wrapper.get('button[aria-label="缩小场景"]').trigger('click')
@@ -25,6 +25,11 @@ describe('三维场景工具条', () => {
     expect(wrapper.emitted('zoom-in')).toHaveLength(1)
     expect(wrapper.emitted('zoom-out')).toHaveLength(1)
     expect(wrapper.emitted('locate')).toHaveLength(1)
+    expect(
+      wrapper
+        .get('button[aria-label="清除场景模型与标绘结果"]')
+        .attributes('title'),
+    ).toBe('清除 Blender 模型、公园模型及标绘结果')
   })
 
   it('测量菜单可选择距离或面积', async () => {

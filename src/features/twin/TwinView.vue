@@ -1404,10 +1404,27 @@ function updateShadowAnalysisTime(value: string) {
   if (shadowAnalysisActive.value) applyShadowAnalysis(true)
 }
 
-function clearSceneDrawings() {
+function clearSceneContent() {
+  const hadGeneratedModel = generatedModel !== null
+  const hadParkContent =
+    parkModel !== null ||
+    parkSelectedPoint.value !== null ||
+    latestIsochrones.value.length > 0
+
   measurementMode.value = null
   clearMeasurementOverlays()
-  notifyScene('标绘与测量结果已清除')
+  if (hadGeneratedModel) removeGeneratedModel()
+  if (hadParkContent) clearParkServiceArea()
+
+  const clearedModels = [
+    hadGeneratedModel ? 'Blender 模型' : '',
+    hadParkContent ? '公园模型与服务圈结果' : '',
+  ].filter(Boolean)
+  notifyScene(
+    clearedModels.length
+      ? `${clearedModels.join('、')}及标绘测量结果已清除`
+      : '当前没有可清除的模型，标绘与测量结果已清除',
+  )
 }
 
 function refreshScene() {
@@ -2264,7 +2281,7 @@ onBeforeUnmount(() => {
           :weather-active="weatherPanelOpen"
           :shadow-active="shadowAnalysisActive"
           :shadow-time="shadowAnalysisTime"
-          @clear="clearSceneDrawings"
+          @clear="clearSceneContent"
           @measure="startMeasurement"
           @end-measure="cancelMeasurement"
           @refresh="refreshScene"
