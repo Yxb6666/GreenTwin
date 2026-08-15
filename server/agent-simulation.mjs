@@ -32,6 +32,28 @@ const FORBIDDEN_CODE_PATTERNS = [
   /\bos\.|\bsys\.|\bsubprocess|\bshutil\.|\bsocket\b|\bPath\s*\(|\benviron\b|\bgetenv\b|\.read_text|\.write_text|\.unlink|\.rmdir|\.rename/,
 ]
 
+function findMaterialsUsedBeforeDeclaration(source) {
+  const lines = source.split(/\r?\n/)
+  const declarations = new Map()
+
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(/^\s*([A-Za-z_]\w*)\s*=\s*material\s*\(/)
+    if (match && !declarations.has(match[1])) {
+      declarations.set(match[1], index)
+    }
+  }
+
+  const invalid = []
+  for (const [name, declarationIndex] of declarations) {
+    const namePattern = new RegExp(`\\b${name}\\b`)
+    const usedEarly = lines
+      .slice(0, declarationIndex)
+      .some((line) => namePattern.test(line.replace(/#.*$/, '')))
+    if (usedEarly) invalid.push(name)
+  }
+  return invalid
+}
+
 function sendJson(response, statusCode, value) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -160,6 +182,13 @@ export function validateGeneratedCode(code) {
   if (primitiveCalls > MAX_PRIMITIVE_CALLS) {
     throw new Error('生成的模型过于复杂，已限制执行')
   }
+  const materialsUsedBeforeDeclaration =
+    findMaterialsUsedBeforeDeclaration(source)
+  if (materialsUsedBeforeDeclaration.length > 0) {
+    throw new Error(
+      `材质变量必须先定义后使用：${materialsUsedBeforeDeclaration.join(', ')}`,
+    )
+  }
   return { length: source.length, primitiveCalls }
 }
 
@@ -188,6 +217,7 @@ export async function generateAgentScript(
     '辅助函数精确签名：material(name,color,metallic=0.0,roughness=0.7)；add_box(name,location,dimensions,material,build_stage=1)；add_beveled_box(name,location,dimensions,material,build_stage=1,bevel=0.06)；add_cylinder(name,location,radius,depth,material,build_stage=2,vertices=12)；add_beam_between(name,start,end,radius,material,build_stage=3,vertices=8)；add_roof_mesh(name,vertices,faces,material,build_stage=3)。除列出的参数外不要传任何其他参数。',
     '材质颜色必须传 RGBA 四元组且取值在 0-1，例如 material("Stone", (0.5, 0.5, 0.5, 1.0))；禁止传三元组 RGB。',
     '只生成建筑本体及其必要台基，不要创建环境地面、草地、地块或大面积底板。',
+    '所有材质变量必须在 build_custom 开头集中定义，并且必须先定义后使用；输出前逐一检查变量引用，禁止先使用再赋值。',
     '规则：build_custom 内部禁止写任何 import 语句，math、mathutils、bpy 已在全局可用；不读写文件、不执行系统命令、不访问网络；坐标单位为米，建筑底平面中心放在 (0,0,0) 附近；每个几何体必须设置 build_stage（1-4，从地基到装饰）；控制对象数量在 200 个以内。',
     '必须只输出 JSON：{"code":"<build_custom 函数完整源码>"}，不使用 Markdown 代码围栏。',
   ].join('\n')
@@ -237,11 +267,17 @@ export async function generateAgentScript(
     }
     return content
   }
+  const extractAndValidate = (content) => {
+    const code = extractAgentCode(content)
+    validateGeneratedCode(code)
+    return code
+  }
   try {
-    return extractAgentCode(await callDeepSeek(baseUserContent))
-  } catch {
-    const reminder = `${baseUserContent}\n\n注意：上次输出无法解析为合法 JSON。请只输出 {"code":"<build_custom 完整源码>"} 这一种格式，代码内的换行与引号必须转义，不要输出任何说明文字。`
-    return extractAgentCode(await callDeepSeek(reminder))
+    return extractAndValidate(await callDeepSeek(baseUserContent))
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : '输出不合法'
+    const reminder = `${baseUserContent}\n\n上次输出未通过校验：${reason}。请修正代码，尤其确保所有材质变量在首次使用前完成定义。只输出 {"code":"<build_custom 完整源码>"} 这一种格式，代码内的换行与引号必须转义，不要输出任何说明文字。`
+    return extractAndValidate(await callDeepSeek(reminder))
   }
 }
 

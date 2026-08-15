@@ -61,6 +61,18 @@ describe('3D Agent 模拟任务服务', () => {
     })
   })
 
+  it('拒绝先使用后定义的材质变量', () => {
+    const code = [
+      'def build_custom(config):',
+      '    add_box("Ext", (0, 0, 1), (1, 1, 2), accent_red, 2)',
+      '    accent_red = material("AccentRed", (0.8, 0.1, 0.1, 1))',
+    ].join('\n')
+
+    expect(() => validateGeneratedCode(code)).toThrow(
+      '材质变量必须先定义后使用：accent_red',
+    )
+  })
+
   it('校验 Agent 请求并规范化落点', () => {
     const result = validateAgentRequest({
       prompt: '建一座两层带飞檐和柱廊的古风楼阁，要精致',
@@ -133,6 +145,55 @@ describe('3D Agent 模拟任务服务', () => {
 
     expect(result).toBe(code.trim())
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('材质变量先用后定义时要求 Agent 修正后重试', async () => {
+    const invalidCode = [
+      'def build_custom(config):',
+      '    add_box("Ext", (0, 0, 1), (1, 1, 2), accent_red, 2)',
+      '    accent_red = material("AccentRed", (0.8, 0.1, 0.1, 1))',
+    ].join('\n')
+    const validCode = [
+      'def build_custom(config):',
+      '    accent_red = material("AccentRed", (0.8, 0.1, 0.1, 1))',
+      '    add_box("Ext", (0, 0, 1), (1, 1, 2), accent_red, 2)',
+    ].join('\n')
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              { message: { content: JSON.stringify({ code: invalidCode }) } },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              { message: { content: JSON.stringify({ code: validCode }) } },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+
+    const result = await generateAgentScript(
+      '建造一座带红色消防设施的服务中心',
+      { buildingType: 'service-center' },
+      { apiKey: 'test-key', fetchImpl },
+      5000,
+    )
+
+    expect(result).toBe(validCode)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    const retryRequest = JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body))
+    expect(retryRequest.messages[1].content).toContain(
+      '材质变量必须先定义后使用：accent_red',
+    )
   })
 
   it('Blender 执行器把辅助函数注入与生成代码相同的命名空间', async () => {
