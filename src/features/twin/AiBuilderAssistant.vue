@@ -236,7 +236,6 @@ watch(
           @pointerup="embedded || onHeaderPointerEnd($event)"
         >
           <div class="builder-identity">
-            <span class="builder-mark">建</span>
             <div>
               <strong>AI 建造助手</strong>
               <small>自然语言生成场景模型</small>
@@ -301,17 +300,6 @@ watch(
           </section>
 
           <template v-else>
-            <section class="builder-location">
-              <i aria-hidden="true">✓</i>
-              <span>
-                <small>建造位置</small>
-                <strong>{{ pointLabel }}</strong>
-              </span>
-              <button type="button" data-no-drag @click="emit('toggle-pick')">
-                重新选点
-              </button>
-            </section>
-
             <div v-if="messages.length" ref="messageList" class="builder-messages">
               <article
                 v-for="message in messages"
@@ -567,7 +555,6 @@ watch(
   white-space: nowrap;
 }
 
-.builder-mark,
 .builder-message__role {
   display: grid;
   place-items: center;
@@ -577,13 +564,6 @@ watch(
   border-radius: 7px;
   background: rgba(61, 214, 196, 0.08);
   font: 700 8px var(--font-data);
-}
-
-.builder-mark {
-  width: 32px;
-  height: 32px;
-  color: #eafffb;
-  font-size: 10px;
 }
 
 .builder-status-pill {
@@ -754,59 +734,10 @@ watch(
   font-size: 8px;
 }
 
-.builder-location {
-  display: grid;
-  align-items: center;
-  margin: 10px 10px 0;
-  padding: 8px 9px;
-  gap: 8px;
-  border: 1px solid rgba(61, 214, 196, 0.18);
-  border-radius: 7px;
-  background: rgba(61, 214, 196, 0.045);
-  grid-template-columns: 22px minmax(0, 1fr) auto;
-}
-
-.builder-location > i {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  color: #04201d;
-  border-radius: 50%;
-  background: var(--cyan);
-  font: normal 10px var(--font-data);
-}
-
-.builder-location > span {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.builder-location small,
 .builder-prompt-guide small,
 .builder-composer__heading small {
   color: var(--text-soft);
   font-size: 8px;
-}
-
-.builder-location strong {
-  overflow: hidden;
-  color: #eafffb;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.builder-location button {
-  min-height: 24px;
-  padding: 0 8px;
-  color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.24);
-  border-radius: 6px;
-  background: rgba(61, 214, 196, 0.06);
-  font-size: 8px;
-  cursor: pointer;
 }
 
 .builder-prompt-guide {

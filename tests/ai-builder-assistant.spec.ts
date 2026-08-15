@@ -50,7 +50,8 @@ describe('AI 建造助手', () => {
       },
     })
 
-    expect(wrapper.find('.builder-location').text()).toContain('徐桥村东侧空地')
+    expect(wrapper.find('.builder-location').exists()).toBe(false)
+    expect(wrapper.find('.builder-mark').exists()).toBe(false)
     expect(wrapper.findAll('.builder-suggestions button')).toHaveLength(3)
     expect(wrapper.find('.builder-composer').exists()).toBe(true)
 
