@@ -23,7 +23,7 @@ const outerMinute = computed(() => Math.max(...props.minutes))
 const maxHomes = computed(() => Math.max(1, props.coverage?.totalHomes ?? 1))
 const statusLabel = computed(() => {
   if (!props.buildingDataReady) return '建筑数据加载中'
-  if (props.phase === 'loading') return '正在统计住房'
+  if (props.phase === 'loading') return '正在统计服务覆盖'
   if (props.phase === 'picking') return '等待地图落点'
   if (props.phase === 'error') return '分析暂不可用'
   if (props.stale) return '参数已变更，待重新分析'
@@ -33,6 +33,13 @@ const statusLabel = computed(() => {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function formatArea(value: number) {
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
 }
 </script>
 
@@ -45,7 +52,7 @@ function formatNumber(value: number) {
 
     <div class="coverage-hero" :class="{ 'is-empty': !coverage || stale }">
       <div>
-        <span>{{ outerMinute }} 分钟圈覆盖住房</span>
+        <span>{{ outerMinute }} 分钟服务覆盖住房</span>
         <strong>{{
           coverage && !stale ? formatNumber(coverage.totalHomes) : '—'
         }}</strong>
@@ -73,6 +80,13 @@ function formatNumber(value: number) {
         <strong
           >{{ coverage && !stale ? formatNumber(coverage.totalResidents) : '—'
           }}<small> 人</small></strong
+        >
+      </div>
+      <div>
+        <span>覆盖面积</span>
+        <strong
+          >{{ coverage && !stale ? formatArea(coverage.totalCoverageArea) : '—'
+          }}<small> km²</small></strong
         >
       </div>
     </div>
@@ -217,12 +231,13 @@ function formatNumber(value: number) {
 .coverage-kpis {
   display: grid;
   gap: 7px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .coverage-kpis > div {
   display: grid;
-  padding: 9px 10px;
+  min-width: 0;
+  padding: 9px 7px;
   gap: 5px;
   border: 1px solid rgba(122, 203, 190, 0.13);
   border-radius: 6px;
@@ -237,7 +252,8 @@ function formatNumber(value: number) {
 
 .coverage-kpis strong {
   color: var(--text);
-  font: 16px var(--font-data);
+  font: 14px var(--font-data);
+  white-space: nowrap;
 }
 
 .coverage-kpis small {

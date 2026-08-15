@@ -2108,7 +2108,7 @@ onBeforeUnmount(() => {
           </div>
         </PanelCard>
 
-        <PanelCard title="住房覆盖分析" meta="等时圈联动">
+        <PanelCard title="服务覆盖分析" meta="等时圈联动">
           <HousingCoveragePanel
             :phase="isochronePhase"
             :profile="isochroneProfile"

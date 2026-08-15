@@ -6,6 +6,7 @@ export interface HousingCoverageBand {
   buildings: number
   homes: number
   residents: number
+  areaSquareKilometers: number
   coverageRate: number
 }
 
@@ -13,6 +14,7 @@ export interface HousingCoverageSummary {
   totalBuildings: number
   totalHomes: number
   totalResidents: number
+  totalCoverageArea: number
   bands: HousingCoverageBand[]
 }
 
@@ -101,6 +103,57 @@ function footprintArea(feature: ParsedLayerFeature) {
   return Math.abs(twiceArea) / 2
 }
 
+function ringArea(ring: Position[]) {
+  if (ring.length < 3) return 0
+  const latitudes = ring
+    .map((point) => point[1])
+    .filter((latitude): latitude is number => latitude !== undefined)
+  const meanLatitude =
+    latitudes.reduce((sum, latitude) => sum + latitude, 0) /
+    Math.max(1, latitudes.length)
+  const longitudeScale = 111_320 * Math.cos((meanLatitude * Math.PI) / 180)
+  const latitudeScale = 111_320
+  let twiceArea = 0
+  for (let index = 0; index < ring.length; index += 1) {
+    const current = ring[index]
+    const next = ring[(index + 1) % ring.length]
+    if (!current || !next) continue
+    const [currentLongitude, currentLatitude] = current
+    const [nextLongitude, nextLatitude] = next
+    if (
+      currentLongitude === undefined ||
+      currentLatitude === undefined ||
+      nextLongitude === undefined ||
+      nextLatitude === undefined
+    ) {
+      continue
+    }
+    twiceArea +=
+      currentLongitude * longitudeScale * nextLatitude * latitudeScale -
+      nextLongitude * longitudeScale * currentLatitude * latitudeScale
+  }
+  return Math.abs(twiceArea) / 2
+}
+
+function polygonArea(polygon: Position[][]) {
+  const outerArea = polygon[0] ? ringArea(polygon[0]) : 0
+  const holesArea = polygon
+    .slice(1)
+    .reduce((sum, hole) => sum + ringArea(hole), 0)
+  return Math.max(0, outerArea - holesArea)
+}
+
+function geometryAreaSquareKilometers(geometry: Polygon | MultiPolygon) {
+  const squareMeters =
+    geometry.type === 'Polygon'
+      ? polygonArea(geometry.coordinates)
+      : geometry.coordinates.reduce(
+          (sum, polygon) => sum + polygonArea(polygon),
+          0,
+        )
+  return squareMeters / 1_000_000
+}
+
 function estimateHomes(feature: ParsedLayerFeature) {
   const floors = Math.max(1, Math.round((feature.height ?? 3) / 3))
   const grossFloorArea = footprintArea(feature) * floors
@@ -133,6 +186,7 @@ export function calculateHousingCoverage(
         buildings: covered.length,
         homes,
         residents: Math.round(homes * 2.7),
+        areaSquareKilometers: geometryAreaSquareKilometers(isochrone.geometry),
         coverageRate: totalHomes
           ? Math.min(100, (homes / totalHomes) * 100)
           : 0,
@@ -145,6 +199,7 @@ export function calculateHousingCoverage(
     totalBuildings: outerBand?.buildings ?? 0,
     totalHomes: outerBand?.homes ?? 0,
     totalResidents: outerBand?.residents ?? 0,
+    totalCoverageArea: outerBand?.areaSquareKilometers ?? 0,
     bands,
   }
 }

@@ -79,6 +79,11 @@ describe('等时圈住房覆盖统计', () => {
     expect(result.totalBuildings).toBe(2)
     expect(result.totalHomes).toBeGreaterThan(result.bands[0]!.homes)
     expect(result.totalResidents).toBe(Math.round(result.totalHomes * 2.7))
+    expect(result.totalCoverageArea).toBeGreaterThan(1.2)
+    expect(result.totalCoverageArea).toBeLessThan(1.3)
+    expect(result.bands[0]!.areaSquareKilometers).toBeLessThan(
+      result.bands[1]!.areaSquareKilometers,
+    )
   })
 
   it('识别多面与空数据', () => {
@@ -108,5 +113,6 @@ describe('等时圈住房覆盖统计', () => {
 
     expect(result.totalHomes).toBe(0)
     expect(result.bands[0]).toMatchObject({ buildings: 0, coverageRate: 0 })
+    expect(result.totalCoverageArea).toBeGreaterThan(0)
   })
 })
