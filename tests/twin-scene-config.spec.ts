@@ -155,8 +155,9 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain("parkPickMode ? '×' : '⌖'")
     expect(source).toContain('服务点与服务圈分析结果已清除')
     expect(source).toContain('renderParkSelectionMarker(point)')
-    expect(source).toContain('trackParkModelScreenSize(origin)')
-    expect(source).toContain('resolveFixedScreenModelScale(')
+    expect(source).toContain('scale: parkModelBaseScale')
+    expect(source).not.toContain('trackParkModelScreenSize')
+    expect(source).not.toContain('minimumPixelSize: 110')
     expect(source).toContain("text: '服务圈中心 · 已选'")
     expect(source.indexOf('renderParkSelectionMarker(point)')).toBeLessThan(
       source.indexOf('await requestIsochrones'),

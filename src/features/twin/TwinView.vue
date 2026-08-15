@@ -32,7 +32,6 @@ import {
   formatPointLabel,
   normalizeHeading,
   normalizePoint,
-  resolveFixedScreenModelScale,
   toSimulationPlacement,
   type PickedPoint,
 } from './modelPlacement'
@@ -325,7 +324,6 @@ let previewEntity: unknown = null
 let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
 let parkModel: ModelPrimitive | null = null
-let stopTrackingParkModelScale: (() => void) | null = null
 let isochroneEntities: unknown[] = []
 let parkOriginEntity: unknown = null
 let isochroneRequest: AbortController | null = null
@@ -802,44 +800,7 @@ function renderParkSelectionMarker(point: PickedPoint) {
   viewer.scene.requestRender?.()
 }
 
-function stopParkModelScaleTracking() {
-  stopTrackingParkModelScale?.()
-  stopTrackingParkModelScale = null
-}
-
-function trackParkModelScreenSize(origin: unknown) {
-  stopParkModelScaleTracking()
-  if (!viewer || !parkModel || !viewer.camera.position) return
-  const sdk = cesium()
-  const referenceDistance = sdk.Cartesian3.distance(
-    viewer.camera.position,
-    origin,
-  )
-  if (!Number.isFinite(referenceDistance) || referenceDistance <= 0) return
-
-  const updateScale = () => {
-    if (!viewer || !parkModel || !viewer.camera.position) return
-    const currentDistance = sdk.Cartesian3.distance(
-      viewer.camera.position,
-      origin,
-    )
-    const nextScale = resolveFixedScreenModelScale(
-      parkModelBaseScale,
-      referenceDistance,
-      currentDistance,
-    )
-    if (Math.abs((parkModel.scale ?? parkModelBaseScale) - nextScale) > 0.001) {
-      parkModel.scale = nextScale
-    }
-  }
-
-  updateScale()
-  stopTrackingParkModelScale =
-    viewer.scene.preRender?.addEventListener(updateScale) ?? null
-}
-
 function removeParkModel() {
-  stopParkModelScaleTracking()
   if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
   parkModel = null
 }
@@ -907,11 +868,9 @@ async function analyzeParkAt(point: PickedPoint) {
       url: parkModelUrl,
       modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
       scale: parkModelBaseScale,
-      minimumPixelSize: 110,
       shadows: sdk.ShadowMode?.ENABLED,
     }),
   )
-  trackParkModelScreenSize(origin)
   const analysisProfile = isochroneProfile.value
   const analysisMinutes = [...isochroneMinutes.value]
   const analysisSignature = `${analysisProfile}:${analysisMinutes.join(',')}`
