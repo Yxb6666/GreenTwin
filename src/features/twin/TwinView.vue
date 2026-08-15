@@ -331,6 +331,9 @@ let plotEntities: Array<{ entity: unknown; plotKey: string }> = []
 
 const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
 const parkModelBaseScale = 0.35
+const parkModelHeightOffset = 2.5
+const isochroneSurfaceOffset = 0.12
+const isochroneLayerGap = 0.04
 const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
   { value: 'walking', label: '步行' },
   { value: 'cycling', label: '骑行' },
@@ -861,7 +864,7 @@ async function analyzeParkAt(point: PickedPoint) {
   const origin = sdk.Cartesian3.fromDegrees(
     point.longitude,
     point.latitude,
-    point.height,
+    point.height + parkModelHeightOffset,
   )
   parkModel = viewer.scene.primitives.add(
     sdk.Model.fromGltf({
@@ -909,7 +912,10 @@ async function analyzeParkAt(point: PickedPoint) {
               ),
               outline: true,
               outlineColor: createCesiumColor(sdk, style.outline),
-              height: 8 + featureIndex * 2,
+              height:
+                point.height +
+                isochroneSurfaceOffset +
+                featureIndex * isochroneLayerGap,
             },
           }),
         )
