@@ -4,6 +4,7 @@ import {
   formatPointLabel,
   normalizeHeading,
   normalizePoint,
+  resolveFixedScreenModelScale,
 } from '@/features/twin/modelPlacement'
 
 describe('模型落点与变换工具', () => {
@@ -44,5 +45,11 @@ describe('模型落点与变换工具', () => {
     expect(clampModelScale(20)).toBe(8)
     expect(clampModelScale(2.4)).toBe(2.4)
     expect(clampModelScale(Number.NaN)).toBe(1)
+  })
+
+  it('根据相机距离补偿模型比例以保持屏幕尺寸', () => {
+    expect(resolveFixedScreenModelScale(2.5, 100, 200)).toBe(5)
+    expect(resolveFixedScreenModelScale(2.5, 100, 50)).toBe(1.25)
+    expect(resolveFixedScreenModelScale(2.5, 0, 200)).toBe(2.5)
   })
 })

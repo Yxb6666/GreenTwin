@@ -32,6 +32,7 @@ import {
   formatPointLabel,
   normalizeHeading,
   normalizePoint,
+  resolveFixedScreenModelScale,
   toSimulationPlacement,
   type PickedPoint,
 } from './modelPlacement'
@@ -75,6 +76,7 @@ interface SceneLayer {
 
 interface ModelPrimitive {
   show: boolean
+  scale?: number
   readyPromise?: Promise<ModelPrimitive>
   modelMatrix?: unknown
 }
@@ -128,6 +130,7 @@ interface SuperMapViewer {
     }
     pick: (windowPosition: { x: number; y: number }) => unknown
     pickPosition: (windowPosition: { x: number; y: number }) => unknown
+    preRender?: CesiumEvent
     render?: () => void
     requestRender?: () => void
   }
@@ -141,6 +144,7 @@ interface SuperMapViewer {
     heading?: number
     pitch?: number
     roll?: number
+    position?: unknown
     setView: (options: Record<string, unknown>) => void
     flyTo: (options: Record<string, unknown>) => void
     getPickRay: (position: { x: number; y: number }) => unknown
@@ -321,12 +325,14 @@ let previewEntity: unknown = null
 let feedbackTimer: number | undefined
 let weatherStage: WeatherPostProcessStage | null = null
 let parkModel: ModelPrimitive | null = null
+let stopTrackingParkModelScale: (() => void) | null = null
 let isochroneEntities: unknown[] = []
 let parkOriginEntity: unknown = null
 let isochroneRequest: AbortController | null = null
 let plotEntities: Array<{ entity: unknown; plotKey: string }> = []
 
 const parkModelUrl = `${import.meta.env.BASE_URL}models/公园.glb`
+const parkModelBaseScale = 2.5
 const profileOptions: Array<{ value: IsochroneProfile; label: string }> = [
   { value: 'walking', label: '步行' },
   { value: 'cycling', label: '骑行' },
@@ -750,6 +756,48 @@ function renderParkSelectionMarker(point: PickedPoint) {
   viewer.scene.requestRender?.()
 }
 
+function stopParkModelScaleTracking() {
+  stopTrackingParkModelScale?.()
+  stopTrackingParkModelScale = null
+}
+
+function trackParkModelScreenSize(origin: unknown) {
+  stopParkModelScaleTracking()
+  if (!viewer || !parkModel || !viewer.camera.position) return
+  const sdk = cesium()
+  const referenceDistance = sdk.Cartesian3.distance(
+    viewer.camera.position,
+    origin,
+  )
+  if (!Number.isFinite(referenceDistance) || referenceDistance <= 0) return
+
+  const updateScale = () => {
+    if (!viewer || !parkModel || !viewer.camera.position) return
+    const currentDistance = sdk.Cartesian3.distance(
+      viewer.camera.position,
+      origin,
+    )
+    const nextScale = resolveFixedScreenModelScale(
+      parkModelBaseScale,
+      referenceDistance,
+      currentDistance,
+    )
+    if (Math.abs((parkModel.scale ?? parkModelBaseScale) - nextScale) > 0.001) {
+      parkModel.scale = nextScale
+    }
+  }
+
+  updateScale()
+  stopTrackingParkModelScale =
+    viewer.scene.preRender?.addEventListener(updateScale) ?? null
+}
+
+function removeParkModel() {
+  stopParkModelScaleTracking()
+  if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
+  parkModel = null
+}
+
 function clearParkServiceArea() {
   isochroneRequest?.abort()
   isochroneRequest = null
@@ -757,8 +805,7 @@ function clearParkServiceArea() {
   isochroneLoading.value = false
   clearIsochroneEntities()
   parkSelectedPoint.value = null
-  if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
-  parkModel = null
+  removeParkModel()
   latestIsochrones.value = []
   latestIsochroneSignature.value = ''
   housingCoverage.value = null
@@ -803,7 +850,7 @@ async function analyzeParkAt(point: PickedPoint) {
   parkSelectedPoint.value = point
   renderParkSelectionMarker(point)
   isochroneStatus.value = '已标记服务圈中心，正在加载公园模型…'
-  if (parkModel) viewer.scene.primitives.remove(parkModel)
+  removeParkModel()
   const origin = sdk.Cartesian3.fromDegrees(
     point.longitude,
     point.latitude,
@@ -813,12 +860,12 @@ async function analyzeParkAt(point: PickedPoint) {
     sdk.Model.fromGltf({
       url: parkModelUrl,
       modelMatrix: sdk.Transforms.eastNorthUpToFixedFrame(origin),
-      scale: 2.5,
+      scale: parkModelBaseScale,
       minimumPixelSize: 110,
-      maximumScale: 20,
       shadows: sdk.ShadowMode?.ENABLED,
     }),
   )
+  trackParkModelScreenSize(origin)
   const analysisProfile = isochroneProfile.value
   const analysisMinutes = [...isochroneMinutes.value]
   const analysisSignature = `${analysisProfile}:${analysisMinutes.join(',')}`
@@ -1974,8 +2021,7 @@ onBeforeUnmount(() => {
   clearNativeWeatherEffect()
   isochroneRequest?.abort()
   clearIsochroneEntities()
-  if (viewer && parkModel) viewer.scene.primitives.remove(parkModel)
-  parkModel = null
+  removeParkModel()
   if (viewer && generatedModel) viewer.scene.primitives.remove(generatedModel)
   generatedModel = null
   if (viewer && !viewer.isDestroyed?.()) viewer.destroy()

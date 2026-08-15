@@ -119,23 +119,29 @@ describe('三生模拟场景配置', () => {
     expect(source).toContain("key: 'poiLayer'")
   })
 
-  it('服务圈分析使用状态驱动的单路径操作卡并即时标记选点', async () => {
+  it('服务圈分析使用精简的单路径操作卡并即时标记选点', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
     expect(source).toContain('title="服务圈分析"')
     expect(source).toContain('isochronePhase')
-    expect(source).toContain('分析公园服务覆盖范围')
+    expect(source).not.toContain('class="isochrone-overview"')
+    expect(source).not.toContain('class="isochrone-status"')
     expect(source).toContain('在地图中选择服务点')
     expect(source).toContain('重新选择服务点')
     expect(source).toContain('clearParkServiceArea')
     expect(source).toContain('aria-label="清除服务点和分析结果"')
     expect(source).toContain('服务点与服务圈分析结果已清除')
     expect(source).toContain('renderParkSelectionMarker(point)')
+    expect(source).toContain('trackParkModelScreenSize(origin)')
+    expect(source).toContain('resolveFixedScreenModelScale(')
     expect(source).toContain("text: '服务圈中心 · 已选'")
     expect(source.indexOf('renderParkSelectionMarker(point)')).toBeLessThan(
       source.indexOf('await requestIsochrones'),
     )
     expect(source).toContain(':aria-pressed="isochroneProfile === option.value"')
+    expect(source).toMatch(
+      /\.minute-switch button \{[\s\S]*?align-items: center;[\s\S]*?justify-content: center;/,
+    )
     expect(source).not.toContain('放置公园模型')
   })
 })

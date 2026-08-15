@@ -47,6 +47,25 @@ export function clampModelScale(value: number) {
   return Number.isFinite(number) ? clamp(number, 0.2, 8) : 1
 }
 
+export function resolveFixedScreenModelScale(
+  baseScale: number,
+  referenceDistance: number,
+  currentDistance: number,
+) {
+  if (
+    !Number.isFinite(baseScale) ||
+    !Number.isFinite(referenceDistance) ||
+    !Number.isFinite(currentDistance) ||
+    baseScale <= 0 ||
+    referenceDistance <= 0 ||
+    currentDistance <= 0
+  ) {
+    return baseScale
+  }
+
+  return baseScale * (currentDistance / referenceDistance)
+}
+
 export function toSimulationPlacement(point: PickedPoint): SimulationPlacement {
   return {
     longitude: point.longitude,
