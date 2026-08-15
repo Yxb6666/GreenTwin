@@ -42,7 +42,7 @@ describe('地块应用场景弹窗', () => {
     const wrapper = mount(PlotApplicationDialog, {
       props: {
         open: false,
-        plot: SIMULATION_PLOTS[2]!,
+        plot: SIMULATION_PLOTS[0]!,
         position: { x: 0, y: 0 },
       },
     })

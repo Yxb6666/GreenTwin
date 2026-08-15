@@ -2238,7 +2238,6 @@ onBeforeUnmount(() => {
       <aside class="twin-right">
         <TwinPlotPreview
           :scene-canvas="sceneSourceCanvas"
-          :plan-label="currentPlan.label"
           :plot-label="currentPlot.label"
           :plot-index="activePlotIndex"
           :plot-count="SIMULATION_PLOTS.length"

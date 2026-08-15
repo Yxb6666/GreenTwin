@@ -3,7 +3,6 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps<{
   sceneCanvas: HTMLCanvasElement | null
-  planLabel: string
   plotLabel: string
   plotIndex: number
   plotCount: number
@@ -99,7 +98,6 @@ onBeforeUnmount(() => {
       </div>
       <div class="scene-title">
         <strong>{{ plotLabel }}</strong>
-        <small>{{ planLabel }}</small>
       </div>
       <button
         type="button"
@@ -199,15 +197,6 @@ onBeforeUnmount(() => {
 .scene-title strong {
   overflow: hidden;
   font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.scene-title small {
-  overflow: hidden;
-  margin-top: 2px;
-  color: rgba(224, 245, 240, 0.72);
-  font-size: 7px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

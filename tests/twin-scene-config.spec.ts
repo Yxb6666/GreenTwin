@@ -94,6 +94,7 @@ describe('三生模拟场景配置', () => {
 
     expect(source).toContain('TwinPlotPreview')
     expect(source).toContain(':scene-canvas="sceneSourceCanvas"')
+    expect(source).not.toContain(':plan-label="currentPlan.label"')
     expect(source.indexOf('<TwinPlotPreview')).toBeLessThan(
       source.indexOf('<AiBuilderAssistant'),
     )
@@ -117,6 +118,7 @@ describe('三生模拟场景配置', () => {
     expect(previewSource).toContain('context.drawImage(source')
     expect(previewSource).toContain('source.captureStream(8)')
     expect(previewSource).toContain('查看下一地块')
+    expect(previewSource).not.toContain('<small>{{ planLabel }}</small>')
   })
 
   it('三生模拟场景加载水系、路网与 POI 数据图层', async () => {

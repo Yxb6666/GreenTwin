@@ -102,32 +102,4 @@ export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
     center: { longitude: 114.97813, latitude: 34.9571 },
     ring: createPlotRectangle(114.97813, 34.9571, 142, 88, -12),
   },
-  {
-    key: 'canal-ecology',
-    label: '北部河渠生态地块',
-    description: '滨水缓冲带与生态修复示范空间',
-    applicationLabel: '河渠生态修复与滨水利用',
-    applicationSummary:
-      '适合评估河渠缓冲、雨洪调蓄和低干扰滨水活动对生态空间的改善效果。',
-    applicationScenarios: [
-      {
-        icon: '水',
-        label: '雨洪调蓄',
-        description: '模拟生态沟渠、下凹绿地与调蓄空间的组合策略。',
-      },
-      {
-        icon: '岸',
-        label: '滨岸带修复',
-        description: '验证岸线缓冲、乡土植被恢复与水体保护范围。',
-      },
-      {
-        icon: '游',
-        label: '低干扰游憩',
-        description: '比选生态步道、观景节点和自然教育设施布局。',
-      },
-    ],
-    applicationTags: ['生态空间', '河渠修复', '韧性提升'],
-    center: { longitude: 114.948, latitude: 34.962 },
-    ring: createPlotRectangle(114.948, 34.962, 156, 68, 24),
-  },
 ]
