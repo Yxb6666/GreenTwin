@@ -388,10 +388,6 @@ watch(
 
         <section v-if="pointReady && !picking" class="builder-composer">
           <div class="builder-composer__heading">
-            <span>
-              <strong>3D Agent</strong>
-              <small>自然语言生成 Blender 模型</small>
-            </span>
             <em>{{ draft.length }}/240</em>
           </div>
           <textarea
@@ -734,8 +730,7 @@ watch(
   font-size: 8px;
 }
 
-.builder-prompt-guide small,
-.builder-composer__heading small {
+.builder-prompt-guide small {
   color: var(--text-soft);
   font-size: 8px;
 }
@@ -929,16 +924,6 @@ watch(
 .builder-composer__heading {
   display: flex;
   align-items: center;
-}
-
-.builder-composer__heading > span {
-  display: grid;
-  gap: 1px;
-}
-
-.builder-composer__heading strong {
-  color: var(--cyan);
-  font-size: 9px;
 }
 
 .builder-composer__heading em {

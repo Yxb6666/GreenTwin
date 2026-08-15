@@ -54,6 +54,8 @@ describe('AI 建造助手', () => {
     expect(wrapper.find('.builder-mark').exists()).toBe(false)
     expect(wrapper.findAll('.builder-suggestions button')).toHaveLength(3)
     expect(wrapper.find('.builder-composer').exists()).toBe(true)
+    expect(wrapper.find('.builder-composer').text()).not.toContain('3D Agent')
+    expect(wrapper.find('.builder-composer__heading').text()).toBe('0/240')
 
     const suggestion = wrapper.find('.builder-suggestions button')
     await suggestion.trigger('click')
