@@ -1,0 +1,176 @@
+.twin-page .twin-left .analysis-guide {
+  gap: 10px;
+}
+
+.twin-page .twin-left .analysis-guide__steps {
+  gap: 8px;
+}
+
+.twin-page .twin-left .analysis-guide__steps li {
+  min-height: 44px;
+  padding: 7px 9px;
+  gap: 10px;
+  grid-template-columns: 28px 1fr;
+}
+
+.twin-page .twin-left .analysis-guide__steps li > i {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.twin-page .twin-left .analysis-guide__steps strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.twin-page .twin-left .analysis-guide__steps small {
+  display: none;
+}
+
+.twin-page .twin-left .analysis-guide__status {
+  min-height: 34px;
+  padding: 8px 9px;
+  color: rgba(210, 232, 228, 0.8);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.twin-page .builder-panel.is-embedded .builder-header {
+  min-height: 64px;
+  padding-inline: 14px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-identity strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.twin-page .builder-panel.is-embedded .builder-identity small,
+.twin-page .builder-panel.is-embedded .builder-steps li > span,
+.twin-page .builder-panel.is-embedded .builder-prompt-guide small,
+.twin-page .builder-panel.is-embedded .builder-notice {
+  display: none;
+}
+
+.twin-page .builder-panel.is-embedded .builder-status-pill {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-steps {
+  padding-block: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-steps li {
+  gap: 0;
+}
+
+.twin-page .builder-panel.is-embedded .builder-steps i {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+.twin-page
+  .builder-panel.is-embedded
+  .builder-steps
+  li:not(:last-child)::after {
+  top: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-prompt-guide {
+  padding: 18px 14px;
+  gap: 12px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-prompt-guide strong,
+.twin-page .builder-panel.is-embedded .builder-transform > span {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.twin-page .builder-panel.is-embedded .builder-suggestions {
+  gap: 8px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-suggestions button {
+  min-height: 40px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.twin-page .builder-panel.is-embedded .builder-message__role {
+  font-size: 10px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-message__body > p {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.twin-page .builder-panel.is-embedded .builder-progress span {
+  font-size: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform {
+  padding: 11px 14px;
+  gap: 8px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform label {
+  gap: 5px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform label > span,
+.twin-page .builder-panel.is-embedded .builder-transform label strong {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform input {
+  height: 5px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform-actions {
+  gap: 8px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-transform-actions button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-composer {
+  margin: 0 14px 12px;
+  padding: 10px;
+  gap: 9px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-composer__heading em {
+  font-size: 11px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-composer textarea {
+  min-height: 62px;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.twin-page .builder-panel.is-embedded .builder-composer > button {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-empty strong {
+  font-size: 13px;
+}
+
+.twin-page .builder-panel.is-embedded .builder-empty p,
+.twin-page .builder-panel.is-embedded .builder-empty button,
+.twin-page .builder-panel.is-embedded .builder-empty small {
+  font-size: 11px;
+  line-height: 1.5;
+}

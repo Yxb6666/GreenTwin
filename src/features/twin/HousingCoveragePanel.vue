@@ -93,7 +93,7 @@ function formatArea(value: number) {
 
     <div class="coverage-bands">
       <div class="coverage-heading">
-        <strong>分圈层覆盖</strong><small>累计统计</small>
+        <strong>分圈层覆盖</strong>
       </div>
       <div v-if="coverage && !stale" class="coverage-band-list">
         <div
@@ -117,14 +117,13 @@ function formatArea(value: number) {
       <i />
       <span>{{ statusLabel }}</span>
     </div>
-    <p>基于建筑白模中心点、占地面积与层高估算，结果用于方案比选。</p>
   </div>
 </template>
 
 <style scoped>
 .housing-coverage {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .coverage-context,
@@ -135,10 +134,11 @@ function formatArea(value: number) {
 }
 
 .coverage-context {
-  padding-bottom: 6px;
-  color: var(--text-soft);
+  padding-bottom: 8px;
+  color: rgba(210, 232, 228, 0.84);
   border-bottom: 1px solid rgba(122, 203, 190, 0.12);
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .coverage-context span {
@@ -159,14 +159,14 @@ function formatArea(value: number) {
 .coverage-context strong {
   margin-left: auto;
   color: var(--cyan);
-  font: 9px var(--font-data);
+  font: 11px/1.4 var(--font-data);
 }
 
 .coverage-hero {
   display: grid;
   align-items: center;
-  min-height: 88px;
-  padding: 11px 14px;
+  min-height: 96px;
+  padding: 13px 14px;
   border: 1px solid rgba(61, 214, 196, 0.28);
   border-radius: 8px;
   background:
@@ -193,8 +193,9 @@ function formatArea(value: number) {
 .coverage-hero span {
   width: 100%;
   margin-bottom: 4px;
-  color: var(--text-soft);
-  font-size: 8px;
+  color: rgba(210, 232, 228, 0.84);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .coverage-hero strong {
@@ -206,7 +207,7 @@ function formatArea(value: number) {
 .coverage-hero small {
   margin-left: 5px;
   color: var(--cyan);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .coverage-ring {
@@ -225,7 +226,7 @@ function formatArea(value: number) {
   width: auto;
   margin: 0;
   color: var(--cyan);
-  font: 12px var(--font-data);
+  font: 13px var(--font-data);
 }
 
 .coverage-kpis {
@@ -237,28 +238,29 @@ function formatArea(value: number) {
 .coverage-kpis > div {
   display: grid;
   min-width: 0;
-  padding: 7px;
-  gap: 4px;
+  min-height: 54px;
+  padding: 9px 8px;
+  gap: 6px;
   border: 1px solid rgba(122, 203, 190, 0.13);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
 }
 
-.coverage-kpis span,
-.coverage-heading small {
-  color: var(--text-soft);
-  font-size: 8px;
+.coverage-kpis span {
+  color: rgba(210, 232, 228, 0.78);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .coverage-kpis strong {
   color: var(--text);
-  font: 14px var(--font-data);
+  font: 16px/1.2 var(--font-data);
   white-space: nowrap;
 }
 
 .coverage-kpis small {
   color: var(--text-soft);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .coverage-bands {
@@ -267,11 +269,8 @@ function formatArea(value: number) {
 }
 
 .coverage-heading strong {
-  font-size: 9px;
-}
-
-.coverage-heading small {
-  margin-left: auto;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .coverage-band-list {
@@ -288,13 +287,13 @@ function formatArea(value: number) {
 
 .coverage-band > span,
 .coverage-band > strong {
-  font: 9px var(--font-data);
+  font: 11px var(--font-data);
 }
 
 .coverage-band > span small {
   margin-left: 2px;
   color: var(--text-soft);
-  font-size: 7px;
+  font-size: 11px;
 }
 
 .coverage-band > div {
@@ -334,26 +333,20 @@ function formatArea(value: number) {
 }
 
 .coverage-note {
-  min-height: 28px;
-  padding: 6px 8px;
+  min-height: 34px;
+  padding: 8px 10px;
   gap: 7px;
-  color: var(--text-soft);
+  color: rgba(210, 232, 228, 0.8);
   border: 1px solid rgba(122, 203, 190, 0.1);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.018);
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .coverage-note:not(.active) i {
   background: var(--amber);
   box-shadow: 0 0 7px rgba(240, 184, 92, 0.65);
-}
-
-.housing-coverage > p {
-  margin: 0;
-  color: rgba(154, 183, 176, 0.72);
-  font-size: 7px;
-  line-height: 1.5;
 }
 
 @media (max-height: 800px) {
