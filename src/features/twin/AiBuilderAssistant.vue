@@ -279,7 +279,35 @@ watch(
             class="builder-empty"
             :class="{ 'is-picking': picking }"
           >
-            <span class="builder-empty__icon" aria-hidden="true">⌖</span>
+            <span class="builder-empty__icon" aria-hidden="true">
+              <span class="builder-empty__orbit" />
+              <svg viewBox="0 0 64 64" focusable="false">
+                <path
+                  class="builder-empty__pin"
+                  d="M32 7c-11.6 0-21 9.4-21 21 0 15 21 29 21 29s21-14 21-29C53 16.4 43.6 7 32 7Z"
+                />
+                <path
+                  class="builder-empty__platform"
+                  d="m18 32 14-8 14 8-14 8-14-8Z"
+                />
+                <path
+                  class="builder-empty__building-top"
+                  d="m32 17 9 5-9 5-9-5 9-5Z"
+                />
+                <path
+                  class="builder-empty__building-left"
+                  d="m23 22 9 5v10l-9-5V22Z"
+                />
+                <path
+                  class="builder-empty__building-right"
+                  d="m41 22-9 5v10l9-5V22Z"
+                />
+                <path
+                  class="builder-empty__crosshair"
+                  d="M32 11v4m0 24v4M15 27h4m26 0h4"
+                />
+              </svg>
+            </span>
             <strong>{{ picking ? '请在地图中选择建造位置' : '先确定模型建造位置' }}</strong>
             <p>
               {{
@@ -674,23 +702,139 @@ watch(
 }
 
 .builder-empty__icon {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  margin-bottom: 10px;
+  width: 62px;
+  height: 62px;
+  margin-bottom: 13px;
   color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.28);
-  border-radius: 15px;
-  background: rgba(61, 214, 196, 0.07);
-  font-size: 25px;
+  border: 1px solid rgba(61, 214, 196, 0.34);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(61, 214, 196, 0.2),
+      transparent 48%
+    ),
+    linear-gradient(145deg, rgba(61, 214, 196, 0.12), rgba(5, 36, 34, 0.5));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+.builder-empty__icon::before,
+.builder-empty__icon::after {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-color: rgba(117, 242, 227, 0.72);
+  content: '';
+}
+
+.builder-empty__icon::before {
+  top: 8px;
+  left: 8px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+
+.builder-empty__icon::after {
+  right: 8px;
+  bottom: 8px;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+}
+
+.builder-empty__icon svg {
+  position: relative;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  overflow: visible;
+}
+
+.builder-empty__orbit {
+  position: absolute;
+  width: 37px;
+  height: 37px;
+  border: 1px solid rgba(61, 214, 196, 0.22);
+  border-radius: 50%;
+}
+
+.builder-empty__pin {
+  fill: rgba(6, 42, 39, 0.72);
+  stroke: rgba(80, 231, 213, 0.62);
+  stroke-width: 1.25;
+}
+
+.builder-empty__platform {
+  fill: rgba(61, 214, 196, 0.09);
+  stroke: rgba(117, 242, 227, 0.78);
+  stroke-width: 1.1;
+}
+
+.builder-empty__building-top {
+  fill: #8af4e7;
+}
+
+.builder-empty__building-left {
+  fill: #2ebda9;
+}
+
+.builder-empty__building-right {
+  fill: #167c72;
+}
+
+.builder-empty__crosshair {
+  fill: none;
+  stroke: #bafff7;
+  stroke-linecap: round;
+  stroke-width: 1.2;
 }
 
 .builder-empty.is-picking .builder-empty__icon {
   color: var(--amber);
-  border-color: rgba(245, 190, 76, 0.3);
-  background: rgba(245, 190, 76, 0.07);
+  border-color: rgba(245, 190, 76, 0.42);
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(245, 190, 76, 0.2),
+      transparent 48%
+    ),
+    linear-gradient(145deg, rgba(245, 190, 76, 0.11), rgba(42, 31, 8, 0.48));
   animation: builder-pulse 1.8s ease-in-out infinite;
+}
+
+.builder-empty.is-picking .builder-empty__orbit {
+  border-color: rgba(245, 190, 76, 0.34);
+  animation: builder-orbit 1.8s ease-out infinite;
+}
+
+.builder-empty.is-picking .builder-empty__pin {
+  fill: rgba(45, 33, 8, 0.7);
+  stroke: rgba(245, 190, 76, 0.72);
+}
+
+.builder-empty.is-picking .builder-empty__platform {
+  fill: rgba(245, 190, 76, 0.1);
+  stroke: rgba(255, 218, 136, 0.82);
+}
+
+.builder-empty.is-picking .builder-empty__building-top {
+  fill: #ffe09a;
+}
+
+.builder-empty.is-picking .builder-empty__building-left {
+  fill: #e4a936;
+}
+
+.builder-empty.is-picking .builder-empty__building-right {
+  fill: #9e6b18;
+}
+
+.builder-empty.is-picking .builder-empty__crosshair {
+  stroke: #fff0c7;
 }
 
 .builder-empty strong {
@@ -1040,7 +1184,24 @@ watch(
 }
 
 @keyframes builder-pulse {
-  50% { box-shadow: 0 0 18px rgba(245, 190, 76, 0.18); }
+  50% {
+    box-shadow:
+      inset 0 1px rgba(255, 255, 255, 0.1),
+      0 0 24px rgba(245, 190, 76, 0.2);
+  }
+}
+
+@keyframes builder-orbit {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.82);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
 }
 
 @media (max-width: 600px) {
@@ -1064,6 +1225,10 @@ watch(
   }
 
   .builder-empty.is-picking .builder-empty__icon {
+    animation: none;
+  }
+
+  .builder-empty.is-picking .builder-empty__orbit {
     animation: none;
   }
 }
