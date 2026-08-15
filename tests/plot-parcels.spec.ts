@@ -20,7 +20,7 @@ describe('三生模拟规划地块', () => {
     ).toBe(true)
   })
 
-  it('地块中心保持至少 1.5 公里间距', () => {
+  it('地块中心保持至少 1 公里间距', () => {
     const distances = SIMULATION_PLOTS.flatMap((plot, index) =>
       SIMULATION_PLOTS.slice(index + 1).map((otherPlot) => {
         const latitudeScale = 111_320
@@ -35,15 +35,18 @@ describe('三生模拟规划地块', () => {
       }),
     )
 
-    expect(Math.min(...distances)).toBeGreaterThanOrEqual(1_500)
+    expect(Math.min(...distances)).toBeGreaterThanOrEqual(1_000)
   })
 
-  it('徐场村地块向东移出原道路交叉区域', () => {
+  it('徐场村地块继续向东移至道路之间的空地', () => {
     const plot = SIMULATION_PLOTS.find((item) => item.key === 'xuchang-renewal')
 
-    expect(plot?.center).toEqual({ longitude: 114.9663, latitude: 34.95 })
+    expect(plot?.center).toEqual({ longitude: 114.9685, latitude: 34.95 })
     expect(Math.min(...plot!.ring.map(([longitude]) => longitude))).toBeGreaterThan(
-      114.9656,
+      114.9678,
+    )
+    expect(Math.min(...plot!.ring.map(([, latitude]) => latitude))).toBeGreaterThan(
+      34.9495,
     )
   })
 

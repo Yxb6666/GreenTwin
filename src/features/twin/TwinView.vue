@@ -1608,11 +1608,11 @@ async function loadDataLayers() {
   ] = results
   const rawBuildingFeatures =
     buildingResult.status === 'fulfilled' ? buildingResult.value : []
-  const clearedPlotRings = SIMULATION_PLOTS.filter((plot) =>
-    ['xuchang-renewal', 'guyang-industry'].includes(plot.key),
-  ).map((plot) => plot.ring)
-  const buildingFeatures = clearedPlotRings.length
-    ? excludePolygonFeaturesFromRings(rawBuildingFeatures, clearedPlotRings)
+  const industryPlot = SIMULATION_PLOTS.find(
+    (plot) => plot.key === 'guyang-industry',
+  )
+  const buildingFeatures = industryPlot
+    ? excludePolygonFeaturesFromRings(rawBuildingFeatures, [industryPlot.ring])
     : rawBuildingFeatures
   buildingFootprints.value = buildingFeatures
   buildingDataReady.value = buildingResult.status === 'fulfilled'
