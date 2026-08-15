@@ -71,8 +71,8 @@ export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
       },
     ],
     applicationTags: ['生活空间', '公共服务', '存量更新'],
-    center: { longitude: 114.965, latitude: 34.95 },
-    ring: createPlotRectangle(114.965, 34.95, 118, 76, 8),
+    center: { longitude: 114.9663, latitude: 34.95 },
+    ring: createPlotRectangle(114.9663, 34.95, 118, 76, 8),
   },
   {
     key: 'guyang-industry',
