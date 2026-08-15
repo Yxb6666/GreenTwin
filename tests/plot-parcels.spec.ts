@@ -57,12 +57,12 @@ describe('三生模拟规划地块', () => {
     expect(plot!.ring[1]![0]).toBeCloseTo(plot!.ring[2]![0], 8)
   })
 
-  it('堌阳产业地块向西北移至目标空地并校正朝向', () => {
+  it('堌阳产业地块继续向西微调以避开右侧道路', () => {
     const plot = SIMULATION_PLOTS.find((item) => item.key === 'guyang-industry')
 
-    expect(plot?.center).toEqual({ longitude: 114.97813, latitude: 34.9571 })
+    expect(plot?.center).toEqual({ longitude: 114.97764, latitude: 34.9572 })
     expect(Math.min(...plot!.ring.map(([longitude]) => longitude))).toBeGreaterThan(
-      114.9772,
+      114.9767,
     )
     expect(Math.min(...plot!.ring.map(([, latitude]) => latitude))).toBeGreaterThan(
       34.9565,
