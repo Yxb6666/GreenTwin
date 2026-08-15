@@ -2131,7 +2131,11 @@ onBeforeUnmount(() => {
           </div>
         </PanelCard>
 
-        <PanelCard title="服务覆盖分析" meta="等时圈联动">
+        <PanelCard
+          class="coverage-analysis-card"
+          title="服务覆盖分析"
+          meta="等时圈联动"
+        >
           <HousingCoveragePanel
             :phase="isochronePhase"
             :profile="isochroneProfile"
@@ -2258,7 +2262,19 @@ onBeforeUnmount(() => {
 }
 
 .twin-left {
-  grid-template-rows: 290px minmax(0, 1fr);
+  align-content: start;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(61, 214, 196, 0.22) transparent;
+  grid-template-rows: max-content max-content;
+}
+
+.twin-left > .panel-card {
+  align-self: start;
+}
+
+.twin-left :deep(.panel-card__body) {
+  height: auto;
 }
 .twin-right {
   grid-template-rows: minmax(250px, 0.65fr) minmax(390px, 1.35fr);
@@ -2782,9 +2798,6 @@ onBeforeUnmount(() => {
   .twin-right {
     gap: 8px;
   }
-  .twin-left {
-    grid-template-rows: 270px minmax(0, 1fr);
-  }
   .twin-right {
     grid-template-rows: minmax(225px, 0.65fr) minmax(360px, 1.35fr);
   }
@@ -2803,10 +2816,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-height: 800px) {
-  .twin-left {
-    grid-template-rows: 270px minmax(0, 1fr);
-  }
-
   .scenario-list button {
     min-height: 42px;
   }

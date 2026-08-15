@@ -132,9 +132,11 @@ describe('三生模拟场景配置', () => {
     const source = await readFile(twinViewPath, 'utf8')
 
     expect(source).toContain('title="服务圈分析"')
-    expect(source).toContain(
-      '<PanelCard title="服务覆盖分析" meta="等时圈联动">',
-    )
+    expect(source).toContain('class="coverage-analysis-card"')
+    expect(source).toContain('grid-template-rows: max-content max-content')
+    expect(source).toContain('.twin-left :deep(.panel-card__body)')
+    expect(source).toContain('title="服务覆盖分析"')
+    expect(source).toContain('meta="等时圈联动"')
     expect(source).toContain('isochronePhase')
     expect(source).not.toContain('class="isochrone-overview"')
     expect(source).not.toContain('class="isochrone-status"')

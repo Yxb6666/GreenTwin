@@ -124,7 +124,7 @@ function formatArea(value: number) {
 <style scoped>
 .housing-coverage {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .coverage-context,
@@ -135,7 +135,7 @@ function formatArea(value: number) {
 }
 
 .coverage-context {
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   color: var(--text-soft);
   border-bottom: 1px solid rgba(122, 203, 190, 0.12);
   font-size: 8px;
@@ -165,8 +165,8 @@ function formatArea(value: number) {
 .coverage-hero {
   display: grid;
   align-items: center;
-  min-height: 104px;
-  padding: 14px 16px;
+  min-height: 88px;
+  padding: 11px 14px;
   border: 1px solid rgba(61, 214, 196, 0.28);
   border-radius: 8px;
   background:
@@ -176,7 +176,7 @@ function formatArea(value: number) {
       transparent 28%
     ),
     linear-gradient(120deg, rgba(61, 214, 196, 0.12), rgba(61, 214, 196, 0.02));
-  grid-template-columns: 1fr 68px;
+  grid-template-columns: 1fr 60px;
 }
 
 .coverage-hero.is-empty {
@@ -211,8 +211,8 @@ function formatArea(value: number) {
 
 .coverage-ring {
   display: grid;
-  width: 62px;
-  height: 62px;
+  width: 56px;
+  height: 56px;
   place-content: center;
   border: 5px solid rgba(61, 214, 196, 0.14);
   border-top-color: var(--cyan);
@@ -237,8 +237,8 @@ function formatArea(value: number) {
 .coverage-kpis > div {
   display: grid;
   min-width: 0;
-  padding: 9px 7px;
-  gap: 5px;
+  padding: 7px;
+  gap: 4px;
   border: 1px solid rgba(122, 203, 190, 0.13);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
@@ -263,7 +263,7 @@ function formatArea(value: number) {
 
 .coverage-bands {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .coverage-heading strong {
@@ -319,7 +319,7 @@ function formatArea(value: number) {
 
 .coverage-placeholder {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .coverage-placeholder i {
@@ -334,7 +334,7 @@ function formatArea(value: number) {
 }
 
 .coverage-note {
-  min-height: 30px;
+  min-height: 28px;
   padding: 6px 8px;
   gap: 7px;
   color: var(--text-soft);
