@@ -14,6 +14,7 @@ import SceneToolbox, { type SceneMeasureType } from './SceneToolbox.vue'
 import WeatherSimulation from './WeatherSimulation.vue'
 import TwinPlotPreview from './TwinPlotPreview.vue'
 import HousingCoveragePanel from './HousingCoveragePanel.vue'
+import PlotApplicationDialog from './PlotApplicationDialog.vue'
 import { SIMULATION_PLOTS } from './plotParcels'
 import {
   calculateHousingCoverage,
@@ -254,6 +255,8 @@ const engineStatus = ref('三维引擎初始化中')
 const activeScenario = ref<ScenarioKey>('waterlogging')
 const activePlan = ref<PlanKey>('planA')
 const activePlotIndex = ref(0)
+const plotApplicationOpen = ref(false)
+const plotApplicationPosition = ref({ x: 0, y: 0 })
 const activeMeasure = ref<MeasureKey>('ditch')
 const buildProgress = ref(0)
 const buildState = ref<'idle' | 'running' | 'ready' | 'error'>('idle')
@@ -1584,7 +1587,18 @@ function setupSceneInteractions() {
       ({ entity }) => picked?.id === entity,
     )
     if (plotIndex >= 0) {
-      selectSimulationPlot(plotIndex)
+      const canvasWidth = cesiumContainer.value?.clientWidth ?? 0
+      const canvasHeight = cesiumContainer.value?.clientHeight ?? 0
+      const popupHalfWidth = Math.min(180, canvasWidth / 2)
+      plotApplicationPosition.value = {
+        x: Math.max(
+          popupHalfWidth,
+          Math.min(canvasWidth - popupHalfWidth, movement.position.x),
+        ),
+        y: Math.max(300, Math.min(canvasHeight - 12, movement.position.y)),
+      }
+      selectSimulationPlot(plotIndex, false)
+      plotApplicationOpen.value = true
       return
     }
     const hitModel =
@@ -1894,6 +1908,7 @@ async function initializeViewer() {
 
 function onWindowKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
+  plotApplicationOpen.value = false
   cancelMeasurement()
   if (parkPickMode.value) cancelParkPicking()
 }
@@ -2078,6 +2093,12 @@ onBeforeUnmount(() => {
           @toggle-weather="weatherPanelOpen = !weatherPanelOpen"
           @toggle-shadow="applyShadowAnalysis(!shadowAnalysisActive)"
           @update-shadow-time="updateShadowAnalysisTime"
+        />
+        <PlotApplicationDialog
+          :open="plotApplicationOpen"
+          :plot="currentPlot"
+          :position="plotApplicationPosition"
+          @close="plotApplicationOpen = false"
         />
       </section>
 

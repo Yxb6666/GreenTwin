@@ -9,6 +9,15 @@ describe('三生模拟规划地块', () => {
     expect(SIMULATION_PLOTS).toHaveLength(3)
     expect(new Set(SIMULATION_PLOTS.map((plot) => plot.key)).size).toBe(3)
     expect(new Set(SIMULATION_PLOTS.map((plot) => plot.label)).size).toBe(3)
+    expect(
+      SIMULATION_PLOTS.every(
+        (plot) =>
+          plot.applicationLabel.length > 0 &&
+          plot.applicationSummary.length > 0 &&
+          plot.applicationScenarios.length === 3 &&
+          plot.applicationTags.length > 0,
+      ),
+    ).toBe(true)
   })
 
   it('地块中心保持至少 1.5 公里间距', () => {
