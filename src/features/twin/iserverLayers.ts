@@ -35,7 +35,9 @@ export interface IServerLayerSource {
 
 export function buildIServerMapUrl(source: IServerLayerSource) {
   const serviceUrl = source.serviceUrl.replace(/\/+$/, '')
-  const restUrl = /\/rest$/i.test(serviceUrl) ? serviceUrl : `${serviceUrl}/rest`
+  const restUrl = /\/rest$/i.test(serviceUrl)
+    ? serviceUrl
+    : `${serviceUrl}/rest`
   return `${restUrl}/maps/${source.mapName}`
 }
 
@@ -55,10 +57,126 @@ export interface IServerQueryBounds {
   maxLatitude: number
 }
 
+type GeographicPoint = { longitude: number; latitude: number }
+
+function orientation(
+  first: GeographicPoint,
+  second: GeographicPoint,
+  third: GeographicPoint,
+) {
+  const value =
+    (second.latitude - first.latitude) * (third.longitude - second.longitude) -
+    (second.longitude - first.longitude) * (third.latitude - second.latitude)
+  if (Math.abs(value) < Number.EPSILON) return 0
+  return value > 0 ? 1 : 2
+}
+
+function isPointOnSegment(
+  point: GeographicPoint,
+  start: GeographicPoint,
+  end: GeographicPoint,
+) {
+  return (
+    point.longitude <= Math.max(start.longitude, end.longitude) &&
+    point.longitude >= Math.min(start.longitude, end.longitude) &&
+    point.latitude <= Math.max(start.latitude, end.latitude) &&
+    point.latitude >= Math.min(start.latitude, end.latitude)
+  )
+}
+
+function doSegmentsIntersect(
+  firstStart: GeographicPoint,
+  firstEnd: GeographicPoint,
+  secondStart: GeographicPoint,
+  secondEnd: GeographicPoint,
+) {
+  const firstOrientation = orientation(firstStart, firstEnd, secondStart)
+  const secondOrientation = orientation(firstStart, firstEnd, secondEnd)
+  const thirdOrientation = orientation(secondStart, secondEnd, firstStart)
+  const fourthOrientation = orientation(secondStart, secondEnd, firstEnd)
+
+  if (
+    firstOrientation !== secondOrientation &&
+    thirdOrientation !== fourthOrientation
+  ) {
+    return true
+  }
+  return (
+    (firstOrientation === 0 &&
+      isPointOnSegment(secondStart, firstStart, firstEnd)) ||
+    (secondOrientation === 0 &&
+      isPointOnSegment(secondEnd, firstStart, firstEnd)) ||
+    (thirdOrientation === 0 &&
+      isPointOnSegment(firstStart, secondStart, secondEnd)) ||
+    (fourthOrientation === 0 &&
+      isPointOnSegment(firstEnd, secondStart, secondEnd))
+  )
+}
+
+function isPointInRing(point: GeographicPoint, ring: GeographicPoint[]) {
+  let inside = false
+  for (
+    let index = 0, previous = ring.length - 1;
+    index < ring.length;
+    previous = index++
+  ) {
+    const start = ring[index]!
+    const end = ring[previous]!
+    if (
+      orientation(start, end, point) === 0 &&
+      isPointOnSegment(point, start, end)
+    ) {
+      return true
+    }
+    const intersects =
+      start.latitude > point.latitude !== end.latitude > point.latitude &&
+      point.longitude <
+        ((end.longitude - start.longitude) *
+          (point.latitude - start.latitude)) /
+          (end.latitude - start.latitude) +
+          start.longitude
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function polygonsOverlap(polygon: GeographicPoint[], ring: GeographicPoint[]) {
+  if (polygon.some((point) => isPointInRing(point, ring))) return true
+  if (ring.some((point) => isPointInRing(point, polygon))) return true
+
+  for (let polygonIndex = 0; polygonIndex < polygon.length; polygonIndex += 1) {
+    const polygonStart = polygon[polygonIndex]!
+    const polygonEnd = polygon[(polygonIndex + 1) % polygon.length]!
+    for (let ringIndex = 0; ringIndex < ring.length; ringIndex += 1) {
+      const ringStart = ring[ringIndex]!
+      const ringEnd = ring[(ringIndex + 1) % ring.length]!
+      if (doSegmentsIntersect(polygonStart, polygonEnd, ringStart, ringEnd)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+export function excludePolygonFeaturesFromRings(
+  features: ParsedLayerFeature[],
+  rings: Array<Array<[longitude: number, latitude: number]>>,
+) {
+  const geographicRings = rings.map((ring) =>
+    ring.map(([longitude, latitude]) => ({ longitude, latitude })),
+  )
+  return features.filter(
+    (feature) =>
+      feature.kind !== 'polygon' ||
+      !geographicRings.some((ring) => polygonsOverlap(feature.points, ring)),
+  )
+}
+
 function readNumericField(feature: IServerFeature, fieldName: string) {
-  const fieldIndex = feature.fieldNames?.findIndex(
-    (name) => name.toLowerCase() === fieldName.toLowerCase(),
-  ) ?? -1
+  const fieldIndex =
+    feature.fieldNames?.findIndex(
+      (name) => name.toLowerCase() === fieldName.toLowerCase(),
+    ) ?? -1
   if (fieldIndex < 0) return undefined
   const value = Number(feature.fieldValues?.[fieldIndex])
   return Number.isFinite(value) ? value : undefined

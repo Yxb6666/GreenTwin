@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildIServerMapUrl,
   buildWgs84BoundsFilter,
+  excludePolygonFeaturesFromRings,
   fetchIServerFeatures,
   parseIServerFeatures,
+  type ParsedLayerFeature,
 } from '@/features/twin/iserverLayers'
 
 describe('iServer 数据图层', () => {
@@ -93,11 +95,15 @@ describe('iServer 数据图层', () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ newResourceLocation: 'http://iserver/query/job.json' }),
+          JSON.stringify({
+            newResourceLocation: 'http://iserver/query/job.json',
+          }),
           { status: 200 },
         ),
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ recordsets: [] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ recordsets: [] }), { status: 200 }),
+      )
 
     await fetchIServerFeatures(
       {
@@ -123,6 +129,54 @@ describe('iServer 数据图层', () => {
       bounds: { left: 114.94, bottom: 34.93, right: 114.99, top: 34.97 },
       queryParameters: { startRecord: 0, expectCount: 6000 },
     })
+  })
+
+  it('从产业净地移除内部、相交和覆盖地块的建筑白膜', () => {
+    const polygon = (points: Array<[number, number]>): ParsedLayerFeature => ({
+      kind: 'polygon',
+      points: points.map(([longitude, latitude]) => ({
+        longitude,
+        latitude,
+      })),
+    })
+    const plotRing: Array<[number, number]> = [
+      [114.98, 34.95],
+      [114.99, 34.95],
+      [114.99, 34.96],
+      [114.98, 34.96],
+      [114.98, 34.95],
+    ]
+    const inside = polygon([
+      [114.982, 34.952],
+      [114.984, 34.952],
+      [114.984, 34.954],
+      [114.982, 34.954],
+    ])
+    const crossing = polygon([
+      [114.979, 34.953],
+      [114.981, 34.953],
+      [114.981, 34.955],
+      [114.979, 34.955],
+    ])
+    const covering = polygon([
+      [114.97, 34.94],
+      [115, 34.94],
+      [115, 34.97],
+      [114.97, 34.97],
+    ])
+    const outside = polygon([
+      [114.97, 34.95],
+      [114.975, 34.95],
+      [114.975, 34.955],
+      [114.97, 34.955],
+    ])
+
+    expect(
+      excludePolygonFeaturesFromRings(
+        [inside, crossing, covering, outside],
+        [plotRing],
+      ),
+    ).toEqual([outside])
   })
 
   it('两步读取 iServer 查询结果并携带过滤条件', async () => {

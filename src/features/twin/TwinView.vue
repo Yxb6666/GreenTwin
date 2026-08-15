@@ -42,6 +42,7 @@ import {
 } from '@/gis/leaflet/measurement'
 import {
   buildWgs84BoundsFilter,
+  excludePolygonFeaturesFromRings,
   fetchIServerFeatures,
   type ParsedLayerFeature,
 } from './iserverLayers'
@@ -1519,8 +1520,14 @@ async function loadDataLayers() {
     waterLineResult,
     waterPolygonResult,
   ] = results
-  const buildingFeatures =
+  const rawBuildingFeatures =
     buildingResult.status === 'fulfilled' ? buildingResult.value : []
+  const industryPlot = SIMULATION_PLOTS.find(
+    (plot) => plot.key === 'guyang-industry',
+  )
+  const buildingFeatures = industryPlot
+    ? excludePolygonFeaturesFromRings(rawBuildingFeatures, [industryPlot.ring])
+    : rawBuildingFeatures
   buildingFootprints.value = buildingFeatures
   buildingDataReady.value = buildingResult.status === 'fulfilled'
   refreshHousingCoverage(latestIsochroneSignature.value)
