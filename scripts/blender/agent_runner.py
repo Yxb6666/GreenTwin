@@ -141,11 +141,6 @@ def clear_scene():
             bpy.data.materials.remove(value)
 
 
-def add_ground():
-    soil = material("AgentSoil", (0.16, 0.28, 0.12, 1.0), roughness=0.95)
-    add_box("AgentGround", (0, 0, -0.25), (64, 64, 0.5), soil, 1)
-
-
 def export_stages(code_path, config_path, output_path):
     with open(config_path, "r", encoding="utf-8") as stream:
         config = json.load(stream)
@@ -153,7 +148,6 @@ def export_stages(code_path, config_path, output_path):
         code = stream.read()
 
     clear_scene()
-    add_ground()
 
     safe_builtins = {
         "abs": abs,

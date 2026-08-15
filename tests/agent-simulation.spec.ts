@@ -147,6 +147,23 @@ describe('3D Agent 模拟任务服务', () => {
     expect(source).toContain('"add_box": add_box')
   })
 
+  it('Blender 执行器不再为 Agent 模型附加绿色环境地块', async () => {
+    const runnerSource = await readFile(
+      resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
+      'utf8',
+    )
+    const serviceSource = await readFile(
+      resolve(process.cwd(), 'server/agent-simulation.mjs'),
+      'utf8',
+    )
+
+    expect(runnerSource).not.toContain('AgentGround')
+    expect(runnerSource).not.toContain('AgentSoil')
+    expect(serviceSource).toContain(
+      '不要创建环境地面、草地、地块或大面积底板',
+    )
+  })
+
   it('Blender 材质函数兼容 RGB 三元组与 0-255 颜色', async () => {
     const source = await readFile(
       resolve(process.cwd(), 'scripts/blender/agent_runner.py'),
