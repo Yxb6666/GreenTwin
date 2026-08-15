@@ -119,4 +119,21 @@ describe('三维场景工具条', () => {
     })
     expect(icon.findAll('path')).toHaveLength(2)
   })
+
+  it('日照分析与天气按钮位于场景右侧工具组', () => {
+    const wrapper = mount(SceneToolbox, {
+      props: { measuring: null, layers, feedback: '' },
+    })
+    const rightRail = wrapper.get('.scene-toolbox__rail--right')
+    const labels = rightRail
+      .findAll('button')
+      .map((button) => button.attributes('aria-label'))
+
+    expect(labels).toEqual(['空间分析', '天气模拟'])
+    expect(
+      wrapper
+        .get('.scene-toolbox__rail:not(.scene-toolbox__rail--right)')
+        .findAll('button'),
+    ).toHaveLength(5)
+  })
 })

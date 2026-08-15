@@ -276,8 +276,8 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
 .weather-panel {
   position: absolute;
   z-index: 26;
-  top: 232px;
-  left: 56px;
+  top: 188px;
+  right: 56px;
   width: 258px;
   pointer-events: auto;
   border: 1px solid rgba(122, 203, 190, 0.26);
@@ -456,7 +456,7 @@ function updateNumber(key: 'intensity' | 'windSpeed', event: Event) {
 .weather-panel-enter-from,
 .weather-panel-leave-to {
   opacity: 0;
-  transform: translateX(-8px) scale(0.96);
+  transform: translateX(8px) scale(0.96);
 }
 
 @media (prefers-reduced-motion: reduce) {

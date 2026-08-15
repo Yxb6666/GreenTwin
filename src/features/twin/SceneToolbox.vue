@@ -125,27 +125,6 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        :class="{ active: analysisMenuOpen || shadowActive }"
-        :aria-expanded="analysisMenuOpen"
-        aria-label="空间分析"
-        title="日照阴影分析"
-        @click="toggleAnalysisMenu"
-      >
-        <svg
-          class="scene-toolbox__sunlight-icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <circle cx="7" cy="7" r="2.5" />
-          <path
-            d="M7 2v1.5M7 10.5V12M2 7h1.5M10.5 7H12M3.5 3.5l1 1m5 5 1 1m0-7-1 1m-5 5-1 1"
-          />
-          <path d="m12 14 4-2 4 2-4 2-4-2Zm0 0v4l4 2 4-2v-4m-4 2v4" />
-        </svg>
-        <span>空间分析</span>
-      </button>
-      <button
-        type="button"
         aria-label="刷新场景"
         title="刷新场景"
         @click="emit('refresh')"
@@ -179,6 +158,34 @@ onBeforeUnmount(() => {
         </svg>
         <span>场景图层</span>
       </button>
+    </div>
+
+    <div
+      class="scene-toolbox__rail scene-toolbox__rail--right"
+      role="toolbar"
+      aria-label="场景环境分析"
+    >
+      <button
+        type="button"
+        :class="{ active: analysisMenuOpen || shadowActive }"
+        :aria-expanded="analysisMenuOpen"
+        aria-label="空间分析"
+        title="日照阴影分析"
+        @click="toggleAnalysisMenu"
+      >
+        <svg
+          class="scene-toolbox__sunlight-icon"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle cx="7" cy="7" r="2.5" />
+          <path
+            d="M7 2v1.5M7 10.5V12M2 7h1.5M10.5 7H12M3.5 3.5l1 1m5 5 1 1m0-7-1 1m-5 5-1 1"
+          />
+          <path d="m12 14 4-2 4 2-4 2-4-2Zm0 0v4l4 2 4-2v-4m-4 2v4" />
+        </svg>
+        <span>空间分析</span>
+      </button>
       <button
         type="button"
         :class="{ active: weatherActive }"
@@ -207,7 +214,10 @@ onBeforeUnmount(() => {
     </Transition>
 
     <Transition name="tool-panel">
-      <div v-if="analysisMenuOpen" class="scene-toolbox__panel analysis-panel">
+      <div
+        v-if="analysisMenuOpen"
+        class="scene-toolbox__panel scene-toolbox__panel--right analysis-panel"
+      >
         <header>
           <span>SUNLIGHT</span>
           <strong>日照阴影分析</strong>
@@ -323,6 +333,13 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
+.scene-toolbox__rail.scene-toolbox__rail--right {
+  top: 144px;
+  right: 12px;
+  left: auto;
+  width: 38px;
+}
+
 .scene-toolbox__rail button {
   position: relative;
   display: grid;
@@ -370,6 +387,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.scene-toolbox__rail--right span {
+  right: 44px;
+  left: auto;
+}
+
 .scene-toolbox__rail button:hover span {
   display: block;
 }
@@ -390,6 +412,12 @@ onBeforeUnmount(() => {
   );
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(12px);
+}
+
+.scene-toolbox__panel--right {
+  top: 144px;
+  right: 56px;
+  left: auto;
 }
 
 .scene-toolbox__panel header {
