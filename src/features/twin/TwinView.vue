@@ -2045,26 +2045,6 @@ onBeforeUnmount(() => {
           meta="可达性分析"
         >
           <div class="isochrone-panel">
-            <div class="isochrone-overview">
-              <i>园</i>
-              <span>
-                <strong>分析公园服务覆盖范围</strong>
-                <small>设置出行方式与时长，再选择服务圈中心</small>
-              </span>
-              <em :class="`is-${isochronePhase}`">
-                {{
-                  isochronePhase === 'picking'
-                    ? '等待落点'
-                    : isochronePhase === 'loading'
-                      ? '生成中'
-                      : isochronePhase === 'complete'
-                        ? '已完成'
-                        : isochronePhase === 'error'
-                          ? '需重试'
-                          : '待分析'
-                }}
-              </em>
-            </div>
             <div class="isochrone-field-heading">
               <strong>出行方式</strong><small>选择一种</small>
             </div>
@@ -2124,20 +2104,6 @@ onBeforeUnmount(() => {
               >
                 <span aria-hidden="true">⌫</span>清除结果
               </button>
-            </div>
-            <div
-              class="isochrone-status"
-              :class="`is-${isochronePhase}`"
-              role="status"
-            >
-              <i />
-              <span>
-                <strong>{{ isochroneStatus }}</strong>
-                <small v-if="parkSelectedPoint">
-                  东经 {{ parkSelectedPoint.longitude.toFixed(6) }}° · 北纬
-                  {{ parkSelectedPoint.latitude.toFixed(6) }}°
-                </small>
-              </span>
             </div>
           </div>
         </PanelCard>
@@ -2369,82 +2335,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
 }
 
-.isochrone-overview {
-  display: grid;
-  align-items: center;
-  min-height: 41px;
-  padding: 6px 7px;
-  border: 1px solid rgba(61, 214, 196, 0.13);
-  border-radius: 7px;
-  background: linear-gradient(
-    105deg,
-    rgba(61, 214, 196, 0.09),
-    rgba(61, 214, 196, 0.015)
-  );
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.isochrone-overview > i {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-content: center;
-  color: var(--cyan);
-  border: 1px solid rgba(61, 214, 196, 0.35);
-  border-radius: 7px;
-  background: rgba(61, 214, 196, 0.08);
-  font: normal 11px var(--font-data);
-}
-
-.isochrone-overview > span {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.isochrone-overview strong {
-  color: #edfffb;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.isochrone-overview small {
-  overflow: hidden;
-  color: rgba(205, 229, 225, 0.68);
-  font-size: 8.5px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.isochrone-overview em {
-  padding: 3px 6px;
-  color: var(--text-soft);
-  border: 1px solid rgba(122, 203, 190, 0.16);
-  border-radius: 99px;
-  background: rgba(0, 0, 0, 0.14);
-  font: normal 7px var(--font-data);
-  white-space: nowrap;
-}
-
-.isochrone-overview em.is-picking,
-.isochrone-overview em.is-loading {
-  color: var(--amber);
-  border-color: rgba(240, 184, 92, 0.38);
-}
-
-.isochrone-overview em.is-complete {
-  color: var(--cyan);
-  border-color: rgba(61, 214, 196, 0.4);
-}
-
-.isochrone-overview em.is-error {
-  color: #ff766f;
-  border-color: rgba(255, 102, 95, 0.42);
-}
-
 .isochrone-field-heading {
   display: flex;
   align-items: center;
@@ -2492,9 +2382,11 @@ onBeforeUnmount(() => {
 
 .minute-switch button {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   gap: 3px;
+  line-height: 1;
+  text-align: center;
 }
 
 .minute-switch button strong {
@@ -2577,60 +2469,6 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.02);
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-.isochrone-status {
-  display: flex;
-  align-items: flex-start;
-  min-height: 30px;
-  padding: 6px 8px;
-  color: rgba(218, 239, 235, 0.78);
-  border: 1px solid rgba(122, 203, 190, 0.14);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.018);
-  font-size: 9px;
-  line-height: 1.5;
-}
-
-.isochrone-status > span {
-  display: grid;
-  min-width: 0;
-  gap: 1px;
-}
-
-.isochrone-status strong {
-  overflow: hidden;
-  font-size: 9px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.isochrone-status small {
-  color: rgba(129, 221, 209, 0.72);
-  font: 7.5px var(--font-data);
-  white-space: nowrap;
-}
-
-.isochrone-status i {
-  flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
-  margin: 3px 6px 0 0;
-  border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 6px var(--cyan);
-}
-
-.isochrone-status.is-picking i,
-.isochrone-status.is-loading i {
-  background: var(--amber);
-  box-shadow: 0 0 6px var(--amber);
-}
-
-.isochrone-status.is-error i {
-  background: #ff665f;
-  box-shadow: 0 0 6px rgba(255, 102, 95, 0.7);
 }
 
 .issue-summary {
