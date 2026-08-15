@@ -87,6 +87,15 @@ describe('三维场景工具条', () => {
 
     await wrapper.get('button[aria-label="空间分析"]').trigger('click')
     expect(wrapper.find('.analysis-panel').text()).toContain('日照阴影分析')
+    expect(wrapper.find('.analysis-panel').text()).toContain(
+      '查看建筑投影与遮挡',
+    )
+    expect(wrapper.find('.analysis-panel').text()).toContain(
+      '结果以当前加载的建筑模型为准',
+    )
+    expect(wrapper.find('.analysis-panel').text()).not.toContain(
+      '场景中已加载的建筑与模型数据',
+    )
     expect(wrapper.find('.analysis-panel').text()).not.toContain('通视分析')
     expect(wrapper.find('.shadow-analysis-card__status svg').exists()).toBe(
       true,

@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
         <header>
           <span>SUNLIGHT</span>
           <strong>日照阴影分析</strong>
-          <small>查看指定时刻的建筑投影与遮挡关系</small>
+          <small>查看建筑投影与遮挡</small>
         </header>
         <section class="shadow-analysis-card">
           <div class="shadow-analysis-card__status">
@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
             </i>
             <span>
               <strong>{{ shadowActive ? '阴影效果已显示' : '阴影效果未启用' }}</strong>
-              <small>{{ shadowActive ? '调整时间可实时更新场景' : '开启后按当前时间模拟光照' }}</small>
+              <small>{{ shadowActive ? '调整时间即可更新' : '按所选时间模拟光照' }}</small>
             </span>
             <button
               type="button"
@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
           <label class="shadow-time-field">
-            <span>分析日期与时间</span>
+            <span>日期与时间</span>
             <input
               type="datetime-local"
               :value="shadowTime"
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
               <circle cx="8" cy="8" r="6" />
               <path d="M8 7v4m0-6v.01" />
             </svg>
-            <span>阴影结果取决于场景中已加载的建筑与模型数据。</span>
+            <span>结果以当前加载的建筑模型为准。</span>
           </p>
         </section>
       </div>
@@ -488,23 +488,37 @@ onBeforeUnmount(() => {
   width: 248px;
 }
 
+.analysis-panel header {
+  padding: 12px 13px 10px;
+  gap: 3px;
+}
+
+.analysis-panel header span {
+  font-size: 9px;
+}
+
+.analysis-panel header strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .analysis-panel header small {
   color: var(--text-soft);
-  font-size: 8px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .shadow-analysis-card {
   display: grid;
-  padding: 11px;
-  gap: 10px;
+  padding: 13px;
+  gap: 12px;
 }
 
 .shadow-analysis-card__status {
   display: grid;
   align-items: center;
-  padding: 8px;
-  gap: 7px;
+  padding: 10px;
+  gap: 9px;
   border: 1px solid rgba(122, 203, 190, 0.12);
   border-radius: 8px;
   background: linear-gradient(
@@ -512,13 +526,13 @@ onBeforeUnmount(() => {
     rgba(61, 214, 196, 0.06),
     rgba(0, 0, 0, 0.08)
   );
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
 }
 
 .shadow-analysis-card__status > i {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   color: var(--text-soft);
   border: 1px solid rgba(122, 203, 190, 0.18);
@@ -551,31 +565,31 @@ onBeforeUnmount(() => {
 
 .shadow-analysis-card__status strong {
   color: var(--text);
-  font-size: 9px;
-  line-height: 1.25;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .shadow-analysis-card__status small {
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .shadow-analysis-card__status small,
 .shadow-time-field > span,
 .shadow-analysis-card__tip {
   color: var(--text-soft);
-  font-size: 8px;
+  font-size: 10px;
 }
 
 .shadow-toggle {
-  min-width: 62px;
-  min-height: 30px;
-  padding: 0 9px;
+  min-width: 70px;
+  min-height: 34px;
+  padding: 0 10px;
   color: #06211e;
   border: 1px solid rgba(89, 234, 216, 0.72);
   border-radius: 6px;
   background: linear-gradient(135deg, #53ddcc, #2fc4b3);
   box-shadow: 0 4px 12px rgba(23, 177, 160, 0.18);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -600,21 +614,21 @@ onBeforeUnmount(() => {
 
 .shadow-time-field {
   display: grid;
-  padding-top: 9px;
-  gap: 5px;
+  padding-top: 10px;
+  gap: 7px;
   border-top: 1px solid rgba(122, 203, 190, 0.1);
 }
 
 .shadow-time-field input {
   width: 100%;
-  min-height: 31px;
-  padding: 0 8px;
+  min-height: 38px;
+  padding: 0 10px;
   color: var(--text);
   color-scheme: dark;
   border: 1px solid rgba(122, 203, 190, 0.18);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.18);
-  font: 8px var(--font-data);
+  font: 11px var(--font-data);
 }
 
 .shadow-time-field input:focus {
@@ -625,18 +639,18 @@ onBeforeUnmount(() => {
 
 .shadow-presets {
   display: grid;
-  gap: 5px;
+  gap: 7px;
   grid-template-columns: repeat(4, 1fr);
 }
 
 .shadow-presets button {
-  min-height: 25px;
+  min-height: 30px;
   padding: 0;
   color: var(--text-soft);
   border: 1px solid rgba(122, 203, 190, 0.14);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.02);
-  font: 8px var(--font-data);
+  font: 10px var(--font-data);
   cursor: pointer;
 }
 
@@ -651,15 +665,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   margin: 0;
-  padding: 8px 1px 0;
-  gap: 6px;
+  padding: 10px 1px 0;
+  gap: 7px;
   border-top: 1px solid rgba(122, 203, 190, 0.09);
   line-height: 1.5;
 }
 
 .shadow-analysis-card__tip svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
   margin-top: 1px;
   fill: none;
