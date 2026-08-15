@@ -103,6 +103,61 @@ describe('通用 AI 决策助手前端请求', () => {
     wrapper.unmount()
   })
 
+  it('隐藏图片按钮文字并支持从剪贴板粘贴图片附件', async () => {
+    const wrapper = mount(DecisionAssistant, {
+      attachTo: document.body,
+      props: {
+        endpoint: '/api/assistant/decision',
+        timeoutMs: 1000,
+        context: {
+          module: '三生模拟',
+          scopeLabel: '方案 A',
+          updatedAt: '2026-08-11T00:00:00Z',
+          data: { composite: 82.3 },
+        },
+        prompts: ['评估当前方案'],
+      },
+    })
+    document.body
+      .querySelector<HTMLButtonElement>('.assistant-launcher')
+      ?.click()
+    await wrapper.vm.$nextTick()
+
+    const attachButton = document.body.querySelector<HTMLButtonElement>(
+      '.assistant-attach-button',
+    )!
+    expect(attachButton.textContent?.trim()).toBe('＋')
+    expect(attachButton.getAttribute('aria-label')).toBe('添加图片')
+
+    const image = new File([new Uint8Array([137, 80, 78, 71])], '截图.png', {
+      type: 'image/png',
+    })
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        files: [image],
+        items: [
+          {
+            type: 'image/png',
+            getAsFile: () => image,
+          },
+        ],
+      },
+    })
+    document.body.querySelector('textarea')?.dispatchEvent(pasteEvent)
+
+    expect(pasteEvent.defaultPrevented).toBe(true)
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('图片已就绪：截图.png'),
+    )
+    expect(
+      document.body.querySelector<HTMLImageElement>(
+        '.assistant-attachment-status img',
+      )?.src,
+    ).toMatch(/^data:image\/png;base64,/)
+    wrapper.unmount()
+  })
+
   it('将拖拽位置限制在带安全边距的可视区域内', () => {
     expect(
       clampPanelPosition(

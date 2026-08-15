@@ -123,11 +123,7 @@ async function sendQuestion(question = draft.value) {
   }
 }
 
-async function selectImage(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+async function attachImage(file: File) {
   attachmentError.value = ''
   try {
     attachedImage.value = await prepareDecisionAssistantImage(file)
@@ -136,6 +132,28 @@ async function selectImage(event: Event) {
     attachmentError.value =
       error instanceof Error ? error.message : '图片处理失败'
   }
+}
+
+async function selectImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  await attachImage(file)
+}
+
+function onComposerPaste(event: ClipboardEvent) {
+  const imageItem = Array.from(event.clipboardData?.items ?? []).find((item) =>
+    item.type.startsWith('image/'),
+  )
+  const file =
+    imageItem?.getAsFile() ??
+    Array.from(event.clipboardData?.files ?? []).find((item) =>
+      item.type.startsWith('image/'),
+    )
+  if (!file) return
+  event.preventDefault()
+  void attachImage(file)
 }
 
 function onComposerKeydown(event: KeyboardEvent) {
@@ -315,7 +333,7 @@ function onComposerKeydown(event: KeyboardEvent) {
             title="添加图片，由 Claude Vision 识别后交给 DeepSeek 研判"
             @click="imageInput?.click()"
           >
-            ＋图
+            ＋
           </button>
           <textarea
             v-model="draft"
@@ -324,6 +342,7 @@ function onComposerKeydown(event: KeyboardEvent) {
             :placeholder="`询问${context.module}的态势、对比或决策建议…`"
             :disabled="isLoading"
             @keydown="onComposerKeydown"
+            @paste="onComposerPaste"
           />
           <button
             type="button"
@@ -340,7 +359,13 @@ function onComposerKeydown(event: KeyboardEvent) {
           v-if="attachedImage || attachmentError"
           class="assistant-attachment-status"
         >
-          <span v-if="attachedImage">图片已就绪：{{ attachedImage.name }}</span>
+          <template v-if="attachedImage">
+            <img
+              :src="`data:${attachedImage.mediaType};base64,${attachedImage.data}`"
+              :alt="attachedImage.name"
+            />
+            <span>图片已就绪：{{ attachedImage.name }}</span>
+          </template>
           <span v-else class="is-error">{{ attachmentError }}</span>
           <button
             v-if="attachedImage"
@@ -851,6 +876,14 @@ function onComposerKeydown(event: KeyboardEvent) {
   gap: 8px;
   color: var(--cyan);
   font-size: 8px;
+}
+
+.assistant-attachment-status img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border: 1px solid rgba(61, 214, 196, 0.28);
+  border-radius: 5px;
 }
 
 .assistant-attachment-status .is-error {
