@@ -52,6 +52,33 @@ describe('三生模拟规划地块', () => {
     expect(plot!.ring[1]![0]).toBeCloseTo(plot!.ring[2]![0], 8)
   })
 
+  it('堌阳产业地块向西北移至目标空地并校正朝向', () => {
+    const plot = SIMULATION_PLOTS.find((item) => item.key === 'guyang-industry')
+
+    expect(plot?.center).toEqual({ longitude: 114.97813, latitude: 34.9571 })
+    expect(Math.min(...plot!.ring.map(([longitude]) => longitude))).toBeGreaterThan(
+      114.9772,
+    )
+    expect(Math.min(...plot!.ring.map(([, latitude]) => latitude))).toBeGreaterThan(
+      34.9565,
+    )
+
+    const [startLongitude, startLatitude] = plot!.ring[0]!
+    const [endLongitude, endLatitude] = plot!.ring[1]!
+    const latitudeScale = 111_320
+    const longitudeScale =
+      latitudeScale * Math.cos((plot!.center.latitude * Math.PI) / 180)
+    const heading =
+      (Math.atan2(
+        (endLatitude - startLatitude) * latitudeScale,
+        (endLongitude - startLongitude) * longitudeScale,
+      ) *
+        180) /
+      Math.PI
+
+    expect(heading).toBeCloseTo(-12, 8)
+  })
+
   it('矩形地块生成闭合且有效的经纬度环', () => {
     const ring = createPlotRectangle(114.965, 34.95, 120, 80, 12)
 

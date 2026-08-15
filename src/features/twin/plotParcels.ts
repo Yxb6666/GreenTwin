@@ -99,8 +99,8 @@ export const SIMULATION_PLOTS: readonly SimulationPlot[] = [
       },
     ],
     applicationTags: ['生产空间', '产业振兴', '设施提升'],
-    center: { longitude: 114.982, latitude: 34.954 },
-    ring: createPlotRectangle(114.982, 34.954, 142, 88, -14),
+    center: { longitude: 114.97813, latitude: 34.9571 },
+    ring: createPlotRectangle(114.97813, 34.9571, 142, 88, -12),
   },
   {
     key: 'canal-ecology',
