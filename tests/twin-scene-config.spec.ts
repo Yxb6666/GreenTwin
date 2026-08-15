@@ -38,6 +38,15 @@ describe('三生模拟场景配置', () => {
     expect(source).not.toContain('viewer.flyTo')
   })
 
+  it('清理徐场村和产业地块内的建筑白膜', async () => {
+    const source = await readFile(twinViewPath, 'utf8')
+
+    expect(source).toContain("['xuchang-renewal', 'guyang-industry']")
+    expect(source).toContain(
+      'excludePolygonFeaturesFromRings(rawBuildingFeatures, clearedPlotRings)',
+    )
+  })
+
   it('三生模拟场景使用 ArcGIS 导航底图而不是街道图栅格代理', async () => {
     const source = await readFile(twinViewPath, 'utf8')
 
